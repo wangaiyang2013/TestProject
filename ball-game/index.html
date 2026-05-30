@@ -29,7 +29,28 @@
         <button id="versus-btn" type="button" class="btn-primary">双人对战</button>
         <button id="training-btn" type="button" class="btn-secondary">训练模式</button>
         <button id="group-battle-btn" type="button" class="btn-accent">组团战斗</button>
+        <button id="hero-mode-btn" type="button" class="btn-hero">小球英雄</button>
       </div>
+    </div>
+
+    <div id="hero-setup-overlay" class="overlay hidden">
+      <h1>小球英雄</h1>
+      <div class="rules" id="rules-hero">
+        <p>无法直接移动球体，每回合<strong>选方向发射</strong></p>
+        <p>飞行中不能操控，仅能通过<strong>碰墙反弹</strong>改变路线</p>
+        <p>红队（玩家1）先选球并先手</p>
+      </div>
+      <div class="menu-buttons">
+        <button id="hero-training-btn" type="button" class="btn-primary">训练场</button>
+        <button id="hero-versus-btn" type="button" class="btn-secondary">双人模式</button>
+      </div>
+      <button id="hero-setup-back" type="button" class="btn-text">返回主菜单</button>
+    </div>
+
+    <div id="hero-hud" class="hero-hud hidden">
+      <div id="hero-phase-text" class="hero-phase-text">选球阶段</div>
+      <div id="hero-p1-info" class="hero-info p1">红队 · —</div>
+      <div id="hero-p2-info" class="hero-info p2">蓝队 · —</div>
     </div>
 
     <div id="group-setup-overlay" class="overlay hidden">
@@ -81,5 +102,6 @@
   </div>
   <script src="game.js"></script>
   <script src="group-battle.js"></script>
+  <script src="little-ball-hero.js"></script>
 </body>
 </html>

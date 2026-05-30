@@ -332,3 +332,59 @@ kbd {
 .health-bar.p2.hidden-bar {
   display: none;
 }
+
+.btn-hero {
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #fcc419, #f59f00);
+  color: #1a1a2e;
+  font-weight: 600;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.btn-hero:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(252, 196, 25, 0.45);
+}
+
+.hero-hud {
+  position: absolute;
+  top: 3.2rem;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.hero-hud.hidden {
+  display: none;
+}
+
+.hero-phase-text {
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(255, 212, 59, 0.2);
+  color: #ffd43b;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.hero-info {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.hero-info.p1 {
+  color: #ff6b6b;
+}
+
+.hero-info.p2 {
+  color: #74c0fc;
+}

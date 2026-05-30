@@ -39,6 +39,8 @@ class GameMode {
   static TRAINING = "training";
 
   static GROUP_BATTLE = "group_battle";
+
+  static LITTLE_BALL_HERO = "little_ball_hero";
 }
 
 /**
@@ -894,15 +896,27 @@ class GameUI {
     this.currentMode = GameMode.VERSUS;
     this.game = new DualBallGame(this.canvas);
     this.groupBattle = new GroupBattleGame(this.canvas);
+    this.littleBallHero = new LittleBallHeroGame(this.canvas);
+    this.heroSetupOverlay = document.getElementById("hero-setup-overlay");
+    this.heroHud = document.getElementById("hero-hud");
+    this.heroPhaseText = document.getElementById("hero-phase-text");
+    this.heroP1Info = document.getElementById("hero-p1-info");
+    this.heroP2Info = document.getElementById("hero-p2-info");
+    this.heroModeBtn = document.getElementById("hero-mode-btn");
+    this.heroTrainingBtn = document.getElementById("hero-training-btn");
+    this.heroVersusBtn = document.getElementById("hero-versus-btn");
+    this.heroSetupBack = document.getElementById("hero-setup-back");
 
     this.bindDualBallGame();
     this.bindGroupBattleGame();
+    this.bindLittleBallHeroGame();
     this.bindMenuButtons();
 
     window.addEventListener("keydown", (e) => {
       const playing =
         this.game.state === "playing" ||
-        this.groupBattle.state === "playing";
+        this.groupBattle.state === "playing" ||
+        this.littleBallHero.state === "playing";
       if (e.code === "ControlRight" && playing) {
         e.preventDefault();
       }
@@ -932,6 +946,22 @@ class GameUI {
     };
   }
 
+  bindLittleBallHeroGame() {
+    this.littleBallHero.onPhaseChange = (snap) => this.updateHeroHud(snap);
+
+    this.littleBallHero.onGameOver = (winnerId) => {
+      const msg =
+        this.littleBallHero.subMode === "training"
+          ? winnerId === 1
+            ? "训练场胜利！"
+            : "训练场失败，再试一次！"
+          : winnerId === 1
+            ? "红队（玩家1）获胜！"
+            : "蓝队（玩家2）获胜！";
+      this.showMainOverlay(msg);
+    };
+  }
+
   bindMenuButtons() {
     this.versusBtn.addEventListener("click", () =>
       this.beginDualGame(GameMode.VERSUS)
@@ -940,9 +970,17 @@ class GameUI {
       this.beginDualGame(GameMode.TRAINING)
     );
     this.groupBattleBtn.addEventListener("click", () => this.showGroupSetup());
+    this.heroModeBtn.addEventListener("click", () => this.showHeroSetup());
     this.group1pBtn.addEventListener("click", () => this.beginGroupBattle(1));
     this.group2pBtn.addEventListener("click", () => this.beginGroupBattle(2));
     this.groupSetupBack.addEventListener("click", () => this.showMainMenu());
+    this.heroTrainingBtn.addEventListener("click", () =>
+      this.beginLittleBallHero("training")
+    );
+    this.heroVersusBtn.addEventListener("click", () =>
+      this.beginLittleBallHero("versus")
+    );
+    this.heroSetupBack.addEventListener("click", () => this.showMainMenu());
   }
 
   getWinnerMessage(winnerId) {
@@ -956,6 +994,74 @@ class GameUI {
     this.overlay.classList.add("hidden");
     this.groupSetupOverlay.classList.add("hidden");
     this.cardOverlay.classList.add("hidden");
+    this.heroSetupOverlay.classList.add("hidden");
+  }
+
+  showHeroSetup() {
+    this.hideAllOverlays();
+    this.heroSetupOverlay.classList.remove("hidden");
+  }
+
+  beginLittleBallHero(subMode) {
+    this.currentMode = GameMode.LITTLE_BALL_HERO;
+    this.hideAllOverlays();
+    this.hud.classList.remove("hidden");
+    this.groupHud.classList.add("hidden");
+    this.heroHud.classList.remove("hidden");
+    this.p2Bar.classList.remove("hidden-bar");
+    this.modeBadge.classList.remove("hidden");
+    this.modeBadge.textContent = "小球英雄";
+
+    this.p1HudLabel.textContent = "红队";
+    this.p2Label.textContent = subMode === "training" ? "AI" : "蓝队";
+
+    this.littleBallHero.start(subMode);
+    this.trackHeroHealth();
+  }
+
+  updateHeroHud(snap) {
+    if (snap.phase === "pick") {
+      if (snap.pickStep === 1) {
+        this.heroPhaseText.textContent = "红队先选球（按 1-4）";
+      } else {
+        this.heroPhaseText.textContent =
+          snap.subMode === "training"
+            ? "AI 正在选球…"
+            : "蓝队选球（按 1-4）";
+      }
+      this.heroP1Info.textContent = "红队 · 待选";
+      this.heroP2Info.textContent = "蓝队 · 待选";
+      return;
+    }
+
+    const p1 = snap.fighters.find((f) => f.playerId === 1);
+    const p2 = snap.fighters.find((f) => f.playerId === 2);
+    if (p1) {
+      this.heroP1Info.textContent = `红队 · ${p1.name} HP ${Math.ceil(p1.health)}`;
+    }
+    if (p2) {
+      this.heroP2Info.textContent = `蓝队 · ${p2.name} HP ${Math.ceil(p2.health)}`;
+    }
+
+    if (snap.phase === "aim") {
+      this.heroPhaseText.textContent =
+        snap.activePlayerId === 1
+          ? "红队回合 · 调方向后发射"
+          : "蓝队回合 · 调方向后发射";
+    } else if (snap.phase === "slide") {
+      this.heroPhaseText.textContent = "小球飞行中（碰墙反弹）";
+    }
+  }
+
+  trackHeroHealth() {
+    const tick = () => {
+      if (this.littleBallHero.state === "playing") {
+        this.hpP1.style.width = `${this.littleBallHero.getHealthPercent(1)}%`;
+        this.hpP2.style.width = `${this.littleBallHero.getHealthPercent(2)}%`;
+        requestAnimationFrame(tick);
+      }
+    };
+    requestAnimationFrame(tick);
   }
 
   showMainMenu() {
@@ -963,6 +1069,7 @@ class GameUI {
     this.overlay.classList.remove("hidden");
     this.hud.classList.add("hidden");
     this.groupHud.classList.add("hidden");
+    this.heroHud.classList.add("hidden");
     this.modeBadge.classList.add("hidden");
     this.overlay.querySelector("h1").textContent = "双球对战";
     this.rulesVersus.classList.remove("hidden");
@@ -971,6 +1078,7 @@ class GameUI {
     this.versusBtn.textContent = "双人对战";
     this.trainingBtn.textContent = "训练模式";
     this.groupBattleBtn.textContent = "组团战斗";
+    this.heroModeBtn.textContent = "小球英雄";
   }
 
   showGroupSetup() {
@@ -1076,6 +1184,7 @@ class GameUI {
     this.overlay.classList.remove("hidden");
     this.hud.classList.add("hidden");
     this.groupHud.classList.add("hidden");
+    this.heroHud.classList.add("hidden");
     this.modeBadge.classList.add("hidden");
     this.overlay.querySelector("h1").textContent = message;
     this.rulesVersus.classList.remove("hidden");
@@ -1084,6 +1193,7 @@ class GameUI {
     this.versusBtn.textContent = "双人对战";
     this.trainingBtn.textContent = "训练模式";
     this.groupBattleBtn.textContent = "组团战斗";
+    this.heroModeBtn.textContent = "小球英雄";
   }
 }
 
