@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Square Game</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div id="overlay" class="overlay visible">
+      <h1>Square Game</h1>
+      <p>点击或触摸屏幕跳跃</p>
+      <div class="menu-buttons">
+        <button id="practice-btn" type="button" class="btn-secondary">练习模式</button>
+        <button id="start-btn" type="button" class="btn-primary">正式游戏</button>
+      </div>
+    </div>
+    <div id="score-hud" class="score-hud hidden">
+      <span id="mode-label">得分</span>: <span id="score">0</span>
+    </div>
+    <div id="practice-tip" class="practice-tip hidden"></div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
