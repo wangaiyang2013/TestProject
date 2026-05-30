@@ -21,7 +21,23 @@ const GameConstants = {
   PLAYER2_GLOW: "#74c0fc",
   PROJECTILE1_COLOR: "#ff8787",
   PROJECTILE2_COLOR: "#91d5ff",
+  AI_ATTACK_RANGE: 300,
+  AI_IDEAL_RANGE_MIN: 100,
+  AI_IDEAL_RANGE_MAX: 240,
+  AI_DODGE_RADIUS: 110,
+  AI_STRAFE_STRENGTH: 0.65,
+  AI_REACTION_INTERVAL_MS: 150,
+  AI_ATTACK_CHANCE: 0.85,
 };
+
+/**
+ * 游戏模式
+ */
+class GameMode {
+  static VERSUS = "versus";
+
+  static TRAINING = "training";
+}
 
 /**
  * 键盘输入管理
@@ -193,6 +209,10 @@ class BallPlayer {
   }
 
   getMoveInput(input) {
+    if (!this.controlScheme) {
+      return new DirectionVector(0, 0);
+    }
+
     let dx = 0;
     let dy = 0;
     const scheme = this.controlScheme;
@@ -214,6 +234,10 @@ class BallPlayer {
   }
 
   wantsAttack(input) {
+    if (!this.controlScheme) {
+      return false;
+    }
+
     const attackKey = this.controlScheme.attack;
     if (attackKey === "ControlLeft") {
       return (
@@ -227,6 +251,15 @@ class BallPlayer {
     return Date.now() - this.lastAttackTime >= GameConstants.ATTACK_COOLDOWN_MS;
   }
 
+  aimToward(targetX, targetY) {
+    const dx = targetX - this.x;
+    const dy = targetY - this.y;
+    const dir = new DirectionVector(dx, dy).normalize();
+    if (dir.x !== 0 || dir.y !== 0) {
+      this.lastMoveDir = dir;
+    }
+  }
+
   move(dir, arena) {
     if (dir.x !== 0 || dir.y !== 0) {
       this.lastMoveDir = dir.clone();
@@ -234,6 +267,14 @@ class BallPlayer {
     this.x += dir.x * GameConstants.MOVE_SPEED;
     this.y += dir.y * GameConstants.MOVE_SPEED;
     arena.clampBall(this);
+  }
+
+  tryAttack(projectileRadius) {
+    if (!this.canAttack()) {
+      return null;
+    }
+    this.lastAttackTime = Date.now();
+    return this.spawnProjectile(projectileRadius);
   }
 
   spawnProjectile(projectileRadius) {
@@ -332,6 +373,186 @@ class ControlScheme {
 }
 
 /**
+ * 训练模式 AI 机器人（控制玩家2）
+ */
+class AiOpponentController {
+  constructor() {
+    this.lastThinkTime = 0;
+    this.strafeSign = 1;
+    this.pendingAttack = false;
+  }
+
+  /**
+   * 计算与目标球的距离
+   */
+  distanceTo(target) {
+    return Math.hypot(target.x - this.aiPlayer.x, target.y - this.aiPlayer.y);
+  }
+
+  /**
+   * 寻找飞向 AI 的最近危险弹幕
+   */
+  findThreateningProjectile(projectiles, aiPlayer) {
+    let closest = null;
+    let closestDist = GameConstants.AI_DODGE_RADIUS;
+
+    for (const proj of projectiles) {
+      if (!proj.alive || proj.ownerId === aiPlayer.id) {
+        continue;
+      }
+
+      const toAiX = aiPlayer.x - proj.x;
+      const toAiY = aiPlayer.y - proj.y;
+      const dot = toAiX * proj.dirX + toAiY * proj.dirY;
+      if (dot <= 0) {
+        continue;
+      }
+
+      const dist = Math.hypot(toAiX, toAiY);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = proj;
+      }
+    }
+
+    return closest;
+  }
+
+  /**
+   * 躲避弹幕：垂直于飞行方向移动
+   */
+  getDodgeDirection(projectile, aiPlayer) {
+    const perpX = -projectile.dirY;
+    const perpY = projectile.dirX;
+    const toAiX = aiPlayer.x - projectile.x;
+    const toAiY = aiPlayer.y - projectile.y;
+    const sign = toAiX * perpX + toAiY * perpY >= 0 ? 1 : -1;
+    return new DirectionVector(perpX * sign, perpY * sign).normalize();
+  }
+
+  /**
+   * 根据与玩家的距离决定追击、后撤或侧移
+   */
+  getChaseDirection(aiPlayer, humanPlayer) {
+    const dx = humanPlayer.x - aiPlayer.x;
+    const dy = humanPlayer.y - aiPlayer.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return new DirectionVector(0, 0);
+    }
+
+    const toHuman = new DirectionVector(dx / dist, dy / dist);
+    const perp = new DirectionVector(-toHuman.y, toHuman.y);
+
+    if (dist > GameConstants.AI_IDEAL_RANGE_MAX) {
+      return toHuman;
+    }
+
+    if (dist < GameConstants.AI_IDEAL_RANGE_MIN) {
+      return new DirectionVector(-toHuman.x, -toHuman.y);
+    }
+
+    return new DirectionVector(
+      perp.x * this.strafeSign * GameConstants.AI_STRAFE_STRENGTH +
+        toHuman.x * 0.25,
+      perp.y * this.strafeSign * GameConstants.AI_STRAFE_STRENGTH +
+        toHuman.y * 0.25
+    ).normalize();
+  }
+
+  /**
+   * 贴边时往场地中心微调，避免 AI 卡在墙角
+   */
+  getArenaCenterBias(aiPlayer, arena) {
+    const centerX = (arena.left + arena.right) / 2;
+    const centerY = (arena.top + arena.bottom) / 2;
+    const margin = aiPlayer.radius * 3;
+    let bx = 0;
+    let by = 0;
+
+    if (aiPlayer.x < arena.left + margin) {
+      bx = 1;
+    } else if (aiPlayer.x > arena.right - margin) {
+      bx = -1;
+    }
+    if (aiPlayer.y < arena.top + margin) {
+      by = 1;
+    } else if (aiPlayer.y > arena.bottom - margin) {
+      by = -1;
+    }
+
+    if (bx === 0 && by === 0) {
+      return new DirectionVector(
+        (centerX - aiPlayer.x) * 0.001,
+        (centerY - aiPlayer.y) * 0.001
+      ).normalize();
+    }
+
+    return new DirectionVector(bx, by).normalize();
+  }
+
+  combineDirections(primary, secondary, secondaryWeight) {
+    const combined = new DirectionVector(
+      primary.x + secondary.x * secondaryWeight,
+      primary.y + secondary.y * secondaryWeight
+    );
+    return combined.normalize();
+  }
+
+  think(aiPlayer, humanPlayer, projectiles, arena) {
+    this.aiPlayer = aiPlayer;
+
+    const now = Date.now();
+    if (now - this.lastThinkTime < GameConstants.AI_REACTION_INTERVAL_MS) {
+      return;
+    }
+    this.lastThinkTime = now;
+
+    if (Math.random() < 0.08) {
+      this.strafeSign *= -1;
+    }
+
+    const threat = this.findThreateningProjectile(projectiles, aiPlayer);
+    let moveDir;
+
+    if (threat) {
+      moveDir = this.getDodgeDirection(threat, aiPlayer);
+    } else {
+      moveDir = this.getChaseDirection(aiPlayer, humanPlayer);
+      const centerBias = this.getArenaCenterBias(aiPlayer, arena);
+      moveDir = this.combineDirections(moveDir, centerBias, 0.35);
+    }
+
+    this.currentMoveDir = moveDir;
+
+    const dist = this.distanceTo(humanPlayer);
+    const healthRatio = aiPlayer.health / GameConstants.MAX_HEALTH;
+    const attackRange =
+      GameConstants.AI_ATTACK_RANGE * (0.85 + healthRatio * 0.15);
+
+    this.pendingAttack =
+      dist <= attackRange &&
+      dist >= GameConstants.AI_IDEAL_RANGE_MIN * 0.6 &&
+      Math.random() < GameConstants.AI_ATTACK_CHANCE;
+  }
+
+  getMoveDirection() {
+    return this.currentMoveDir || new DirectionVector(0, 0);
+  }
+
+  shouldAttackNow() {
+    return this.pendingAttack;
+  }
+
+  reset() {
+    this.lastThinkTime = 0;
+    this.strafeSign = Math.random() < 0.5 ? -1 : 1;
+    this.pendingAttack = false;
+    this.currentMoveDir = new DirectionVector(-1, 0);
+  }
+}
+
+/**
  * 主游戏逻辑
  */
 class DualBallGame {
@@ -339,7 +560,9 @@ class DualBallGame {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.state = "idle";
+    this.gameMode = GameMode.VERSUS;
     this.input = new InputManager();
+    this.aiController = new AiOpponentController();
     this.players = [];
     this.projectiles = [];
     this.arena = null;
@@ -385,13 +608,17 @@ class DualBallGame {
     return Math.max(8, this.height * GameConstants.PROJECTILE_RADIUS_RATIO);
   }
 
-  start() {
+  start(mode) {
+    this.gameMode = mode || GameMode.VERSUS;
     this.state = "playing";
     this.winnerId = null;
     this.projectiles = [];
 
     const r = this.getBallRadius();
     const centerY = (this.arena.top + this.arena.bottom) / 2;
+    const isTraining = this.gameMode === GameMode.TRAINING;
+
+    const player2Scheme = isTraining ? null : ControlScheme.player2();
 
     this.players = [
       new BallPlayer(
@@ -410,9 +637,13 @@ class DualBallGame {
         r,
         GameConstants.PLAYER2_COLOR,
         GameConstants.PLAYER2_GLOW,
-        ControlScheme.player2()
+        player2Scheme
       ),
     ];
+
+    if (isTraining) {
+      this.aiController.reset();
+    }
 
     if (this.animationId !== null) {
       cancelAnimationFrame(this.animationId);
@@ -420,16 +651,81 @@ class DualBallGame {
     this.loop();
   }
 
-  handleAttacks() {
-    const projectileRadius = this.getProjectileRadius();
+  isTrainingMode() {
+    return this.gameMode === GameMode.TRAINING;
+  }
 
+  updateHumanPlayer() {
+    const human = this.players[0];
+    if (!human || !human.isAlive()) {
+      return;
+    }
+    const dir = human.getMoveInput(this.input);
+    human.move(dir, this.arena);
+  }
+
+  updateAiPlayer() {
+    const aiPlayer = this.players[1];
+    const human = this.players[0];
+    if (!aiPlayer || !human || !aiPlayer.isAlive() || !human.isAlive()) {
+      return;
+    }
+
+    this.aiController.think(
+      aiPlayer,
+      human,
+      this.projectiles,
+      this.arena
+    );
+
+    const moveDir = this.aiController.getMoveDirection();
+    aiPlayer.move(moveDir, this.arena);
+    aiPlayer.aimToward(human.x, human.y);
+  }
+
+  updateVersusPlayers() {
     for (const player of this.players) {
       if (!player.isAlive()) {
         continue;
       }
-      if (player.wantsAttack(this.input) && player.canAttack()) {
-        player.lastAttackTime = Date.now();
-        this.projectiles.push(player.spawnProjectile(projectileRadius));
+      const dir = player.getMoveInput(this.input);
+      player.move(dir, this.arena);
+    }
+  }
+
+  handleAttacks() {
+    const projectileRadius = this.getProjectileRadius();
+
+    const human = this.players[0];
+    if (human && human.isAlive() && human.wantsAttack(this.input)) {
+      const proj = human.tryAttack(projectileRadius);
+      if (proj) {
+        this.projectiles.push(proj);
+      }
+    }
+
+    if (this.isTrainingMode()) {
+      const aiPlayer = this.players[1];
+      if (
+        aiPlayer &&
+        aiPlayer.isAlive() &&
+        this.aiController.shouldAttackNow()
+      ) {
+        aiPlayer.aimToward(this.players[0].x, this.players[0].y);
+        const proj = aiPlayer.tryAttack(projectileRadius);
+        if (proj) {
+          this.projectiles.push(proj);
+        }
+        this.aiController.pendingAttack = false;
+      }
+      return;
+    }
+
+    const player2 = this.players[1];
+    if (player2 && player2.isAlive() && player2.wantsAttack(this.input)) {
+      const proj = player2.tryAttack(projectileRadius);
+      if (proj) {
+        this.projectiles.push(proj);
       }
     }
   }
@@ -491,12 +787,11 @@ class DualBallGame {
       return;
     }
 
-    for (const player of this.players) {
-      if (!player.isAlive()) {
-        continue;
-      }
-      const dir = player.getMoveInput(this.input);
-      player.move(dir, this.arena);
+    if (this.isTrainingMode()) {
+      this.updateHumanPlayer();
+      this.updateAiPlayer();
+    } else {
+      this.updateVersusPlayers();
     }
 
     this.handleAttacks();
@@ -509,6 +804,20 @@ class DualBallGame {
     this.ctx.fillStyle = GameConstants.BACKGROUND_COLOR;
     this.ctx.fillRect(0, 0, this.width, this.height);
     this.arena.draw(this.ctx);
+
+    if (this.isTrainingMode()) {
+      this.ctx.fillStyle = "rgba(77, 171, 247, 0.2)";
+      this.ctx.font = "14px system-ui, sans-serif";
+      this.ctx.fillText("训练模式 · AI 对战", 12, 28);
+    }
+  }
+
+  drawAiRobotBadge(ctx, player) {
+    ctx.fillStyle = "#74c0fc";
+    ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("AI", player.x, player.y - player.radius - 10);
+    ctx.textAlign = "left";
   }
 
   draw() {
@@ -521,6 +830,9 @@ class DualBallGame {
     for (const player of this.players) {
       if (player.isAlive()) {
         player.draw(this.ctx);
+        if (this.isTrainingMode() && player.id === 2) {
+          this.drawAiRobotBadge(this.ctx, player);
+        }
       }
     }
   }
@@ -551,17 +863,27 @@ class GameUI {
     this.canvas = document.getElementById("game-canvas");
     this.overlay = document.getElementById("overlay");
     this.hud = document.getElementById("hud");
-    this.startBtn = document.getElementById("start-btn");
+    this.modeBadge = document.getElementById("mode-badge");
+    this.versusBtn = document.getElementById("versus-btn");
+    this.trainingBtn = document.getElementById("training-btn");
+    this.rulesVersus = document.getElementById("rules-versus");
+    this.rulesTraining = document.getElementById("rules-training");
     this.hpP1 = document.getElementById("hp-p1");
     this.hpP2 = document.getElementById("hp-p2");
+    this.p2Label = document.getElementById("p2-label");
+    this.p1HudLabel = document.querySelector(".health-bar.p1 span");
+    this.currentMode = GameMode.VERSUS;
     this.game = new DualBallGame(this.canvas);
 
     this.game.onGameOver = (winnerId) => {
-      const winnerText = winnerId === 1 ? "玩家1（红球）获胜！" : "玩家2（蓝球）获胜！";
+      const winnerText = this.getWinnerMessage(winnerId);
       this.showOverlay(winnerText);
     };
 
-    this.startBtn.addEventListener("click", () => this.beginGame());
+    this.versusBtn.addEventListener("click", () => this.beginGame(GameMode.VERSUS));
+    this.trainingBtn.addEventListener("click", () =>
+      this.beginGame(GameMode.TRAINING)
+    );
 
     window.addEventListener("keydown", (e) => {
       if (e.code === "ControlRight" && this.game.state === "playing") {
@@ -570,11 +892,25 @@ class GameUI {
     });
   }
 
-  beginGame() {
+  getWinnerMessage(winnerId) {
+    if (this.currentMode === GameMode.TRAINING) {
+      return winnerId === 1 ? "你赢了！击败了 AI 机器人" : "AI 机器人获胜，再试一次！";
+    }
+    return winnerId === 1 ? "玩家1（红球）获胜！" : "玩家2（蓝球）获胜！";
+  }
+
+  beginGame(mode) {
+    this.currentMode = mode;
+    const isTraining = mode === GameMode.TRAINING;
+
     this.overlay.classList.add("hidden");
     this.hud.classList.remove("hidden");
-    this.overlay.querySelector("h1").textContent = "双球对战";
-    this.game.start();
+    this.modeBadge.classList.toggle("hidden", !isTraining);
+
+    this.p1HudLabel.textContent = isTraining ? "你" : "玩家1";
+    this.p2Label.textContent = isTraining ? "AI 机器人" : "玩家2";
+
+    this.game.start(mode);
     this.trackHealth();
   }
 
@@ -592,8 +928,12 @@ class GameUI {
   showOverlay(message) {
     this.overlay.classList.remove("hidden");
     this.hud.classList.add("hidden");
+    this.modeBadge.classList.add("hidden");
     this.overlay.querySelector("h1").textContent = message;
-    this.startBtn.textContent = "再来一局";
+    this.rulesVersus.classList.remove("hidden");
+    this.rulesTraining.classList.add("hidden");
+    this.versusBtn.textContent = "双人对战";
+    this.trainingBtn.textContent = "训练模式";
   }
 }
 
