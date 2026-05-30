@@ -55,21 +55,41 @@ body {
 .overlay p {
   font-size: clamp(1rem, 4vw, 1.25rem);
   opacity: 0.9;
+  max-width: 22rem;
+  line-height: 1.5;
 }
 
-#start-btn {
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   margin-top: 0.5rem;
+  width: min(100%, 16rem);
+}
+
+.btn-primary,
+.btn-secondary {
   padding: 0.75rem 2rem;
   font-size: 1.1rem;
   border: none;
   border-radius: 8px;
-  background: #4ecca3;
-  color: #1a1a2e;
   cursor: pointer;
   font-weight: 600;
 }
 
-#start-btn:active {
+.btn-primary {
+  background: #4ecca3;
+  color: #1a1a2e;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: #4ecca3;
+  border: 2px solid #4ecca3;
+}
+
+.btn-primary:active,
+.btn-secondary:active {
   transform: scale(0.97);
 }
 
@@ -88,4 +108,43 @@ body {
 
 .score-hud.hidden {
   display: none;
+}
+
+.practice-tip {
+  position: absolute;
+  bottom: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.6rem 1.2rem;
+  background: rgba(78, 204, 163, 0.92);
+  color: #1a1a2e;
+  border-radius: 8px;
+  font-size: clamp(1rem, 4vw, 1.25rem);
+  font-weight: 700;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.practice-tip.hidden {
+  display: none;
+}
+
+.practice-tip.fade {
+  opacity: 0.35;
+}
+
+.practice-tip.jump-now {
+  background: rgba(233, 69, 96, 0.95);
+  color: #fff;
+  animation: pulse 0.5s ease infinite alternate;
+}
+
+@keyframes pulse {
+  from {
+    transform: translateX(-50%) scale(1);
+  }
+  to {
+    transform: translateX(-50%) scale(1.06);
+  }
 }

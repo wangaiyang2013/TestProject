@@ -12,9 +12,15 @@
     <div id="overlay" class="overlay visible">
       <h1>Square Game</h1>
       <p>点击或触摸屏幕跳跃</p>
-      <button id="start-btn" type="button">开始游戏</button>
+      <div class="menu-buttons">
+        <button id="practice-btn" type="button" class="btn-secondary">练习模式</button>
+        <button id="start-btn" type="button" class="btn-primary">正式游戏</button>
+      </div>
     </div>
-    <div id="score-hud" class="score-hud hidden">得分: <span id="score">0</span></div>
+    <div id="score-hud" class="score-hud hidden">
+      <span id="mode-label">得分</span>: <span id="score">0</span>
+    </div>
+    <div id="practice-tip" class="practice-tip hidden"></div>
   </div>
   <script src="game.js"></script>
 </body>
