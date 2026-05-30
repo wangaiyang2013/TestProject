@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>双球对战</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div id="overlay" class="overlay visible">
+      <h1>双球对战</h1>
+      <div class="rules">
+        <p><span class="p1-tag">玩家1（红）</span> 方向键移动，<kbd>Ctrl</kbd> 攻击</p>
+        <p><span class="p2-tag">玩家2（蓝）</span> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>Z</kbd> 移动，<kbd>Y</kbd> 攻击</p>
+      </div>
+      <button id="start-btn" type="button" class="btn-primary">开始游戏</button>
+    </div>
+    <div id="hud" class="hud hidden">
+      <div class="health-bar p1">
+        <span>玩家1</span>
+        <div class="bar"><div id="hp-p1" class="fill"></div></div>
+      </div>
+      <div class="health-bar p2">
+        <span>玩家2</span>
+        <div class="bar"><div id="hp-p2" class="fill"></div></div>
+      </div>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
