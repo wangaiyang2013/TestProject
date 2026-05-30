@@ -41,6 +41,8 @@ class GameMode {
   static GROUP_BATTLE = "group_battle";
 
   static LITTLE_BALL_HERO = "little_ball_hero";
+
+  static WEST_BULLDOG = "west_bulldog";
 }
 
 /**
@@ -897,6 +899,10 @@ class GameUI {
     this.game = new DualBallGame(this.canvas);
     this.groupBattle = new GroupBattleGame(this.canvas);
     this.littleBallHero = new LittleBallHeroGame(this.canvas);
+    this.westBulldog = new WestBulldogGame(this.canvas);
+    this.westBulldogBtn = document.getElementById("west-bulldog-btn");
+    this.westHud = document.getElementById("west-hud");
+    this.westHitMsg = document.getElementById("west-hit-msg");
     this.heroSetupOverlay = document.getElementById("hero-setup-overlay");
     this.heroHud = document.getElementById("hero-hud");
     this.heroPhaseText = document.getElementById("hero-phase-text");
@@ -910,13 +916,15 @@ class GameUI {
     this.bindDualBallGame();
     this.bindGroupBattleGame();
     this.bindLittleBallHeroGame();
+    this.bindWestBulldogGame();
     this.bindMenuButtons();
 
     window.addEventListener("keydown", (e) => {
       const playing =
         this.game.state === "playing" ||
         this.groupBattle.state === "playing" ||
-        this.littleBallHero.state === "playing";
+        this.littleBallHero.state === "playing" ||
+        this.westBulldog.state === "playing";
       if (e.code === "ControlRight" && playing) {
         e.preventDefault();
       }
@@ -946,6 +954,20 @@ class GameUI {
     };
   }
 
+  bindWestBulldogGame() {
+    this.westBulldog.onHudUpdate = (snap) => {
+      if (snap.lastHit) {
+        this.westHitMsg.textContent = snap.lastHit;
+      }
+    };
+
+    this.westBulldog.onGameOver = (playerWon) => {
+      this.showMainOverlay(
+        playerWon ? "西部斗牛球胜利！对手已倒下" : "你被对手撞倒了，再试一次！"
+      );
+    };
+  }
+
   bindLittleBallHeroGame() {
     this.littleBallHero.onPhaseChange = (snap) => this.updateHeroHud(snap);
 
@@ -971,6 +993,7 @@ class GameUI {
     );
     this.groupBattleBtn.addEventListener("click", () => this.showGroupSetup());
     this.heroModeBtn.addEventListener("click", () => this.showHeroSetup());
+    this.westBulldogBtn.addEventListener("click", () => this.beginWestBulldog());
     this.group1pBtn.addEventListener("click", () => this.beginGroupBattle(1));
     this.group2pBtn.addEventListener("click", () => this.beginGroupBattle(2));
     this.groupSetupBack.addEventListener("click", () => this.showMainMenu());
@@ -1002,11 +1025,42 @@ class GameUI {
     this.heroSetupOverlay.classList.remove("hidden");
   }
 
+  beginWestBulldog() {
+    this.currentMode = GameMode.WEST_BULLDOG;
+    this.hideAllOverlays();
+    this.hud.classList.remove("hidden");
+    this.groupHud.classList.add("hidden");
+    this.heroHud.classList.add("hidden");
+    this.westHud.classList.remove("hidden");
+    this.p2Bar.classList.remove("hidden-bar");
+    this.modeBadge.classList.remove("hidden");
+    this.modeBadge.textContent = "西部斗牛球";
+
+    this.p1HudLabel.textContent = "西部斗牛球";
+    this.p2Label.textContent = "对手";
+    this.westHitMsg.textContent = "";
+
+    this.westBulldog.start();
+    this.trackWestHealth();
+  }
+
+  trackWestHealth() {
+    const tick = () => {
+      if (this.westBulldog.state === "playing") {
+        this.hpP1.style.width = `${this.westBulldog.getPlayerHealthPercent()}%`;
+        this.hpP2.style.width = `${this.westBulldog.getEnemyHealthPercent()}%`;
+        requestAnimationFrame(tick);
+      }
+    };
+    requestAnimationFrame(tick);
+  }
+
   beginLittleBallHero(subMode) {
     this.currentMode = GameMode.LITTLE_BALL_HERO;
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
     this.groupHud.classList.add("hidden");
+    this.westHud.classList.add("hidden");
     this.heroHud.classList.remove("hidden");
     this.p2Bar.classList.remove("hidden-bar");
     this.modeBadge.classList.remove("hidden");
@@ -1070,6 +1124,7 @@ class GameUI {
     this.hud.classList.add("hidden");
     this.groupHud.classList.add("hidden");
     this.heroHud.classList.add("hidden");
+    this.westHud.classList.add("hidden");
     this.modeBadge.classList.add("hidden");
     this.overlay.querySelector("h1").textContent = "双球对战";
     this.rulesVersus.classList.remove("hidden");
@@ -1079,6 +1134,7 @@ class GameUI {
     this.trainingBtn.textContent = "训练模式";
     this.groupBattleBtn.textContent = "组团战斗";
     this.heroModeBtn.textContent = "小球英雄";
+    this.westBulldogBtn.textContent = "西部斗牛球";
   }
 
   showGroupSetup() {
@@ -1185,6 +1241,7 @@ class GameUI {
     this.hud.classList.add("hidden");
     this.groupHud.classList.add("hidden");
     this.heroHud.classList.add("hidden");
+    this.westHud.classList.add("hidden");
     this.modeBadge.classList.add("hidden");
     this.overlay.querySelector("h1").textContent = message;
     this.rulesVersus.classList.remove("hidden");
@@ -1194,6 +1251,7 @@ class GameUI {
     this.trainingBtn.textContent = "训练模式";
     this.groupBattleBtn.textContent = "组团战斗";
     this.heroModeBtn.textContent = "小球英雄";
+    this.westBulldogBtn.textContent = "西部斗牛球";
   }
 }
 

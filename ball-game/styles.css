@@ -388,3 +388,54 @@ kbd {
 .hero-info.p2 {
   color: #74c0fc;
 }
+
+.btn-west {
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #c68642, #8b5a2b);
+  color: #fff;
+  font-weight: 600;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.btn-west:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(198, 134, 66, 0.45);
+}
+
+.west-hud {
+  position: absolute;
+  top: 3.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.west-hud.hidden {
+  display: none;
+}
+
+.west-hud #west-hud-title {
+  color: #e9b872;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.west-hit-msg {
+  color: #ffd43b;
+  font-size: 0.75rem;
+  max-width: 90vw;
+  text-align: center;
+}
+
+.health-bar.enemy span {
+  color: #adb5bd;
+}
