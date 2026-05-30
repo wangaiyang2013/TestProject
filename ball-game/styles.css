@@ -206,3 +206,129 @@ kbd {
 .health-bar.p2 .fill {
   background: linear-gradient(90deg, #4dabf7, #74c0fc);
 }
+
+.btn-accent {
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #94d82d, #74b816);
+  color: #1a1a2e;
+  font-weight: 600;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.btn-accent:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(148, 216, 45, 0.4);
+}
+
+.btn-text {
+  margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.btn-text:hover {
+  color: #ccc;
+}
+
+.setup-hint {
+  opacity: 0.85;
+  max-width: 360px;
+}
+
+.group-hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0.75rem 1.25rem;
+  pointer-events: none;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.group-hud.hidden {
+  display: none;
+}
+
+.group-stat {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #a9e34b;
+}
+
+.group-xp-row {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.8rem;
+}
+
+.xp-block.p1 span:first-child {
+  color: #ff6b6b;
+}
+
+.xp-block.p2 span:first-child {
+  color: #74c0fc;
+}
+
+.xp-block.hidden {
+  display: none;
+}
+
+.gb-phase {
+  font-size: 0.75rem;
+  color: #aaa;
+  text-align: center;
+}
+
+.card-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  max-width: 720px;
+}
+
+.card-btn {
+  width: 200px;
+  padding: 1.25rem 1rem;
+  border: 2px solid #4ecca3;
+  border-radius: 12px;
+  background: #16213e;
+  color: #eee;
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.card-btn:hover {
+  transform: translateY(-4px);
+  border-color: #ffd43b;
+}
+
+.card-btn h3 {
+  font-size: 1.1rem;
+  color: #ffd43b;
+  margin-bottom: 0.5rem;
+}
+
+.card-btn p {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  line-height: 1.4;
+}
+
+.health-bar.p2.hidden-bar {
+  display: none;
+}

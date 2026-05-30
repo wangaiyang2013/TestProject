@@ -37,6 +37,8 @@ class GameMode {
   static VERSUS = "versus";
 
   static TRAINING = "training";
+
+  static GROUP_BATTLE = "group_battle";
 }
 
 /**
@@ -862,34 +864,85 @@ class GameUI {
   constructor() {
     this.canvas = document.getElementById("game-canvas");
     this.overlay = document.getElementById("overlay");
+    this.groupSetupOverlay = document.getElementById("group-setup-overlay");
+    this.cardOverlay = document.getElementById("card-overlay");
+    this.cardChoicesEl = document.getElementById("card-choices");
+    this.cardLevelHint = document.getElementById("card-level-hint");
     this.hud = document.getElementById("hud");
+    this.groupHud = document.getElementById("group-hud");
     this.modeBadge = document.getElementById("mode-badge");
     this.versusBtn = document.getElementById("versus-btn");
     this.trainingBtn = document.getElementById("training-btn");
+    this.groupBattleBtn = document.getElementById("group-battle-btn");
+    this.group1pBtn = document.getElementById("group-1p-btn");
+    this.group2pBtn = document.getElementById("group-2p-btn");
+    this.groupSetupBack = document.getElementById("group-setup-back");
     this.rulesVersus = document.getElementById("rules-versus");
     this.rulesTraining = document.getElementById("rules-training");
+    this.rulesGroup = document.getElementById("rules-group");
     this.hpP1 = document.getElementById("hp-p1");
     this.hpP2 = document.getElementById("hp-p2");
+    this.p2Bar = document.querySelector(".health-bar.p2");
     this.p2Label = document.getElementById("p2-label");
     this.p1HudLabel = document.querySelector(".health-bar.p1 span");
+    this.gbLevel = document.getElementById("gb-level");
+    this.gbBoss = document.getElementById("gb-boss");
+    this.gbP1Xp = document.getElementById("gb-p1-xp");
+    this.gbP2Xp = document.getElementById("gb-p2-xp");
+    this.gbP2Block = document.getElementById("gb-p2-block");
+    this.gbPhase = document.getElementById("gb-phase");
     this.currentMode = GameMode.VERSUS;
     this.game = new DualBallGame(this.canvas);
+    this.groupBattle = new GroupBattleGame(this.canvas);
 
-    this.game.onGameOver = (winnerId) => {
-      const winnerText = this.getWinnerMessage(winnerId);
-      this.showOverlay(winnerText);
-    };
-
-    this.versusBtn.addEventListener("click", () => this.beginGame(GameMode.VERSUS));
-    this.trainingBtn.addEventListener("click", () =>
-      this.beginGame(GameMode.TRAINING)
-    );
+    this.bindDualBallGame();
+    this.bindGroupBattleGame();
+    this.bindMenuButtons();
 
     window.addEventListener("keydown", (e) => {
-      if (e.code === "ControlRight" && this.game.state === "playing") {
+      const playing =
+        this.game.state === "playing" ||
+        this.groupBattle.state === "playing";
+      if (e.code === "ControlRight" && playing) {
         e.preventDefault();
       }
     });
+  }
+
+  bindDualBallGame() {
+    this.game.onGameOver = (winnerId) => {
+      const winnerText = this.getWinnerMessage(winnerId);
+      this.showMainOverlay(winnerText);
+    };
+  }
+
+  bindGroupBattleGame() {
+    this.groupBattle.onHudUpdate = (snap) => this.updateGroupHud(snap);
+
+    this.groupBattle.onLevelComplete = (cards, snap) => {
+      this.showCardDraw(cards, snap);
+    };
+
+    this.groupBattle.onGameVictory = () => {
+      this.showMainOverlay("恭喜通关！30 个 Boss 全部击败！");
+    };
+
+    this.groupBattle.onGameOver = () => {
+      this.showMainOverlay("组团失败，全员阵亡，再试一次！");
+    };
+  }
+
+  bindMenuButtons() {
+    this.versusBtn.addEventListener("click", () =>
+      this.beginDualGame(GameMode.VERSUS)
+    );
+    this.trainingBtn.addEventListener("click", () =>
+      this.beginDualGame(GameMode.TRAINING)
+    );
+    this.groupBattleBtn.addEventListener("click", () => this.showGroupSetup());
+    this.group1pBtn.addEventListener("click", () => this.beginGroupBattle(1));
+    this.group2pBtn.addEventListener("click", () => this.beginGroupBattle(2));
+    this.groupSetupBack.addEventListener("click", () => this.showMainMenu());
   }
 
   getWinnerMessage(winnerId) {
@@ -899,22 +952,80 @@ class GameUI {
     return winnerId === 1 ? "玩家1（红球）获胜！" : "玩家2（蓝球）获胜！";
   }
 
-  beginGame(mode) {
+  hideAllOverlays() {
+    this.overlay.classList.add("hidden");
+    this.groupSetupOverlay.classList.add("hidden");
+    this.cardOverlay.classList.add("hidden");
+  }
+
+  showMainMenu() {
+    this.hideAllOverlays();
+    this.overlay.classList.remove("hidden");
+    this.hud.classList.add("hidden");
+    this.groupHud.classList.add("hidden");
+    this.modeBadge.classList.add("hidden");
+    this.overlay.querySelector("h1").textContent = "双球对战";
+    this.rulesVersus.classList.remove("hidden");
+    this.rulesTraining.classList.add("hidden");
+    this.rulesGroup.classList.add("hidden");
+    this.versusBtn.textContent = "双人对战";
+    this.trainingBtn.textContent = "训练模式";
+    this.groupBattleBtn.textContent = "组团战斗";
+  }
+
+  showGroupSetup() {
+    this.hideAllOverlays();
+    this.groupSetupOverlay.classList.remove("hidden");
+    this.rulesGroup.classList.remove("hidden");
+  }
+
+  beginDualGame(mode) {
     this.currentMode = mode;
     const isTraining = mode === GameMode.TRAINING;
 
-    this.overlay.classList.add("hidden");
+    this.hideAllOverlays();
     this.hud.classList.remove("hidden");
+    this.groupHud.classList.add("hidden");
+    this.p2Bar.classList.remove("hidden-bar");
     this.modeBadge.classList.toggle("hidden", !isTraining);
+    this.modeBadge.textContent = "训练模式";
 
     this.p1HudLabel.textContent = isTraining ? "你" : "玩家1";
     this.p2Label.textContent = isTraining ? "AI 机器人" : "玩家2";
 
     this.game.start(mode);
-    this.trackHealth();
+    this.trackDualHealth();
   }
 
-  trackHealth() {
+  beginGroupBattle(playerCount) {
+    this.currentMode = GameMode.GROUP_BATTLE;
+    this.hideAllOverlays();
+    this.hud.classList.remove("hidden");
+    this.groupHud.classList.remove("hidden");
+    this.modeBadge.classList.remove("hidden");
+    this.modeBadge.textContent = "组团战斗";
+
+    this.p1HudLabel.textContent = "玩家1";
+    this.p2Label.textContent = "玩家2";
+    this.p2Bar.classList.toggle("hidden-bar", playerCount === 1);
+    this.gbP2Block.classList.toggle("hidden", playerCount === 1);
+
+    this.groupBattle.start(playerCount);
+    this.trackGroupHealth();
+  }
+
+  updateGroupHud(snap) {
+    this.gbLevel.textContent = `第 ${snap.level} 关`;
+    this.gbBoss.textContent = `Boss ${snap.bossesDefeated}/${snap.bossTotal}`;
+    this.gbP1Xp.textContent = `Lv.${snap.p1Level} · XP ${snap.p1Xp}`;
+    if (snap.playerCount === 2) {
+      this.gbP2Xp.textContent = `Lv.${snap.p2Level} · XP ${snap.p2Xp}`;
+    }
+    this.gbPhase.textContent =
+      snap.phase === "boss" ? "Boss 战中！" : `剩余怪物 ${snap.monstersLeft}`;
+  }
+
+  trackDualHealth() {
     const tick = () => {
       if (this.game.state === "playing") {
         this.hpP1.style.width = `${this.game.getHealthPercent(1)}%`;
@@ -925,15 +1036,54 @@ class GameUI {
     requestAnimationFrame(tick);
   }
 
-  showOverlay(message) {
+  trackGroupHealth() {
+    const tick = () => {
+      if (this.groupBattle.state === "playing") {
+        const snap = this.groupBattle.getHudSnapshot();
+        this.hpP1.style.width = `${snap.p1Hp}%`;
+        if (snap.playerCount === 2) {
+          this.hpP2.style.width = `${snap.p2Hp}%`;
+        }
+        requestAnimationFrame(tick);
+      }
+    };
+    requestAnimationFrame(tick);
+  }
+
+  showCardDraw(cards, snap) {
+    this.cardOverlay.classList.remove("hidden");
+    this.cardLevelHint.textContent = `第 ${snap.level} 关完成 · 已击败 Boss ${snap.bossesDefeated}/${snap.bossTotal}`;
+    this.cardChoicesEl.innerHTML = "";
+
+    for (const card of cards) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "card-btn";
+      btn.innerHTML = `<h3>${card.name}</h3><p>${card.description}</p>`;
+      btn.addEventListener("click", () => {
+        this.cardOverlay.classList.add("hidden");
+        this.groupBattle.applyCardToParty(card);
+        if (this.groupBattle.state === "playing") {
+          this.trackGroupHealth();
+        }
+      });
+      this.cardChoicesEl.appendChild(btn);
+    }
+  }
+
+  showMainOverlay(message) {
+    this.hideAllOverlays();
     this.overlay.classList.remove("hidden");
     this.hud.classList.add("hidden");
+    this.groupHud.classList.add("hidden");
     this.modeBadge.classList.add("hidden");
     this.overlay.querySelector("h1").textContent = message;
     this.rulesVersus.classList.remove("hidden");
     this.rulesTraining.classList.add("hidden");
+    this.rulesGroup.classList.add("hidden");
     this.versusBtn.textContent = "双人对战";
     this.trainingBtn.textContent = "训练模式";
+    this.groupBattleBtn.textContent = "组团战斗";
   }
 }
 

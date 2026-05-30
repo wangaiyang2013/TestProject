@@ -9,6 +9,7 @@
 <body>
   <div id="game-container">
     <canvas id="game-canvas"></canvas>
+
     <div id="overlay" class="overlay visible">
       <h1>双球对战</h1>
       <div class="rules" id="rules-versus">
@@ -19,12 +20,36 @@
         <p><span class="p1-tag">你（红球）</span> 方向键移动，<kbd>Ctrl</kbd> 攻击</p>
         <p><span class="p2-tag">AI 机器人（蓝球）</span> 自动移动与攻击</p>
       </div>
-      <div class="menu-buttons">
+      <div class="rules hidden" id="rules-group">
+        <p>击杀怪物获得经验，每关击败 Boss 后可<strong>抽卡</strong>强化</p>
+        <p>击败 <strong>30</strong> 个 Boss 即可通关获胜</p>
+        <p>可选 <strong>1 人</strong> 或 <strong>2 人</strong> 组队</p>
+      </div>
+      <div class="menu-buttons" id="main-menu-buttons">
         <button id="versus-btn" type="button" class="btn-primary">双人对战</button>
         <button id="training-btn" type="button" class="btn-secondary">训练模式</button>
+        <button id="group-battle-btn" type="button" class="btn-accent">组团战斗</button>
       </div>
     </div>
+
+    <div id="group-setup-overlay" class="overlay hidden">
+      <h1>组团战斗</h1>
+      <p class="setup-hint">选择组队人数</p>
+      <div class="menu-buttons">
+        <button id="group-1p-btn" type="button" class="btn-primary">1 人闯关</button>
+        <button id="group-2p-btn" type="button" class="btn-secondary">2 人组队</button>
+      </div>
+      <button id="group-setup-back" type="button" class="btn-text">返回主菜单</button>
+    </div>
+
+    <div id="card-overlay" class="overlay hidden">
+      <h1>关卡胜利！抽一张卡</h1>
+      <p id="card-level-hint" class="setup-hint">Boss 已击败，选择增益卡牌</p>
+      <div id="card-choices" class="card-choices"></div>
+    </div>
+
     <div id="mode-badge" class="mode-badge hidden">训练模式</div>
+
     <div id="hud" class="hud hidden">
       <div class="health-bar p1">
         <span>玩家1</span>
@@ -35,7 +60,26 @@
         <div class="bar"><div id="hp-p2" class="fill"></div></div>
       </div>
     </div>
+
+    <div id="group-hud" class="group-hud hidden">
+      <div class="group-stat">
+        <span id="gb-level">第 1 关</span>
+        <span id="gb-boss">Boss 0/30</span>
+      </div>
+      <div class="group-xp-row">
+        <div class="xp-block p1">
+          <span id="gb-p1-label">玩家1</span>
+          <span id="gb-p1-xp">Lv.1 · XP 0</span>
+        </div>
+        <div class="xp-block p2 hidden" id="gb-p2-block">
+          <span id="gb-p2-label">玩家2</span>
+          <span id="gb-p2-xp">Lv.1 · XP 0</span>
+        </div>
+      </div>
+      <div id="gb-phase" class="gb-phase">清剿怪物中...</div>
+    </div>
   </div>
   <script src="game.js"></script>
+  <script src="group-battle.js"></script>
 </body>
 </html>
