@@ -1021,35 +1021,35 @@ class GameUI {
 
   updateHeroHud(snap) {
     if (snap.phase === "pick") {
+      const sec = Math.ceil(snap.pickRemainingMs / 1000);
       if (snap.pickStep === 1) {
-        this.heroPhaseText.textContent = "红队先选球（按 1-4）";
+        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒（1-4）`;
       } else {
         this.heroPhaseText.textContent =
           snap.subMode === "training"
-            ? "AI 正在选球…"
-            : "蓝队选球（按 1-4）";
+            ? "AI 选球中…"
+            : `蓝队选球 · 剩余 ${sec} 秒（1-4）`;
       }
-      this.heroP1Info.textContent = "红队 · 待选";
-      this.heroP2Info.textContent = "蓝队 · 待选";
+      this.heroP1Info.textContent = snap.p1HeroId
+        ? `红队 · ${HeroRoster.getById(snap.p1HeroId).name}`
+        : "红队 · 待选";
+      this.heroP2Info.textContent = snap.p2HeroId
+        ? `蓝队 · ${HeroRoster.getById(snap.p2HeroId).name}`
+        : "蓝队 · 待选";
       return;
     }
 
     const p1 = snap.fighters.find((f) => f.playerId === 1);
     const p2 = snap.fighters.find((f) => f.playerId === 2);
     if (p1) {
-      this.heroP1Info.textContent = `红队 · ${p1.name} HP ${Math.ceil(p1.health)}`;
+      this.heroP1Info.textContent = `红队 · ${p1.name} HP ${Math.ceil(p1.health)} · ${p1.skillName}`;
     }
     if (p2) {
-      this.heroP2Info.textContent = `蓝队 · ${p2.name} HP ${Math.ceil(p2.health)}`;
+      this.heroP2Info.textContent = `蓝队 · ${p2.name} HP ${Math.ceil(p2.health)} · ${p2.skillName}`;
     }
 
-    if (snap.phase === "aim") {
-      this.heroPhaseText.textContent =
-        snap.activePlayerId === 1
-          ? "红队回合 · 调方向后发射"
-          : "蓝队回合 · 调方向后发射";
-    } else if (snap.phase === "slide") {
-      this.heroPhaseText.textContent = "小球飞行中（碰墙反弹）";
+    if (snap.phase === "battle") {
+      this.heroPhaseText.textContent = "自动对战中 · 双球持续反弹";
     }
   }
 

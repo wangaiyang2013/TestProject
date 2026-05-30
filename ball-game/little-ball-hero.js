@@ -1,32 +1,47 @@
 /**
- * 小球英雄模式 - 选球对战，回合制发射，碰墙反弹，飞行中不可操控方向
+ * 小球英雄模式 - 仅需选球（限时）；双球持续自动反弹，技能自动释放
  */
 
 const LittleBallHeroConstants = {
-  LAUNCH_MIN_SPEED: 8,
-  LAUNCH_MAX_SPEED: 16,
-  FRICTION: 0.985,
-  WALL_BOUNCE: 0.92,
-  BALL_BOUNCE: 0.85,
-  STOP_SPEED: 0.35,
-  AIM_ROTATE_SPEED: 0.06,
-  COLLISION_DAMAGE_SCALE: 2.5,
-  PICK_COUNTDOWN_MS: 0,
+  PICK_TIME_LIMIT_MS: 8000,
+  MIN_BOUNCE_SPEED: 7,
+  MAX_BOUNCE_SPEED: 11,
+  WALL_BOUNCE: 0.98,
+  BALL_BOUNCE: 0.92,
+  SKILL_INTERVAL_MS: 1400,
+  PROJECTILE_SPEED: 11,
+  PROJECTILE_LIFETIME_MS: 900,
+  PULSE_RANGE: 72,
+  PULSE_DAMAGE: 14,
+  BUMP_DAMAGE: 10,
+  AI_PICK_DELAY_MS: 500,
 };
+
+/**
+ * 英雄技能类型
+ */
+class HeroSkillType {
+  static SHOT = "shot";
+
+  static PULSE = "pulse";
+
+  static BUMP = "bump";
+}
 
 /**
  * 可选英雄球模板
  */
 class HeroBallTemplate {
-  constructor(id, name, color, glow, maxHealth, launchSpeed, mass, collisionDamage) {
+  constructor(id, name, color, glow, maxHealth, moveSpeed, mass, skillType, skillDamage) {
     this.id = id;
     this.name = name;
     this.color = color;
     this.glow = glow;
     this.maxHealth = maxHealth;
-    this.launchSpeed = launchSpeed;
+    this.moveSpeed = moveSpeed;
     this.mass = mass;
-    this.collisionDamage = collisionDamage;
+    this.skillType = skillType;
+    this.skillDamage = skillDamage;
   }
 }
 
@@ -36,33 +51,123 @@ class HeroBallTemplate {
 class HeroRoster {
   static getAll() {
     return [
-      new HeroBallTemplate("flame", "烈焰丸", "#e94560", "#ff6b6b", 100, 14, 1.0, 18),
-      new HeroBallTemplate("wind", "疾风丸", "#51cf66", "#8ce99a", 85, 16, 0.85, 14),
-      new HeroBallTemplate("iron", "铁壁丸", "#868e96", "#ced4da", 130, 11, 1.4, 22),
-      new HeroBallTemplate("bolt", "闪电丸", "#fcc419", "#ffe066", 95, 13, 1.0, 16),
+      new HeroBallTemplate(
+        "flame",
+        "烈焰丸",
+        "#e94560",
+        "#ff6b6b",
+        100,
+        9,
+        1.0,
+        HeroSkillType.SHOT,
+        16
+      ),
+      new HeroBallTemplate(
+        "wind",
+        "疾风丸",
+        "#51cf66",
+        "#8ce99a",
+        85,
+        10,
+        0.85,
+        HeroSkillType.BUMP,
+        12
+      ),
+      new HeroBallTemplate(
+        "iron",
+        "铁壁丸",
+        "#868e96",
+        "#ced4da",
+        130,
+        8,
+        1.4,
+        HeroSkillType.PULSE,
+        18
+      ),
+      new HeroBallTemplate(
+        "bolt",
+        "闪电丸",
+        "#fcc419",
+        "#ffe066",
+        95,
+        9,
+        1.0,
+        HeroSkillType.SHOT,
+        14
+      ),
     ];
   }
 
   static getById(id) {
     return HeroRoster.getAll().find((h) => h.id === id) || HeroRoster.getAll()[0];
   }
+
+  static pickRandom(available) {
+    const list = available.length > 0 ? available : HeroRoster.getAll();
+    return list[Math.floor(Math.random() * list.length)];
+  }
 }
 
 /**
- * 场上战斗用英雄球
+ * 技能投射物
+ */
+class HeroSkillProjectile {
+  constructor(x, y, dirX, dirY, radius, ownerId, color, damage) {
+    this.x = x;
+    this.y = y;
+    this.dirX = dirX;
+    this.dirY = dirY;
+    this.radius = radius;
+    this.ownerId = ownerId;
+    this.color = color;
+    this.damage = damage;
+    this.alive = true;
+    this.spawnTime = Date.now();
+  }
+
+  update() {
+    this.x += this.dirX * LittleBallHeroConstants.PROJECTILE_SPEED;
+    this.y += this.dirY * LittleBallHeroConstants.PROJECTILE_SPEED;
+    if (Date.now() - this.spawnTime > LittleBallHeroConstants.PROJECTILE_LIFETIME_MS) {
+      this.alive = false;
+    }
+  }
+
+  isOutOfBounds(arena) {
+    return (
+      this.x - this.radius < arena.left ||
+      this.x + this.radius > arena.right ||
+      this.y - this.radius < arena.top ||
+      this.y + this.radius > arena.bottom
+    );
+  }
+
+  draw(ctx) {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = this.color;
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
+/**
+ * 场上战斗用英雄球（自动反弹 + 自动技能）
  */
 class HeroBallFighter {
-  constructor(playerId, template, x, y, radius) {
+  constructor(playerId, template, x, y, radius, dirX, dirY) {
     this.playerId = playerId;
     this.template = template;
     this.x = x;
     this.y = y;
     this.radius = radius;
     this.health = template.maxHealth;
-    this.vx = 0;
-    this.vy = 0;
-    this.aimAngle = playerId === 1 ? 0 : Math.PI;
-    this.isMoving = false;
+    this.vx = dirX * template.moveSpeed;
+    this.vy = dirY * template.moveSpeed;
+    this.lastSkillTime = Date.now() - Math.random() * LittleBallHeroConstants.SKILL_INTERVAL_MS;
+    this.pulseFlashUntil = 0;
   }
 
   get maxHealth() {
@@ -81,21 +186,16 @@ class HeroBallFighter {
     return this.template.mass;
   }
 
-  launch() {
-    this.vx = Math.cos(this.aimAngle) * this.template.launchSpeed;
-    this.vy = Math.sin(this.aimAngle) * this.template.launchSpeed;
-    this.isMoving = true;
+  getSpeed() {
+    return Math.hypot(this.vx, this.vy);
   }
 
-  isStopped() {
-    const speed = Math.hypot(this.vx, this.vy);
-    return !this.isMoving || speed < LittleBallHeroConstants.STOP_SPEED;
-  }
-
-  stop() {
-    this.vx = 0;
-    this.vy = 0;
-    this.isMoving = false;
+  getMoveAngle() {
+    const speed = this.getSpeed();
+    if (speed < 0.001) {
+      return this.playerId === 1 ? 0 : Math.PI;
+    }
+    return Math.atan2(this.vy, this.vx);
   }
 
   takeDamage(amount) {
@@ -106,24 +206,21 @@ class HeroBallFighter {
     return this.health > 0;
   }
 
-  rotateAim(delta) {
-    this.aimAngle += delta;
+  canUseSkill(now) {
+    return now - this.lastSkillTime >= LittleBallHeroConstants.SKILL_INTERVAL_MS;
   }
 
-  draw(ctx, isActive, showAim) {
-    if (showAim && !this.isMoving) {
-      const lineLen = this.radius + 36;
+  markSkillUsed(now) {
+    this.lastSkillTime = now;
+  }
+
+  draw(ctx) {
+    if (Date.now() < this.pulseFlashUntil) {
       ctx.beginPath();
-      ctx.moveTo(this.x, this.y);
-      ctx.lineTo(
-        this.x + Math.cos(this.aimAngle) * lineLen,
-        this.y + Math.sin(this.aimAngle) * lineLen
-      );
-      ctx.strokeStyle = isActive ? "#ffd43b" : "rgba(255,255,255,0.35)";
-      ctx.lineWidth = isActive ? 3 : 2;
-      ctx.setLineDash(isActive ? [] : [6, 6]);
+      ctx.arc(this.x, this.y, LittleBallHeroConstants.PULSE_RANGE, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255, 212, 59, 0.55)";
+      ctx.lineWidth = 3;
       ctx.stroke();
-      ctx.setLineDash([]);
     }
 
     ctx.beginPath();
@@ -137,8 +234,8 @@ class HeroBallFighter {
     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
     ctx.fillStyle = this.color;
     ctx.fill();
-    ctx.strokeStyle = isActive ? "#ffd43b" : "#fff";
-    ctx.lineWidth = isActive ? 4 : 2;
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 3;
     ctx.stroke();
 
     const barW = this.radius * 2.2;
@@ -158,19 +255,30 @@ class HeroBallFighter {
 }
 
 /**
- * 墙壁反弹物理
+ * 持续反弹物理（球体永不停止，保持最低速度）
  */
-class BouncePhysics {
-  static updateBall(ball, arena) {
-    if (!ball.isMoving) {
-      return;
-    }
+class ContinuousBouncePhysics {
+  static maintainSpeed(ball) {
+    const speed = ball.getSpeed();
+    const minSpeed = LittleBallHeroConstants.MIN_BOUNCE_SPEED;
+    const maxSpeed = LittleBallHeroConstants.MAX_BOUNCE_SPEED;
+    const angle = ball.getMoveAngle();
 
+    if (speed < minSpeed) {
+      ball.vx = Math.cos(angle) * minSpeed;
+      ball.vy = Math.sin(angle) * minSpeed;
+    } else if (speed > maxSpeed) {
+      ball.vx = (ball.vx / speed) * maxSpeed;
+      ball.vy = (ball.vy / speed) * maxSpeed;
+    }
+  }
+
+  static updateBall(ball, arena) {
     ball.x += ball.vx;
     ball.y += ball.vy;
 
     const bounce = LittleBallHeroConstants.WALL_BOUNCE;
-  const r = ball.radius;
+    const r = ball.radius;
 
     if (ball.x - r < arena.left) {
       ball.x = arena.left + r;
@@ -188,19 +296,10 @@ class BouncePhysics {
       ball.vy = -Math.abs(ball.vy) * bounce;
     }
 
-    ball.vx *= LittleBallHeroConstants.FRICTION;
-    ball.vy *= LittleBallHeroConstants.FRICTION;
-
-    if (ball.isStopped()) {
-      ball.stop();
-    }
+    ContinuousBouncePhysics.maintainSpeed(ball);
   }
 
   static resolveBallCollision(a, b) {
-    if (!a.isMoving && !b.isMoving) {
-      return;
-    }
-
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const dist = Math.hypot(dx, dy);
@@ -223,51 +322,124 @@ class BouncePhysics {
     const dvx = a.vx - b.vx;
     const dvy = a.vy - b.vy;
     const impact = dvx * nx + dvy * ny;
-    if (impact > 0) {
-      const restitution = LittleBallHeroConstants.BALL_BOUNCE;
-      const impulse = (2 * impact * restitution) / totalMass;
-      a.vx -= impulse * b.mass * nx;
-      a.vy -= impulse * b.mass * ny;
-      b.vx += impulse * a.mass * nx;
-      b.vy += impulse * a.mass * ny;
-
-      const relSpeed = Math.abs(impact);
-      const dmgA = Math.round(
-        b.template.collisionDamage *
-          LittleBallHeroConstants.COLLISION_DAMAGE_SCALE *
-          (relSpeed / 10)
-      );
-      const dmgB = Math.round(
-        a.template.collisionDamage *
-          LittleBallHeroConstants.COLLISION_DAMAGE_SCALE *
-          (relSpeed / 10)
-      );
-      a.takeDamage(Math.max(4, dmgA));
-      b.takeDamage(Math.max(4, dmgB));
-
-      if (!a.isStopped()) {
-        a.isMoving = true;
-      }
-      if (!b.isStopped()) {
-        b.isMoving = true;
-      }
+    if (impact <= 0) {
+      return;
     }
+
+    const restitution = LittleBallHeroConstants.BALL_BOUNCE;
+    const impulse = (2 * impact * restitution) / totalMass;
+    a.vx -= impulse * b.mass * nx;
+    a.vy -= impulse * b.mass * ny;
+    b.vx += impulse * a.mass * nx;
+    b.vy += impulse * a.mass * ny;
+
+    const touchDamage = LittleBallHeroConstants.BUMP_DAMAGE;
+    a.takeDamage(touchDamage);
+    b.takeDamage(touchDamage);
+
+    ContinuousBouncePhysics.maintainSpeed(a);
+    ContinuousBouncePhysics.maintainSpeed(b);
   }
 }
 
 /**
- * 训练场 AI
+ * 自动技能系统
  */
-class HeroTrainingAi {
-  pickHero(available) {
-    const idx = Math.floor(Math.random() * available.length);
-    return available[idx];
+class HeroAutoSkillSystem {
+  static tryUseSkill(fighter, opponent, projectiles, projectileRadius) {
+    const now = Date.now();
+    if (!fighter.canUseSkill(now) || !opponent || !opponent.isAlive()) {
+      return;
+    }
+
+    const template = fighter.template;
+    fighter.markSkillUsed(now);
+
+    if (template.skillType === HeroSkillType.SHOT) {
+      HeroAutoSkillSystem.fireShot(fighter, opponent, projectiles, projectileRadius, template.skillDamage);
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.PULSE) {
+      HeroAutoSkillSystem.firePulse(fighter, opponent, template.skillDamage);
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.BUMP) {
+      HeroAutoSkillSystem.fireBump(fighter, opponent, template.skillDamage);
+    }
   }
 
-  computeAimAngle(aiBall, targetBall) {
-    const dx = targetBall.x - aiBall.x;
-    const dy = targetBall.y - aiBall.y;
-    return Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.35;
+  static fireShot(fighter, opponent, projectiles, radius, damage) {
+    const dx = opponent.x - fighter.x;
+    const dy = opponent.y - fighter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return;
+    }
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+    const offset = fighter.radius + radius + 4;
+    projectiles.push(
+      new HeroSkillProjectile(
+        fighter.x + dirX * offset,
+        fighter.y + dirY * offset,
+        dirX,
+        dirY,
+        radius,
+        fighter.playerId,
+        fighter.color,
+        damage
+      )
+    );
+  }
+
+  static firePulse(fighter, opponent, damage) {
+    fighter.pulseFlashUntil = Date.now() + 200;
+    const dist = Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y);
+    if (dist <= LittleBallHeroConstants.PULSE_RANGE + opponent.radius) {
+      opponent.takeDamage(damage);
+    }
+  }
+
+  static fireBump(fighter, opponent, damage) {
+    const dx = opponent.x - fighter.x;
+    const dy = opponent.y - fighter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return;
+    }
+    const nx = dx / dist;
+    const ny = dy / dist;
+    opponent.vx += nx * 2.5;
+    opponent.vy += ny * 2.5;
+    fighter.vx -= nx * 1.2;
+    fighter.vy -= ny * 1.2;
+    opponent.takeDamage(damage);
+    ContinuousBouncePhysics.maintainSpeed(fighter);
+    ContinuousBouncePhysics.maintainSpeed(opponent);
+  }
+}
+
+/**
+ * 选球倒计时
+ */
+class PickTimer {
+  constructor(limitMs) {
+    this.limitMs = limitMs;
+    this.startTime = Date.now();
+  }
+
+  getRemainingMs() {
+    return Math.max(0, this.limitMs - (Date.now() - this.startTime));
+  }
+
+  isExpired() {
+    return this.getRemainingMs() <= 0;
+  }
+
+  reset() {
+    this.startTime = Date.now();
   }
 }
 
@@ -282,9 +454,10 @@ class LittleBallHeroGame {
     this.state = "idle";
     this.subMode = "training";
     this.phase = "pick";
-    this.activePlayerId = 1;
     this.pickStep = 1;
+    this.pickTimer = null;
     this.fighters = [];
+    this.projectiles = [];
     this.p1HeroId = null;
     this.p2HeroId = null;
     this.takenHeroIds = new Set();
@@ -292,7 +465,6 @@ class LittleBallHeroGame {
     this.width = 0;
     this.height = 0;
     this.animationId = null;
-    this.trainingAi = new HeroTrainingAi();
     this.onPhaseChange = null;
     this.onGameOver = null;
     this.resize();
@@ -328,16 +500,21 @@ class LittleBallHeroGame {
     return Math.max(18, this.height * GameConstants.BALL_RADIUS_RATIO);
   }
 
+  getProjectileRadius() {
+    return Math.max(8, this.height * GameConstants.PROJECTILE_RADIUS_RATIO);
+  }
+
   start(subMode) {
     this.subMode = subMode;
     this.state = "playing";
     this.phase = "pick";
-    this.activePlayerId = 1;
     this.pickStep = 1;
     this.p1HeroId = null;
     this.p2HeroId = null;
     this.takenHeroIds = new Set();
     this.fighters = [];
+    this.projectiles = [];
+    this.startPickTimer();
     this.notifyPhase();
 
     if (this.animationId !== null) {
@@ -350,6 +527,10 @@ class LittleBallHeroGame {
     return this.subMode === "versus";
   }
 
+  startPickTimer() {
+    this.pickTimer = new PickTimer(LittleBallHeroConstants.PICK_TIME_LIMIT_MS);
+  }
+
   notifyPhase() {
     if (typeof this.onPhaseChange === "function") {
       this.onPhaseChange(this.getPhaseSnapshot());
@@ -359,9 +540,9 @@ class LittleBallHeroGame {
   getPhaseSnapshot() {
     return {
       phase: this.phase,
-      activePlayerId: this.activePlayerId,
       pickStep: this.pickStep,
       subMode: this.subMode,
+      pickRemainingMs: this.pickTimer ? this.pickTimer.getRemainingMs() : 0,
       p1HeroId: this.p1HeroId,
       p2HeroId: this.p2HeroId,
       fighters: this.fighters.map((f) => ({
@@ -369,6 +550,7 @@ class LittleBallHeroGame {
         name: f.template.name,
         health: f.health,
         maxHealth: f.maxHealth,
+        skillName: HeroAutoSkillSystem.getSkillLabel(f.template.skillType),
       })),
     };
   }
@@ -377,43 +559,44 @@ class LittleBallHeroGame {
     return HeroRoster.getAll().filter((h) => !this.takenHeroIds.has(h.id));
   }
 
-  tryPickHero(heroId) {
-    if (this.phase !== "pick") {
-      return false;
-    }
-    if (this.takenHeroIds.has(heroId)) {
-      return false;
-    }
+  autoPickForCurrentStep() {
+    const available = this.getAvailableHeroes();
+    const hero = HeroRoster.pickRandom(available);
+    this.applyPick(hero.id, true);
+  }
 
-    const pickingPlayer =
-      this.pickStep === 1 ? 1 : this.pickStep === 2 ? 2 : null;
-    if (!pickingPlayer) {
-      return false;
-    }
-
-    if (pickingPlayer === 1) {
+  applyPick(heroId, wasAuto) {
+    if (this.pickStep === 1) {
       this.p1HeroId = heroId;
     } else {
       this.p2HeroId = heroId;
     }
     this.takenHeroIds.add(heroId);
-    this.advancePick();
+    this.advancePick(wasAuto);
+  }
+
+  tryPickHero(heroId) {
+    if (this.phase !== "pick" || this.takenHeroIds.has(heroId)) {
+      return false;
+    }
+    this.applyPick(heroId, false);
     return true;
   }
 
-  advancePick() {
+  advancePick(wasAuto) {
     if (this.pickStep === 1) {
       this.pickStep = 2;
-      this.activePlayerId = 2;
 
       if (!this.isTwoPlayer()) {
         const available = this.getAvailableHeroes();
-        const aiHero = this.trainingAi.pickHero(available);
+        const aiHero = HeroRoster.pickRandom(available);
         this.p2HeroId = aiHero.id;
         this.takenHeroIds.add(aiHero.id);
         this.beginBattle();
         return;
       }
+
+      this.startPickTimer();
       this.notifyPhase();
       return;
     }
@@ -431,34 +614,31 @@ class LittleBallHeroGame {
       new HeroBallFighter(
         1,
         p1Template,
-        this.arena.left + this.width * 0.25,
+        this.arena.left + this.width * 0.28,
         cy,
-        r
+        r,
+        1,
+        0.2
       ),
       new HeroBallFighter(
         2,
         p2Template,
-        this.arena.right - this.width * 0.25,
+        this.arena.right - this.width * 0.28,
         cy,
-        r
+        r,
+        -1,
+        0.2
       ),
     ];
 
-    this.phase = "aim";
-    this.activePlayerId = 1;
+    this.phase = "battle";
+    this.projectiles = [];
     this.notifyPhase();
   }
 
-  getActiveFighter() {
-    return this.fighters.find((f) => f.playerId === this.activePlayerId);
-  }
-
-  getOpponentFighter() {
-    return this.fighters.find((f) => f.playerId !== this.activePlayerId);
-  }
-
-  handlePickInput() {
-    if (!this.isTwoPlayer() && this.pickStep === 2) {
+  updatePickPhase() {
+    if (this.pickTimer && this.pickTimer.isExpired()) {
+      this.autoPickForCurrentStep();
       return;
     }
 
@@ -468,121 +648,75 @@ class LittleBallHeroGame {
       if (this.input.wasPressed(keys[i])) {
         const hero = heroes[i];
         if (hero && !this.takenHeroIds.has(hero.id)) {
-          this.tryPickHero(hero.id);
+          const isP1Turn = this.pickStep === 1;
+          const isP2Turn = this.pickStep === 2 && this.isTwoPlayer();
+          if (isP1Turn || isP2Turn) {
+            this.tryPickHero(hero.id);
+          }
         }
       }
     }
   }
 
-  handleAimInputP1() {
-    if (this.input.isDown("ArrowLeft")) {
-      this.getActiveFighter().rotateAim(-LittleBallHeroConstants.AIM_ROTATE_SPEED);
-    }
-    if (this.input.isDown("ArrowRight")) {
-      this.getActiveFighter().rotateAim(LittleBallHeroConstants.AIM_ROTATE_SPEED);
-    }
-    if (this.input.isDown("ArrowUp")) {
-      this.getActiveFighter().rotateAim(-LittleBallHeroConstants.AIM_ROTATE_SPEED);
-    }
-    if (this.input.isDown("ArrowDown")) {
-      this.getActiveFighter().rotateAim(LittleBallHeroConstants.AIM_ROTATE_SPEED);
-    }
-    if (
-      this.input.wasPressed("ControlLeft") ||
-      this.input.wasPressed("ControlRight") ||
-      this.input.wasPressed("Space")
-    ) {
-      this.launchActiveBall();
-    }
+  getFighter(playerId) {
+    return this.fighters.find((f) => f.playerId === playerId);
   }
 
-  handleAimInputP2() {
-    if (this.input.isDown("KeyA")) {
-      this.getActiveFighter().rotateAim(-LittleBallHeroConstants.AIM_ROTATE_SPEED);
-    }
-    if (this.input.isDown("KeyZ")) {
-      this.getActiveFighter().rotateAim(LittleBallHeroConstants.AIM_ROTATE_SPEED);
-    }
-    if (this.input.isDown("KeyW")) {
-      this.getActiveFighter().rotateAim(-LittleBallHeroConstants.AIM_ROTATE_SPEED * 0.7);
-    }
-    if (this.input.isDown("KeyS")) {
-      this.getActiveFighter().rotateAim(LittleBallHeroConstants.AIM_ROTATE_SPEED * 0.7);
-    }
-    if (this.input.wasPressed("KeyY")) {
-      this.launchActiveBall();
-    }
-  }
-
-  launchActiveBall() {
-    const fighter = this.getActiveFighter();
-    if (!fighter || fighter.isMoving) {
+  updateBattle() {
+    const f1 = this.fighters[0];
+    const f2 = this.fighters[1];
+    if (!f1 || !f2) {
       return;
     }
-    fighter.launch();
-    this.phase = "slide";
-    this.notifyPhase();
-  }
 
-  runTrainingAiTurn() {
-    const fighter = this.getActiveFighter();
-    if (!fighter || fighter.playerId !== 2) {
-      return;
-    }
-    const target = this.getOpponentFighter();
-    if (target) {
-      fighter.aimAngle = this.trainingAi.computeAimAngle(fighter, target);
-    }
-    fighter.launch();
-    this.phase = "slide";
-    this.notifyPhase();
-  }
+    ContinuousBouncePhysics.updateBall(f1, this.arena);
+    ContinuousBouncePhysics.updateBall(f2, this.arena);
+    ContinuousBouncePhysics.resolveBallCollision(f1, f2);
 
-  updateSlide() {
-    let anyMoving = false;
+    const now = Date.now();
+    HeroAutoSkillSystem.tryUseSkill(f1, f2, this.projectiles, this.getProjectileRadius());
+    HeroAutoSkillSystem.tryUseSkill(f2, f1, this.projectiles, this.getProjectileRadius());
+
+    this.updateProjectiles();
 
     for (const fighter of this.fighters) {
-      BouncePhysics.updateBall(fighter, this.arena);
-      if (fighter.isMoving && !fighter.isStopped()) {
-        anyMoving = true;
-      }
-    }
-
-    BouncePhysics.resolveBallCollision(this.fighters[0], this.fighters[1]);
-
-    for (const fighter of this.fighters) {
-      this.arena.clampBall(fighter);
       if (!fighter.isAlive()) {
         this.endGame(fighter.playerId === 1 ? 2 : 1);
         return;
       }
     }
-
-    if (!anyMoving) {
-      for (const fighter of this.fighters) {
-        fighter.stop();
-      }
-      this.endTurn();
-    }
   }
 
-  endTurn() {
-    const dead = this.fighters.find((f) => !f.isAlive());
-    if (dead) {
-      this.endGame(dead.playerId === 1 ? 2 : 1);
-      return;
-    }
+  updateProjectiles() {
+    for (let i = this.projectiles.length - 1; i >= 0; i -= 1) {
+      const proj = this.projectiles[i];
+      proj.update();
 
-    this.activePlayerId = this.activePlayerId === 1 ? 2 : 1;
-    this.phase = "aim";
-    this.notifyPhase();
+      if (!proj.alive || proj.isOutOfBounds(this.arena)) {
+        this.projectiles.splice(i, 1);
+        continue;
+      }
 
-    if (!this.isTwoPlayer() && this.activePlayerId === 2) {
-      setTimeout(() => {
-        if (this.state === "playing" && this.phase === "aim") {
-          this.runTrainingAiTurn();
+      for (const fighter of this.fighters) {
+        if (fighter.playerId === proj.ownerId || !fighter.isAlive()) {
+          continue;
         }
-      }, 600);
+        if (
+          CollisionDetector.circleHitsCircle(
+            proj.x,
+            proj.y,
+            proj.radius,
+            fighter.x,
+            fighter.y,
+            fighter.radius
+          )
+        ) {
+          fighter.takeDamage(proj.damage);
+          proj.alive = false;
+          this.projectiles.splice(i, 1);
+          break;
+        }
+      }
     }
   }
 
@@ -603,15 +737,11 @@ class LittleBallHeroGame {
     }
 
     if (this.phase === "pick") {
-      this.handlePickInput();
-    } else if (this.phase === "aim") {
-      if (this.activePlayerId === 1) {
-        this.handleAimInputP1();
-      } else if (this.isTwoPlayer()) {
-        this.handleAimInputP2();
-      }
-    } else if (this.phase === "slide") {
-      this.updateSlide();
+      this.updatePickPhase();
+      this.notifyPhase();
+    } else if (this.phase === "battle") {
+      this.updateBattle();
+      this.notifyPhase();
     }
 
     this.input.clearFrame();
@@ -619,22 +749,34 @@ class LittleBallHeroGame {
 
   drawPickScreen() {
     const heroes = HeroRoster.getAll();
+    const remainingSec = Math.ceil(
+      (this.pickTimer ? this.pickTimer.getRemainingMs() : 0) / 1000
+    );
     const pickerLabel =
       this.pickStep === 1
-        ? "红队（玩家1）先选球"
+        ? "红队（玩家1）选球"
         : "蓝队（玩家2）选球";
 
     this.ctx.fillStyle = "rgba(0,0,0,0.55)";
-    this.ctx.fillRect(this.arena.left, this.arena.top, this.arena.right - this.arena.left, this.arena.bottom - this.arena.top);
+    this.ctx.fillRect(
+      this.arena.left,
+      this.arena.top,
+      this.arena.right - this.arena.left,
+      this.arena.bottom - this.arena.top
+    );
 
     this.ctx.textAlign = "center";
     this.ctx.fillStyle = "#ffd43b";
     this.ctx.font = "bold 18px system-ui, sans-serif";
-    this.ctx.fillText(pickerLabel, this.width / 2, this.arena.top + 36);
+    this.ctx.fillText(pickerLabel, this.width / 2, this.arena.top + 32);
 
-    this.ctx.fillStyle = "#ccc";
-    this.ctx.font = "13px system-ui, sans-serif";
-    this.ctx.fillText("按 1-4 选择英雄球（双人模式 P2 用 Y/A/Z 确认见提示）", this.width / 2, this.arena.top + 58);
+    this.ctx.fillStyle = remainingSec <= 3 ? "#ff6b6b" : "#ccc";
+    this.ctx.font = "14px system-ui, sans-serif";
+    this.ctx.fillText(
+      `剩余 ${remainingSec} 秒 · 按 1-4 选球，超时随机`,
+      this.width / 2,
+      this.arena.top + 56
+    );
 
     const startX = this.width / 2 - (heroes.length * 110) / 2;
     heroes.forEach((hero, i) => {
@@ -655,9 +797,12 @@ class LittleBallHeroGame {
       this.ctx.fillStyle = "#fff";
       this.ctx.font = "12px system-ui, sans-serif";
       this.ctx.fillText(`${i + 1}. ${hero.name}`, cx, cy + 48);
+      const skillLabel = HeroAutoSkillSystem.getSkillLabel(hero.skillType);
+      this.ctx.fillStyle = "#aaa";
+      this.ctx.fillText(`自动·${skillLabel}`, cx, cy + 64);
       if (taken) {
         this.ctx.fillStyle = "#888";
-        this.ctx.fillText("已选", cx, cy + 62);
+        this.ctx.fillText("已选", cx, cy + 78);
       }
     });
     this.ctx.textAlign = "left";
@@ -684,29 +829,24 @@ class LittleBallHeroGame {
     }
 
     for (const fighter of this.fighters) {
-      const isActive =
-        this.phase === "aim" && fighter.playerId === this.activePlayerId;
-      const showAim = this.phase === "aim";
-      fighter.draw(this.ctx, isActive, showAim && !fighter.isMoving);
+      if (fighter.isAlive()) {
+        fighter.draw(this.ctx);
+      }
     }
 
-    if (this.phase === "aim") {
-      const label =
-        this.activePlayerId === 1
-          ? "红队回合：调整方向后 Ctrl/空格 发射"
-          : "蓝队回合：调整方向后 Y 发射";
-      this.ctx.fillStyle = "rgba(255, 212, 59, 0.9)";
-      this.ctx.font = "13px system-ui, sans-serif";
-      this.ctx.textAlign = "center";
-      this.ctx.fillText(label, this.width / 2, this.arena.bottom + 28);
-      this.ctx.textAlign = "left";
-    } else if (this.phase === "slide") {
-      this.ctx.fillStyle = "#aaa";
-      this.ctx.font = "13px system-ui, sans-serif";
-      this.ctx.textAlign = "center";
-      this.ctx.fillText("小球飞行中，碰墙反弹…", this.width / 2, this.arena.bottom + 28);
-      this.ctx.textAlign = "left";
+    for (const proj of this.projectiles) {
+      proj.draw(this.ctx);
     }
+
+    this.ctx.fillStyle = "rgba(255, 212, 59, 0.85)";
+    this.ctx.font = "13px system-ui, sans-serif";
+    this.ctx.textAlign = "center";
+    this.ctx.fillText(
+      "双球自动反弹对打 · 技能自动释放 · 你只需选球",
+      this.width / 2,
+      this.arena.bottom + 28
+    );
+    this.ctx.textAlign = "left";
   }
 
   loop() {
@@ -719,10 +859,23 @@ class LittleBallHeroGame {
   }
 
   getHealthPercent(playerId) {
-    const fighter = this.fighters.find((f) => f.playerId === playerId);
+    const fighter = this.getFighter(playerId);
     if (!fighter) {
       return 100;
     }
     return (fighter.health / fighter.maxHealth) * 100;
   }
 }
+
+HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
+  if (skillType === HeroSkillType.SHOT) {
+    return "弹射";
+  }
+  if (skillType === HeroSkillType.PULSE) {
+    return "震荡";
+  }
+  if (skillType === HeroSkillType.BUMP) {
+    return "冲击";
+  }
+  return "技能";
+};
