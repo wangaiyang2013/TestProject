@@ -1150,6 +1150,8 @@ class GameUI {
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
     this.groupHud.classList.add("hidden");
+    this.heroHud.classList.add("hidden");
+    this.westHud.classList.add("hidden");
     this.p2Bar.classList.remove("hidden-bar");
     this.modeBadge.classList.toggle("hidden", !isTraining);
     this.modeBadge.textContent = "训练模式";
@@ -1165,6 +1167,8 @@ class GameUI {
     this.currentMode = GameMode.GROUP_BATTLE;
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
+    this.heroHud.classList.add("hidden");
+    this.westHud.classList.add("hidden");
     this.groupHud.classList.remove("hidden");
     this.modeBadge.classList.remove("hidden");
     this.modeBadge.textContent = "组团战斗";
