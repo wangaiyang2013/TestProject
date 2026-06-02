@@ -9,8 +9,9 @@ const WestBulldogConstants = {
   MOVE_SPEED: 5.5,
   BULLET_SPEED: 16,
   BULLET_RADIUS_RATIO: 0.012,
-  SHOOT_COOLDOWN_MS: 280,
+  ATTACK_INTERVAL_MS: 100,
   MAX_SHOOT_RANGE: 420,
+  ENEMY_COUNT: 3,
   MAX_DAMAGE: 28,
   MIN_DAMAGE: 6,
   BULLET_LIFETIME_MS: 1400,
@@ -114,8 +115,12 @@ class WestBulldogBall {
     this.aimAngle = Math.atan2(mouseY - this.y, mouseX - this.x);
   }
 
+  aimAt(targetX, targetY) {
+    this.aimAngle = Math.atan2(targetY - this.y, targetX - this.x);
+  }
+
   canShoot() {
-    return Date.now() - this.lastShootTime >= WestBulldogConstants.SHOOT_COOLDOWN_MS;
+    return Date.now() - this.lastShootTime >= WestBulldogConstants.ATTACK_INTERVAL_MS;
   }
 
   shoot(bulletRadius) {
@@ -284,6 +289,33 @@ class BulldogEnemyBall {
 }
 
 /**
+ * 查找距离玩家最近的存活敌人
+ */
+class NearestEnemyFinder {
+  static find(player, enemies) {
+    let nearest = null;
+    let minDist = Infinity;
+
+    for (const enemy of enemies) {
+      if (!enemy.isAlive()) {
+        continue;
+      }
+      const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = enemy;
+      }
+    }
+
+    if (!nearest || minDist > WestBulldogConstants.MAX_SHOOT_RANGE) {
+      return null;
+    }
+
+    return { enemy: nearest, distance: minDist };
+  }
+}
+
+/**
  * 鼠标输入
  */
 class MouseInput {
@@ -339,7 +371,7 @@ class WestBulldogGame {
     this.mouse = new MouseInput(canvas);
     this.state = "idle";
     this.player = null;
-    this.enemy = null;
+    this.enemies = [];
     this.bullets = [];
     this.arena = null;
     this.width = 0;
@@ -376,9 +408,9 @@ class WestBulldogGame {
       this.player.radius = r;
       this.arena.clampBall(this.player);
     }
-    if (this.enemy) {
-      this.enemy.radius = r;
-      this.arena.clampBall(this.enemy);
+    for (const enemy of this.enemies) {
+      enemy.radius = r;
+      this.arena.clampBall(enemy);
     }
   }
 
@@ -401,11 +433,27 @@ class WestBulldogGame {
       cy,
       r
     );
-    this.enemy = new BulldogEnemyBall(
-      this.arena.right - this.width * 0.25,
-      cy,
-      r
+    this.enemies = [];
+    const spawnSlots = [
+      { x: 0.72, y: 0.35 },
+      { x: 0.78, y: 0.55 },
+      { x: 0.65, y: 0.72 },
+    ];
+    const count = Math.min(
+      WestBulldogConstants.ENEMY_COUNT,
+      spawnSlots.length
     );
+
+    for (let i = 0; i < count; i += 1) {
+      const slot = spawnSlots[i];
+      this.enemies.push(
+        new BulldogEnemyBall(
+          this.arena.left + (this.arena.right - this.arena.left) * slot.x,
+          this.arena.top + (this.arena.bottom - this.arena.top) * slot.y,
+          r
+        )
+      );
+    }
 
     if (this.animationId !== null) {
       cancelAnimationFrame(this.animationId);
@@ -418,18 +466,45 @@ class WestBulldogGame {
     if (typeof this.onHudUpdate === "function") {
       this.onHudUpdate({
         playerHp: this.player ? this.player.health : 0,
-        enemyHp: this.enemy ? this.enemy.health : 0,
+        enemyHp: this.getTotalEnemyHealth(),
+        enemyCount: this.getAliveEnemyCount(),
         lastHit: this.lastHitMessage,
       });
     }
   }
 
-  tryShoot() {
-    if (!this.mouse.consumeClick() || !this.player.canShoot()) {
-      return;
+  getAliveEnemyCount() {
+    return this.enemies.filter((e) => e.isAlive()).length;
+  }
+
+  getTotalEnemyHealth() {
+    return this.enemies.reduce((sum, e) => sum + (e.isAlive() ? e.health : 0), 0);
+  }
+
+  getMaxTotalEnemyHealth() {
+    return WestBulldogConstants.ENEMY_HEALTH * this.enemies.length;
+  }
+
+  fireBullet() {
+    if (!this.player.canShoot()) {
+      return false;
     }
     const bullet = this.player.shoot(this.getBulletRadius());
     this.bullets.push(bullet);
+    return true;
+  }
+
+  tryManualShoot() {
+    if (!this.mouse.consumeClick()) {
+      return;
+    }
+    const result = NearestEnemyFinder.find(this.player, this.enemies);
+    if (result) {
+      this.player.aimAt(result.enemy.x, result.enemy.y);
+    } else if (this.mouse.inside) {
+      this.player.updateAim(this.mouse.x, this.mouse.y);
+    }
+    this.fireBullet();
   }
 
   updateBullets() {
@@ -442,32 +517,34 @@ class WestBulldogGame {
         continue;
       }
 
-      if (!this.enemy.isAlive()) {
-        continue;
-      }
-
-      if (
-        CollisionDetector.circleHitsCircle(
-          bullet.x,
-          bullet.y,
-          bullet.radius,
-          this.enemy.x,
-          this.enemy.y,
-          this.enemy.radius
-        )
-      ) {
-        const damage = bullet.getDamageAtImpact();
-        this.enemy.takeDamage(damage);
-        this.lastHitMessage = `命中！造成 ${damage} 点伤害（距离越远伤害越低）`;
-        this.hitMessageUntil = Date.now() + 1200;
-        bullet.alive = false;
-        this.bullets.splice(i, 1);
-        this.notifyHud();
-
-        if (!this.enemy.isAlive()) {
-          this.endGame(true);
+      for (const enemy of this.enemies) {
+        if (!enemy.isAlive()) {
+          continue;
+        }
+        if (
+          CollisionDetector.circleHitsCircle(
+            bullet.x,
+            bullet.y,
+            bullet.radius,
+            enemy.x,
+            enemy.y,
+            enemy.radius
+          )
+        ) {
+          const damage = bullet.getDamageAtImpact();
+          enemy.takeDamage(damage);
+          this.lastHitMessage = `命中最近敌人！${damage} 伤害（越远越低）`;
+          this.hitMessageUntil = Date.now() + 800;
+          bullet.alive = false;
+          this.bullets.splice(i, 1);
+          this.notifyHud();
+          break;
         }
       }
+    }
+
+    if (this.getAliveEnemyCount() === 0) {
+      this.endGame(true);
     }
   }
 
@@ -478,11 +555,24 @@ class WestBulldogGame {
 
     if (this.mouse.inside) {
       this.player.moveToward(this.mouse.x, this.mouse.y, this.arena);
+    }
+
+    const nearest = NearestEnemyFinder.find(this.player, this.enemies);
+    if (nearest) {
+      this.player.aimAt(nearest.enemy.x, nearest.enemy.y);
+      this.fireBullet();
+    } else if (this.mouse.inside) {
       this.player.updateAim(this.mouse.x, this.mouse.y);
     }
 
-    this.tryShoot();
-    this.enemy.update(this.player, this.arena);
+    this.tryManualShoot();
+
+    for (const enemy of this.enemies) {
+      if (enemy.isAlive()) {
+        enemy.update(this.player, this.arena);
+      }
+    }
+
     this.updateBullets();
 
     if (!this.player.isAlive()) {
@@ -504,15 +594,15 @@ class WestBulldogGame {
   }
 
   drawAimLine() {
-    if (!this.mouse.inside) {
-      return;
-    }
     const maxLen = WestBulldogConstants.MAX_SHOOT_RANGE;
     const ex = this.player.x + Math.cos(this.player.aimAngle) * maxLen;
     const ey = this.player.y + Math.sin(this.player.aimAngle) * maxLen;
+    const nearest = NearestEnemyFinder.find(this.player, this.enemies);
 
     const ctx = this.ctx;
-    ctx.strokeStyle = "rgba(255, 212, 59, 0.25)";
+    ctx.strokeStyle = nearest
+      ? "rgba(255, 107, 107, 0.45)"
+      : "rgba(255, 212, 59, 0.25)";
     ctx.setLineDash([8, 8]);
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -521,13 +611,20 @@ class WestBulldogGame {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.fillStyle = "rgba(255, 212, 59, 0.6)";
-    ctx.beginPath();
-    ctx.arc(this.mouse.x, this.mouse.y, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    if (nearest) {
+      ctx.fillStyle = "rgba(255, 107, 107, 0.75)";
+      ctx.beginPath();
+      ctx.arc(nearest.enemy.x, nearest.enemy.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (this.mouse.inside) {
+      ctx.fillStyle = "rgba(255, 212, 59, 0.6)";
+      ctx.beginPath();
+      ctx.arc(this.mouse.x, this.mouse.y, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
   }
 
   drawBackground() {
@@ -550,8 +647,10 @@ class WestBulldogGame {
   draw() {
     this.drawBackground();
 
-    if (this.enemy.isAlive()) {
-      this.enemy.draw(this.ctx);
+    for (const enemy of this.enemies) {
+      if (enemy.isAlive()) {
+        enemy.draw(this.ctx);
+      }
     }
     if (this.player.isAlive()) {
       this.player.draw(this.ctx);
@@ -573,7 +672,7 @@ class WestBulldogGame {
       this.ctx.font = "12px system-ui, sans-serif";
       this.ctx.textAlign = "center";
       this.ctx.fillText(
-        "鼠标移动 · 左键射击（手枪瞄准鼠标，远距伤害更低）",
+        "鼠标移动 · 最近敌人自动射击（0.1秒/发）· 远距伤害更低",
         this.width / 2,
         this.arena.bottom + 26
       );
@@ -598,9 +697,10 @@ class WestBulldogGame {
   }
 
   getEnemyHealthPercent() {
-    if (!this.enemy) {
-      return 100;
+    const maxTotal = this.getMaxTotalEnemyHealth();
+    if (maxTotal <= 0) {
+      return 0;
     }
-    return (this.enemy.health / WestBulldogConstants.ENEMY_HEALTH) * 100;
+    return (this.getTotalEnemyHealth() / maxTotal) * 100;
   }
 }

@@ -1037,7 +1037,7 @@ class GameUI {
     this.modeBadge.textContent = "西部斗牛球";
 
     this.p1HudLabel.textContent = "西部斗牛球";
-    this.p2Label.textContent = "对手";
+    this.p2Label.textContent = "敌人";
     this.westHitMsg.textContent = "";
 
     this.westBulldog.start();
