@@ -1077,12 +1077,12 @@ class GameUI {
     if (snap.phase === "pick") {
       const sec = Math.ceil(snap.pickRemainingMs / 1000);
       if (snap.pickStep === 1) {
-        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒（1-4）`;
+        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒（1-5）`;
       } else {
         this.heroPhaseText.textContent =
           snap.subMode === "training"
             ? "AI 选球中…"
-            : `蓝队选球 · 剩余 ${sec} 秒（1-4）`;
+            : `蓝队选球 · 剩余 ${sec} 秒（1-5）`;
       }
       this.heroP1Info.textContent = snap.p1HeroId
         ? `红队 · ${HeroRoster.getById(snap.p1HeroId).name}`
