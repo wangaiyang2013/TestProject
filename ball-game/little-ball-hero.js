@@ -26,13 +26,27 @@ class HeroSkillType {
   static PULSE = "pulse";
 
   static BUMP = "bump";
+
+  /** 江西步牛仔球专属：双发左轮射击 */
+  static REVOLVER = "revolver";
 }
 
 /**
  * 可选英雄球模板
  */
 class HeroBallTemplate {
-  constructor(id, name, color, glow, maxHealth, moveSpeed, mass, skillType, skillDamage) {
+  constructor(
+    id,
+    name,
+    color,
+    glow,
+    maxHealth,
+    moveSpeed,
+    mass,
+    skillType,
+    skillDamage,
+    skillIntervalMs
+  ) {
     this.id = id;
     this.name = name;
     this.color = color;
@@ -42,6 +56,8 @@ class HeroBallTemplate {
     this.mass = mass;
     this.skillType = skillType;
     this.skillDamage = skillDamage;
+    this.skillIntervalMs =
+      skillIntervalMs || LittleBallHeroConstants.SKILL_INTERVAL_MS;
   }
 }
 
@@ -94,6 +110,18 @@ class HeroRoster {
         1.0,
         HeroSkillType.SHOT,
         14
+      ),
+      new HeroBallTemplate(
+        "jiangxi_cowboy",
+        "江西步牛仔球",
+        "#c68642",
+        "#e9b872",
+        92,
+        10,
+        0.95,
+        HeroSkillType.REVOLVER,
+        12,
+        1000
       ),
     ];
   }
@@ -207,7 +235,8 @@ class HeroBallFighter {
   }
 
   canUseSkill(now) {
-    return now - this.lastSkillTime >= LittleBallHeroConstants.SKILL_INTERVAL_MS;
+    const interval = this.template.skillIntervalMs;
+    return now - this.lastSkillTime >= interval;
   }
 
   markSkillUsed(now) {
@@ -250,6 +279,13 @@ class HeroBallFighter {
     ctx.font = "10px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(this.template.name, this.x, this.y + this.radius + 14);
+
+    if (this.template.id === "jiangxi_cowboy") {
+      ctx.fillStyle = "#3d2914";
+      ctx.font = "bold 8px system-ui, sans-serif";
+      ctx.fillText("牛仔", this.x, this.y - this.radius - 6);
+    }
+
     ctx.textAlign = "left";
   }
 }
@@ -367,6 +403,47 @@ class HeroAutoSkillSystem {
 
     if (template.skillType === HeroSkillType.BUMP) {
       HeroAutoSkillSystem.fireBump(fighter, opponent, template.skillDamage);
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.REVOLVER) {
+      HeroAutoSkillSystem.fireRevolver(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius,
+        template.skillDamage
+      );
+    }
+  }
+
+  static fireRevolver(fighter, opponent, projectiles, radius, damage) {
+    const dx = opponent.x - fighter.x;
+    const dy = opponent.y - fighter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return;
+    }
+    const baseAngle = Math.atan2(dy, dx);
+    const spread = 0.18;
+    const angles = [baseAngle - spread, baseAngle + spread];
+    const offset = fighter.radius + radius + 4;
+
+    for (const angle of angles) {
+      const dirX = Math.cos(angle);
+      const dirY = Math.sin(angle);
+      projectiles.push(
+        new HeroSkillProjectile(
+          fighter.x + dirX * offset,
+          fighter.y + dirY * offset,
+          dirX,
+          dirY,
+          radius,
+          fighter.playerId,
+          "#ffd43b",
+          damage
+        )
+      );
     }
   }
 
@@ -642,10 +719,10 @@ class LittleBallHeroGame {
       return;
     }
 
-    const keys = ["Digit1", "Digit2", "Digit3", "Digit4"];
     const heroes = HeroRoster.getAll();
-    for (let i = 0; i < keys.length; i += 1) {
-      if (this.input.wasPressed(keys[i])) {
+    for (let i = 0; i < heroes.length; i += 1) {
+      const keyCode = `Digit${i + 1}`;
+      if (this.input.wasPressed(keyCode)) {
         const hero = heroes[i];
         if (hero && !this.takenHeroIds.has(hero.id)) {
           const isP1Turn = this.pickStep === 1;
@@ -773,14 +850,15 @@ class LittleBallHeroGame {
     this.ctx.fillStyle = remainingSec <= 3 ? "#ff6b6b" : "#ccc";
     this.ctx.font = "14px system-ui, sans-serif";
     this.ctx.fillText(
-      `剩余 ${remainingSec} 秒 · 按 1-4 选球，超时随机`,
+      `剩余 ${remainingSec} 秒 · 按 1-${heroes.length} 选球，超时随机`,
       this.width / 2,
       this.arena.top + 56
     );
 
-    const startX = this.width / 2 - (heroes.length * 110) / 2;
+    const cardWidth = Math.min(100, (this.width - 80) / heroes.length);
+    const startX = this.width / 2 - (heroes.length * cardWidth) / 2;
     heroes.forEach((hero, i) => {
-      const cx = startX + i * 110 + 55;
+      const cx = startX + i * cardWidth + cardWidth / 2;
       const cy = this.height / 2;
       const taken = this.takenHeroIds.has(hero.id);
 
@@ -876,6 +954,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.BUMP) {
     return "冲击";
+  }
+  if (skillType === HeroSkillType.REVOLVER) {
+    return "左轮双射";
   }
   return "技能";
 };
