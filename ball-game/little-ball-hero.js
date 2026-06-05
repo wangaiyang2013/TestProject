@@ -14,6 +14,9 @@ const LittleBallHeroConstants = {
   PULSE_RANGE: 72,
   PULSE_DAMAGE: 14,
   BUMP_DAMAGE: 10,
+  SUNGLASSES_OUTBOUND_DAMAGE: 14,
+  SUNGLASSES_RETURN_DAMAGE: 11,
+  SUNGLASSES_SPEED: 10,
   AI_PICK_DELAY_MS: 500,
 };
 
@@ -29,6 +32,9 @@ class HeroSkillType {
 
   /** 江西步牛仔球专属：双发左轮射击 */
   static REVOLVER = "revolver";
+
+  /** 墨镜球专属：投出墨镜，命中后折返造成二次伤害 */
+  static SUNGLASSES = "sunglasses";
 }
 
 /**
@@ -45,7 +51,8 @@ class HeroBallTemplate {
     mass,
     skillType,
     skillDamage,
-    skillIntervalMs
+    skillIntervalMs,
+    returnDamage
   ) {
     this.id = id;
     this.name = name;
@@ -58,6 +65,7 @@ class HeroBallTemplate {
     this.skillDamage = skillDamage;
     this.skillIntervalMs =
       skillIntervalMs || LittleBallHeroConstants.SKILL_INTERVAL_MS;
+    this.returnDamage = returnDamage || Math.round(skillDamage * 0.8);
   }
 }
 
@@ -123,6 +131,19 @@ class HeroRoster {
         12,
         1000
       ),
+      new HeroBallTemplate(
+        "sunglasses",
+        "墨镜球",
+        "#212529",
+        "#495057",
+        88,
+        9,
+        0.9,
+        HeroSkillType.SUNGLASSES,
+        LittleBallHeroConstants.SUNGLASSES_OUTBOUND_DAMAGE,
+        1300,
+        LittleBallHeroConstants.SUNGLASSES_RETURN_DAMAGE
+      ),
     ];
   }
 
@@ -178,6 +199,130 @@ class HeroSkillProjectile {
     ctx.strokeStyle = "#fff";
     ctx.lineWidth = 2;
     ctx.stroke();
+  }
+}
+
+/**
+ * 墨镜球投出的回旋墨镜（命中后折返，二次伤害）
+ */
+class SunglassesProjectile {
+  constructor(
+    x,
+    y,
+    dirX,
+    dirY,
+    radius,
+    ownerId,
+    outboundDamage,
+    returnDamage
+  ) {
+    this.x = x;
+    this.y = y;
+    this.dirX = dirX;
+    this.dirY = dirY;
+    this.radius = radius;
+    this.ownerId = ownerId;
+    this.outboundDamage = outboundDamage;
+    this.returnDamage = returnDamage;
+    this.alive = true;
+    this.spawnTime = Date.now();
+    this.isReturning = false;
+    this.hasHitEnemy = false;
+    this.hitEnemyId = null;
+  }
+
+  update(ownerFighter) {
+    if (this.isReturning && ownerFighter && ownerFighter.isAlive()) {
+      const dx = ownerFighter.x - this.x;
+      const dy = ownerFighter.y - this.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.001) {
+        this.dirX = dx / dist;
+        this.dirY = dy / dist;
+      }
+      if (dist < ownerFighter.radius + this.radius + 4) {
+        this.alive = false;
+        return;
+      }
+    }
+
+    const speed = LittleBallHeroConstants.SUNGLASSES_SPEED;
+    this.x += this.dirX * speed;
+    this.y += this.dirY * speed;
+
+    if (Date.now() - this.spawnTime > LittleBallHeroConstants.PROJECTILE_LIFETIME_MS * 2) {
+      this.alive = false;
+    }
+  }
+
+  isOutOfBounds(arena) {
+    return (
+      this.x - this.radius < arena.left ||
+      this.x + this.radius > arena.right ||
+      this.y - this.radius < arena.top ||
+      this.y + this.radius > arena.bottom
+    );
+  }
+
+  beginReturn() {
+    this.isReturning = true;
+  }
+
+  /**
+   * @returns {boolean} 是否应从场上移除
+   */
+  handleEnemyHit(fighter) {
+    if (fighter.playerId === this.ownerId || !fighter.isAlive()) {
+      return false;
+    }
+
+    if (!this.hasHitEnemy) {
+      fighter.takeDamage(this.outboundDamage);
+      this.hasHitEnemy = true;
+      this.hitEnemyId = fighter.playerId;
+      this.beginReturn();
+      return false;
+    }
+
+    if (this.isReturning && fighter.playerId === this.hitEnemyId) {
+      fighter.takeDamage(this.returnDamage);
+      this.alive = false;
+      return true;
+    }
+
+    return false;
+  }
+
+  draw(ctx) {
+    const lensW = this.radius * 1.1;
+    const lensH = this.radius * 0.75;
+    const gap = this.radius * 0.35;
+    const angle = Math.atan2(this.dirY, this.dirX);
+
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(angle);
+
+    ctx.fillStyle = "#111";
+    ctx.strokeStyle = this.isReturning ? "#74c0fc" : "#ffd43b";
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    ctx.ellipse(-gap, 0, lensW, lensH, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(gap, 0, lensW, lensH, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-gap + lensW * 0.3, 0);
+    ctx.lineTo(gap - lensW * 0.3, 0);
+    ctx.stroke();
+
+    ctx.restore();
   }
 }
 
@@ -284,6 +429,12 @@ class HeroBallFighter {
       ctx.fillStyle = "#3d2914";
       ctx.font = "bold 8px system-ui, sans-serif";
       ctx.fillText("牛仔", this.x, this.y - this.radius - 6);
+    }
+
+    if (this.template.id === "sunglasses") {
+      ctx.fillStyle = "#111";
+      ctx.font = "bold 9px system-ui, sans-serif";
+      ctx.fillText("墨镜", this.x, this.y - this.radius - 6);
     }
 
     ctx.textAlign = "left";
@@ -414,7 +565,50 @@ class HeroAutoSkillSystem {
         projectileRadius,
         template.skillDamage
       );
+      return;
     }
+
+    if (template.skillType === HeroSkillType.SUNGLASSES) {
+      HeroAutoSkillSystem.fireSunglasses(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius,
+        template.skillDamage,
+        template.returnDamage
+      );
+    }
+  }
+
+  static fireSunglasses(
+    fighter,
+    opponent,
+    projectiles,
+    radius,
+    outboundDamage,
+    returnDamage
+  ) {
+    const dx = opponent.x - fighter.x;
+    const dy = opponent.y - fighter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return;
+    }
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+    const offset = fighter.radius + radius + 6;
+    projectiles.push(
+      new SunglassesProjectile(
+        fighter.x + dirX * offset,
+        fighter.y + dirY * offset,
+        dirX,
+        dirY,
+        radius * 1.4,
+        fighter.playerId,
+        outboundDamage,
+        returnDamage
+      )
+    );
   }
 
   static fireRevolver(fighter, opponent, projectiles, radius, damage) {
@@ -767,6 +961,37 @@ class LittleBallHeroGame {
   updateProjectiles() {
     for (let i = this.projectiles.length - 1; i >= 0; i -= 1) {
       const proj = this.projectiles[i];
+
+      if (proj instanceof SunglassesProjectile) {
+        const owner = this.getFighter(proj.ownerId);
+        proj.update(owner);
+
+        if (!proj.alive || proj.isOutOfBounds(this.arena)) {
+          this.projectiles.splice(i, 1);
+          continue;
+        }
+
+        for (const fighter of this.fighters) {
+          if (
+            CollisionDetector.circleHitsCircle(
+              proj.x,
+              proj.y,
+              proj.radius,
+              fighter.x,
+              fighter.y,
+              fighter.radius
+            )
+          ) {
+            const removed = proj.handleEnemyHit(fighter);
+            if (removed || !proj.alive) {
+              this.projectiles.splice(i, 1);
+            }
+            break;
+          }
+        }
+        continue;
+      }
+
       proj.update();
 
       if (!proj.alive || proj.isOutOfBounds(this.arena)) {
@@ -957,6 +1182,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.REVOLVER) {
     return "左轮双射";
+  }
+  if (skillType === HeroSkillType.SUNGLASSES) {
+    return "回旋墨镜";
   }
   return "技能";
 };
