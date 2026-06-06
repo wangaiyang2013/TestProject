@@ -45,6 +45,8 @@ class GameMode {
   static WEST_BULLDOG = "west_bulldog";
 
   static NUMBER_TEACHER = "number_teacher";
+
+  static SELF_DEFINITION = "self_definition";
 }
 
 /**
@@ -903,7 +905,37 @@ class GameUI {
     this.littleBallHero = new LittleBallHeroGame(this.canvas);
     this.westBulldog = new WestBulldogGame(this.canvas);
     this.numberTeacher = new NumberTeacherGame(this.canvas);
+    this.selfDefinition = new SelfDefinitionGame(this.canvas);
     this.westBulldogBtn = document.getElementById("west-bulldog-btn");
+    this.selfDefBtn = document.getElementById("self-def-btn");
+    this.selfDefSetup = document.getElementById("self-def-setup");
+    this.selfDefRoom = document.getElementById("self-def-room");
+    this.selfDefTrainingBtn = document.getElementById("self-def-training-btn");
+    this.selfDefVersusBtn = document.getElementById("self-def-versus-btn");
+    this.selfDefSetupBack = document.getElementById("self-def-setup-back");
+    this.selfDefConfirmBtn = document.getElementById("self-def-confirm-btn");
+    this.selfDefRoomBack = document.getElementById("self-def-room-back");
+    this.pendingSelfDefSubMode = "training";
+    this.customBallRoom = new CustomBallRoom();
+    this.selfDefRoomPanel = new CustomBallRoomPanel(this.customBallRoom, {
+      slotsContainer: document.getElementById("self-def-slots"),
+      name: document.getElementById("sdf-name"),
+      color: document.getElementById("sdf-color"),
+      glow: document.getElementById("sdf-glow"),
+      maxHealth: document.getElementById("sdf-health"),
+      moveSpeed: document.getElementById("sdf-speed"),
+      mass: document.getElementById("sdf-mass"),
+      skillType: document.getElementById("sdf-skill"),
+      skillDamage: document.getElementById("sdf-damage"),
+      skillIntervalMs: document.getElementById("sdf-interval"),
+      returnDamage: document.getElementById("sdf-return"),
+      returnDamageRow: document.getElementById("sdf-return-row"),
+      confirmBtn: this.selfDefConfirmBtn,
+    });
+    this.selfDefRoomPanel.onConfirm = (templates) => {
+      this.selfDefRoom.classList.add("hidden");
+      this.beginSelfDefinition(this.pendingSelfDefSubMode, templates);
+    };
     this.numberTeacherBtn = document.getElementById("number-teacher-btn");
     this.numberTeacherSetup = document.getElementById("number-teacher-setup");
     this.ntTrainingBtn = document.getElementById("nt-training-btn");
@@ -930,6 +962,7 @@ class GameUI {
     this.bindLittleBallHeroGame();
     this.bindWestBulldogGame();
     this.bindNumberTeacherGame();
+    this.bindSelfDefinitionGame();
     this.bindMenuButtons();
 
     window.addEventListener("keydown", (e) => {
@@ -938,7 +971,8 @@ class GameUI {
         this.groupBattle.state === "playing" ||
         this.littleBallHero.state === "playing" ||
         this.westBulldog.state === "playing" ||
-        this.numberTeacher.state === "playing";
+        this.numberTeacher.state === "playing" ||
+        this.selfDefinition.state === "playing";
       if (e.code === "ControlRight" && playing) {
         e.preventDefault();
       }
@@ -1007,6 +1041,22 @@ class GameUI {
     };
   }
 
+  bindSelfDefinitionGame() {
+    this.selfDefinition.onPhaseChange = (snap) => this.updateSelfDefHud(snap);
+
+    this.selfDefinition.onGameOver = (winnerId) => {
+      const msg =
+        this.selfDefinition.subMode === "training"
+          ? winnerId === 1
+            ? "自定义模式训练场胜利！"
+            : "自定义模式训练场失败，再试一次！"
+          : winnerId === 1
+            ? "红队（玩家1）获胜！"
+            : "蓝队（玩家2）获胜！";
+      this.showMainOverlay(msg);
+    };
+  }
+
   bindLittleBallHeroGame() {
     this.littleBallHero.onPhaseChange = (snap) => this.updateHeroHud(snap);
 
@@ -1034,6 +1084,15 @@ class GameUI {
     this.heroModeBtn.addEventListener("click", () => this.showHeroSetup());
     this.westBulldogBtn.addEventListener("click", () => this.beginWestBulldog());
     this.numberTeacherBtn.addEventListener("click", () => this.showNumberTeacherSetup());
+    this.selfDefBtn.addEventListener("click", () => this.showSelfDefSetup());
+    this.selfDefTrainingBtn.addEventListener("click", () =>
+      this.openSelfDefRoom("training")
+    );
+    this.selfDefVersusBtn.addEventListener("click", () =>
+      this.openSelfDefRoom("versus")
+    );
+    this.selfDefSetupBack.addEventListener("click", () => this.showMainMenu());
+    this.selfDefRoomBack.addEventListener("click", () => this.showSelfDefSetup());
     this.ntTrainingBtn.addEventListener("click", () =>
       this.beginNumberTeacher("training")
     );
@@ -1066,6 +1125,8 @@ class GameUI {
     this.cardOverlay.classList.add("hidden");
     this.heroSetupOverlay.classList.add("hidden");
     this.numberTeacherSetup.classList.add("hidden");
+    this.selfDefSetup.classList.add("hidden");
+    this.selfDefRoom.classList.add("hidden");
   }
 
   /**
@@ -1078,6 +1139,7 @@ class GameUI {
       this.littleBallHero,
       this.westBulldog,
       this.numberTeacher,
+      this.selfDefinition,
     ];
 
     for (const game of allGames) {
@@ -1095,6 +1157,85 @@ class GameUI {
   showNumberTeacherSetup() {
     this.hideAllOverlays();
     this.numberTeacherSetup.classList.remove("hidden");
+  }
+
+  showSelfDefSetup() {
+    this.hideAllOverlays();
+    this.selfDefSetup.classList.remove("hidden");
+  }
+
+  openSelfDefRoom(subMode) {
+    this.pendingSelfDefSubMode = subMode;
+    this.selfDefRoomPanel.reset();
+    this.hideAllOverlays();
+    this.selfDefRoom.classList.remove("hidden");
+  }
+
+  beginSelfDefinition(subMode, templates) {
+    this.currentMode = GameMode.SELF_DEFINITION;
+    this.stopInactiveGameLoops(this.selfDefinition);
+    this.hideAllOverlays();
+    this.hud.classList.remove("hidden");
+    this.groupHud.classList.add("hidden");
+    this.westHud.classList.add("hidden");
+    this.numberTeacherHud.classList.add("hidden");
+    this.heroHud.classList.remove("hidden");
+    this.p2Bar.classList.remove("hidden-bar");
+    this.modeBadge.classList.remove("hidden");
+    this.modeBadge.textContent = "自定义模式";
+
+    this.p1HudLabel.textContent = "红队";
+    this.p2Label.textContent = subMode === "training" ? "AI" : "蓝队";
+
+    this.selfDefinition.startWithCustomRoster(subMode, templates);
+    this.trackSelfDefHealth();
+  }
+
+  updateSelfDefHud(snap) {
+    const heroCount = this.selfDefinition.getHeroes().length;
+
+    if (snap.phase === "pick") {
+      const sec = Math.ceil(snap.pickRemainingMs / 1000);
+      if (snap.pickStep === 1) {
+        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒（1-${heroCount}）`;
+      } else {
+        this.heroPhaseText.textContent =
+          snap.subMode === "training"
+            ? "AI 选球中…"
+            : `蓝队选球 · 剩余 ${sec} 秒（1-${heroCount}）`;
+      }
+      this.heroP1Info.textContent = snap.p1HeroId
+        ? `红队 · ${this.selfDefinition.getHeroById(snap.p1HeroId).name}`
+        : "红队 · 待选";
+      this.heroP2Info.textContent = snap.p2HeroId
+        ? `蓝队 · ${this.selfDefinition.getHeroById(snap.p2HeroId).name}`
+        : "蓝队 · 待选";
+      return;
+    }
+
+    const p1 = snap.fighters.find((f) => f.playerId === 1);
+    const p2 = snap.fighters.find((f) => f.playerId === 2);
+    if (p1) {
+      this.heroP1Info.textContent = `红队 · ${p1.name} HP ${Math.ceil(p1.health)} · ${p1.skillName}`;
+    }
+    if (p2) {
+      this.heroP2Info.textContent = `蓝队 · ${p2.name} HP ${Math.ceil(p2.health)} · ${p2.skillName}`;
+    }
+
+    if (snap.phase === "battle") {
+      this.heroPhaseText.textContent = "自定义模式 · 自动对战中";
+    }
+  }
+
+  trackSelfDefHealth() {
+    const tick = () => {
+      if (this.selfDefinition.state === "playing") {
+        this.hpP1.style.width = `${this.selfDefinition.getHealthPercent(1)}%`;
+        this.hpP2.style.width = `${this.selfDefinition.getHealthPercent(2)}%`;
+        requestAnimationFrame(tick);
+      }
+    };
+    requestAnimationFrame(tick);
   }
 
   beginNumberTeacher(subMode) {
@@ -1190,12 +1331,12 @@ class GameUI {
     if (snap.phase === "pick") {
       const sec = Math.ceil(snap.pickRemainingMs / 1000);
       if (snap.pickStep === 1) {
-        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒（1-7）`;
+        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒（1-8）`;
       } else {
         this.heroPhaseText.textContent =
           snap.subMode === "training"
             ? "AI 选球中…"
-            : `蓝队选球 · 剩余 ${sec} 秒（1-7）`;
+            : `蓝队选球 · 剩余 ${sec} 秒（1-8）`;
       }
       this.heroP1Info.textContent = snap.p1HeroId
         ? `红队 · ${HeroRoster.getById(snap.p1HeroId).name}`
@@ -1250,6 +1391,7 @@ class GameUI {
     this.heroModeBtn.textContent = "小球英雄";
     this.westBulldogBtn.textContent = "西部斗牛球";
     this.numberTeacherBtn.textContent = "数字老师";
+    this.selfDefBtn.textContent = "自定义模式";
   }
 
   showGroupSetup() {
@@ -1377,6 +1519,7 @@ class GameUI {
     this.heroModeBtn.textContent = "小球英雄";
     this.westBulldogBtn.textContent = "西部斗牛球";
     this.numberTeacherBtn.textContent = "数字老师";
+    this.selfDefBtn.textContent = "自定义模式";
   }
 }
 

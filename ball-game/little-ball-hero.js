@@ -1118,6 +1118,7 @@ class LittleBallHeroGame {
     this.p1HeroId = null;
     this.p2HeroId = null;
     this.takenHeroIds = new Set();
+    this.customRoster = null;
     this.arena = null;
     this.width = 0;
     this.height = 0;
@@ -1159,6 +1160,24 @@ class LittleBallHeroGame {
 
   getProjectileRadius() {
     return Math.max(8, this.height * GameConstants.PROJECTILE_RADIUS_RATIO);
+  }
+
+  setCustomRoster(templates) {
+    this.customRoster = templates;
+  }
+
+  getHeroes() {
+    return this.customRoster || HeroRoster.getAll();
+  }
+
+  getHeroById(id) {
+    const heroes = this.getHeroes();
+    return heroes.find((hero) => hero.id === id) || heroes[0];
+  }
+
+  pickRandomHero(available) {
+    const list = available.length > 0 ? available : this.getHeroes();
+    return list[Math.floor(Math.random() * list.length)];
   }
 
   start(subMode) {
@@ -1207,18 +1226,18 @@ class LittleBallHeroGame {
         name: f.template.name,
         health: f.health,
         maxHealth: f.maxHealth,
-        skillName: HeroAutoSkillSystem.getSkillLabel(f.template.skillType),
+        skillName: HeroAutoSkillSystem.getFighterSkillLabel(f),
       })),
     };
   }
 
   getAvailableHeroes() {
-    return HeroRoster.getAll().filter((h) => !this.takenHeroIds.has(h.id));
+    return this.getHeroes().filter((h) => !this.takenHeroIds.has(h.id));
   }
 
   autoPickForCurrentStep() {
     const available = this.getAvailableHeroes();
-    const hero = HeroRoster.pickRandom(available);
+    const hero = this.pickRandomHero(available);
     this.applyPick(hero.id, true);
   }
 
@@ -1246,7 +1265,7 @@ class LittleBallHeroGame {
 
       if (!this.isTwoPlayer()) {
         const available = this.getAvailableHeroes();
-        const aiHero = HeroRoster.pickRandom(available);
+        const aiHero = this.pickRandomHero(available);
         this.p2HeroId = aiHero.id;
         this.takenHeroIds.add(aiHero.id);
         this.beginBattle();
@@ -1264,8 +1283,8 @@ class LittleBallHeroGame {
   beginBattle() {
     const r = this.getBallRadius();
     const cy = (this.arena.top + this.arena.bottom) / 2;
-    const p1Template = HeroRoster.getById(this.p1HeroId);
-    const p2Template = HeroRoster.getById(this.p2HeroId);
+    const p1Template = this.getHeroById(this.p1HeroId);
+    const p2Template = this.getHeroById(this.p2HeroId);
 
     this.fighters = [
       new HeroBallFighter(
@@ -1299,7 +1318,7 @@ class LittleBallHeroGame {
       return;
     }
 
-    const heroes = HeroRoster.getAll();
+    const heroes = this.getHeroes();
     for (let i = 0; i < heroes.length; i += 1) {
       const keyCode = `Digit${i + 1}`;
       if (this.input.wasPressed(keyCode)) {
@@ -1466,7 +1485,7 @@ class LittleBallHeroGame {
   }
 
   drawPickScreen() {
-    const heroes = HeroRoster.getAll();
+    const heroes = this.getHeroes();
     const remainingSec = Math.ceil(
       (this.pickTimer ? this.pickTimer.getRemainingMs() : 0) / 1000
     );
@@ -1531,8 +1550,7 @@ class LittleBallHeroGame {
     this.ctx.fillRect(0, 0, this.width, this.height);
     this.arena.draw(this.ctx);
 
-    const modeLabel =
-      this.subMode === "training" ? "小球英雄 · 训练场" : "小球英雄 · 双人";
+    const modeLabel = this.getModeLabel();
     this.ctx.fillStyle = "rgba(255, 212, 59, 0.3)";
     this.ctx.font = "14px system-ui, sans-serif";
     this.ctx.fillText(modeLabel, 12, 28);
@@ -1582,6 +1600,10 @@ class LittleBallHeroGame {
       return 100;
     }
     return (fighter.health / fighter.maxHealth) * 100;
+  }
+
+  getModeLabel() {
+    return this.subMode === "training" ? "小球英雄 · 训练场" : "小球英雄 · 双人";
   }
 }
 

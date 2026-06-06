@@ -32,7 +32,47 @@
         <button id="hero-mode-btn" type="button" class="btn-hero">小球英雄</button>
         <button id="west-bulldog-btn" type="button" class="btn-west">西部斗牛球</button>
         <button id="number-teacher-btn" type="button" class="btn-number">数字老师</button>
+        <button id="self-def-btn" type="button" class="btn-self-def">自定义模式</button>
       </div>
+    </div>
+
+    <div id="self-def-setup" class="overlay hidden">
+      <h1>自定义模式</h1>
+      <div class="rules">
+        <p>玩法同<strong>小球英雄</strong>：限时选球，双球自动反弹，技能自动释放</p>
+        <p>在<strong>自创球房间</strong>中自由创建全部 8 颗球，任何人可编辑任意球体属性</p>
+      </div>
+      <div class="menu-buttons">
+        <button id="self-def-training-btn" type="button" class="btn-primary">训练场</button>
+        <button id="self-def-versus-btn" type="button" class="btn-secondary">双人模式</button>
+      </div>
+      <button id="self-def-setup-back" type="button" class="btn-text">返回主菜单</button>
+    </div>
+
+    <div id="self-def-room" class="overlay self-def-room hidden">
+      <h1>自创球房间</h1>
+      <p class="setup-hint">点击球位编辑属性，完成后进入选球对战</p>
+      <div id="self-def-slots" class="self-def-slots"></div>
+      <form id="self-def-form" class="self-def-form" onsubmit="return false;">
+        <div class="self-def-form-grid">
+          <label>名称 <input id="sdf-name" type="text" maxlength="12" /></label>
+          <label>球体颜色 <input id="sdf-color" type="color" /></label>
+          <label>光晕颜色 <input id="sdf-glow" type="color" /></label>
+          <label>生命值 <input id="sdf-health" type="number" min="50" max="200" /></label>
+          <label>移动速度 <input id="sdf-speed" type="number" min="5" max="14" step="0.1" /></label>
+          <label>质量 <input id="sdf-mass" type="number" min="0.5" max="2" step="0.05" /></label>
+          <label>技能类型
+            <select id="sdf-skill"></select>
+          </label>
+          <label>技能伤害 <input id="sdf-damage" type="number" min="5" max="30" /></label>
+          <label>技能间隔(ms) <input id="sdf-interval" type="number" min="600" max="3000" step="100" /></label>
+          <label id="sdf-return-row">折返伤害 <input id="sdf-return" type="number" min="5" max="25" /></label>
+        </div>
+      </form>
+      <div class="menu-buttons">
+        <button id="self-def-confirm-btn" type="button" class="btn-primary">完成创球，开始选球</button>
+      </div>
+      <button id="self-def-room-back" type="button" class="btn-text">返回</button>
     </div>
 
     <div id="number-teacher-setup" class="overlay hidden">
@@ -131,5 +171,6 @@
   <script src="little-ball-hero.js"></script>
   <script src="west-bulldog.js"></script>
   <script src="number-teacher.js"></script>
+  <script src="self-definition-mode.js"></script>
 </body>
 </html>
