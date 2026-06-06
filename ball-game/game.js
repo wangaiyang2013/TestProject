@@ -1068,6 +1068,30 @@ class GameUI {
     this.numberTeacherSetup.classList.add("hidden");
   }
 
+  /**
+   * 停止其他模式的渲染循环，避免共用画布时互相覆盖
+   */
+  stopInactiveGameLoops(activeGame) {
+    const allGames = [
+      this.game,
+      this.groupBattle,
+      this.littleBallHero,
+      this.westBulldog,
+      this.numberTeacher,
+    ];
+
+    for (const game of allGames) {
+      if (game === activeGame || game.state !== "playing") {
+        continue;
+      }
+      game.state = "idle";
+      if (game.animationId !== null) {
+        cancelAnimationFrame(game.animationId);
+        game.animationId = null;
+      }
+    }
+  }
+
   showNumberTeacherSetup() {
     this.hideAllOverlays();
     this.numberTeacherSetup.classList.remove("hidden");
@@ -1075,6 +1099,7 @@ class GameUI {
 
   beginNumberTeacher(subMode) {
     this.currentMode = GameMode.NUMBER_TEACHER;
+    this.stopInactiveGameLoops(this.numberTeacher);
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
     this.groupHud.classList.add("hidden");
@@ -1111,6 +1136,7 @@ class GameUI {
 
   beginWestBulldog() {
     this.currentMode = GameMode.WEST_BULLDOG;
+    this.stopInactiveGameLoops(this.westBulldog);
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
     this.groupHud.classList.add("hidden");
@@ -1142,6 +1168,7 @@ class GameUI {
 
   beginLittleBallHero(subMode) {
     this.currentMode = GameMode.LITTLE_BALL_HERO;
+    this.stopInactiveGameLoops(this.littleBallHero);
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
     this.groupHud.classList.add("hidden");
@@ -1235,6 +1262,7 @@ class GameUI {
     this.currentMode = mode;
     const isTraining = mode === GameMode.TRAINING;
 
+    this.stopInactiveGameLoops(this.game);
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
     this.groupHud.classList.add("hidden");
@@ -1254,6 +1282,7 @@ class GameUI {
 
   beginGroupBattle(playerCount) {
     this.currentMode = GameMode.GROUP_BATTLE;
+    this.stopInactiveGameLoops(this.groupBattle);
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
     this.heroHud.classList.add("hidden");

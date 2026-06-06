@@ -589,7 +589,7 @@ class ContinuousBouncePhysics {
     ContinuousBouncePhysics.maintainSpeed(ball);
   }
 
-  static resolveBallCollision(a, b) {
+  static resolveBallCollision(a, b, applyBumpDamage = true) {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const dist = Math.hypot(dx, dy);
@@ -623,9 +623,11 @@ class ContinuousBouncePhysics {
     b.vx += impulse * a.mass * nx;
     b.vy += impulse * a.mass * ny;
 
-    const touchDamage = LittleBallHeroConstants.BUMP_DAMAGE;
-    a.takeDamage(touchDamage);
-    b.takeDamage(touchDamage);
+    if (applyBumpDamage) {
+      const touchDamage = LittleBallHeroConstants.BUMP_DAMAGE;
+      a.takeDamage(touchDamage);
+      b.takeDamage(touchDamage);
+    }
 
     ContinuousBouncePhysics.maintainSpeed(a);
     ContinuousBouncePhysics.maintainSpeed(b);

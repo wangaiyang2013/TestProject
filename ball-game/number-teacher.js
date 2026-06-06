@@ -5,6 +5,7 @@
 const NumberTeacherConstants = {
   MAX_HEALTH: 300,
   START_NUMBER: 1,
+  BALL_MASS: 1.0,
   BALL_RADIUS_RATIO: 0.038,
   MOVE_SPEED: 9,
   NUMBER_SPAWN_INTERVAL_MS: 700,
@@ -78,7 +79,77 @@ class NumberHomingProjectile {
 }
 
 /**
- * 数字老师对战球
+ * 星球外观绘制（径向渐变 + 大气光晕）
+ */
+class PlanetBallRenderer {
+  static draw(ctx, fighter) {
+    const { x, y, radius, color, glowColor, playerId } = fighter;
+    const highlightX = x - radius * 0.28;
+    const highlightY = y - radius * 0.32;
+
+    ctx.save();
+
+    ctx.beginPath();
+    ctx.arc(x, y, radius + 14, 0, Math.PI * 2);
+    const atmosphere = ctx.createRadialGradient(x, y, radius * 0.6, x, y, radius + 14);
+    atmosphere.addColorStop(0, "rgba(255, 255, 255, 0)");
+    atmosphere.addColorStop(0.65, glowColor + "55");
+    atmosphere.addColorStop(1, glowColor + "00");
+    ctx.fillStyle = atmosphere;
+    ctx.fill();
+
+    const body = ctx.createRadialGradient(
+      highlightX,
+      highlightY,
+      radius * 0.15,
+      x,
+      y,
+      radius
+    );
+    body.addColorStop(0, "#ffffff");
+    body.addColorStop(0.25, color);
+    body.addColorStop(0.75, color);
+    body.addColorStop(1, PlanetBallRenderer.darkenColor(color, 0.45));
+
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = body;
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    if (playerId === 2) {
+      ctx.beginPath();
+      ctx.ellipse(x, y, radius * 1.35, radius * 0.22, -0.35, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+    ctx.font = `bold ${Math.max(10, radius * 0.32)}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(playerId === 1 ? "红星球" : "蓝星球", x, y + radius + 18);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+
+    ctx.restore();
+  }
+
+  static darkenColor(hex, factor) {
+    const raw = hex.replace("#", "");
+    const r = Math.floor(parseInt(raw.substring(0, 2), 16) * factor);
+    const g = Math.floor(parseInt(raw.substring(2, 4), 16) * factor);
+    const b = Math.floor(parseInt(raw.substring(4, 6), 16) * factor);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+}
+
+/**
+ * 数字老师对战球（星球）
  */
 class NumberTeacherFighter {
   constructor(playerId, x, y, radius, color, glowColor, dirX, dirY) {
@@ -88,6 +159,7 @@ class NumberTeacherFighter {
     this.radius = radius;
     this.color = color;
     this.glowColor = glowColor;
+    this.mass = NumberTeacherConstants.BALL_MASS;
     this.health = NumberTeacherConstants.MAX_HEALTH;
     this.attackNumber = NumberTeacherConstants.START_NUMBER;
     this.vx = dirX * NumberTeacherConstants.MOVE_SPEED;
@@ -137,21 +209,7 @@ class NumberTeacherFighter {
       ctx.globalAlpha = 0.65;
     }
 
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius + 8, 0, Math.PI * 2);
-    ctx.fillStyle = this.glowColor;
-    ctx.globalAlpha = 0.35;
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    ctx.fillStyle = this.color;
-    ctx.fill();
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
+    PlanetBallRenderer.draw(ctx, this);
     this.drawHeadNumber(ctx);
 
     const barW = this.radius * 2.4;
@@ -257,6 +315,7 @@ class NumberTeacherGame {
   }
 
   start(subMode) {
+    this.resize();
     this.subMode = subMode || "training";
     this.state = "playing";
     this.projectiles = [];
@@ -401,7 +460,7 @@ class NumberTeacherGame {
 
     ContinuousBouncePhysics.updateBall(f1, this.arena);
     ContinuousBouncePhysics.updateBall(f2, this.arena);
-    ContinuousBouncePhysics.resolveBallCollision(f1, f2);
+    ContinuousBouncePhysics.resolveBallCollision(f1, f2, false);
 
     this.trySpawnNumbers(Date.now());
     this.updateProjectiles();
