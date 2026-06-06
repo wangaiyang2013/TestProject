@@ -17,6 +17,10 @@ const LittleBallHeroConstants = {
   SUNGLASSES_OUTBOUND_DAMAGE: 14,
   SUNGLASSES_RETURN_DAMAGE: 11,
   SUNGLASSES_SPEED: 10,
+  BOXING_MIN_RANGE_METERS: 1,
+  BOXING_MAX_RANGE_METERS: 2,
+  BOXING_METERS_TO_RADIUS_FACTOR: 4.5,
+  BOXING_PUNCH_FLASH_MS: 280,
   AI_PICK_DELAY_MS: 500,
 };
 
@@ -35,6 +39,9 @@ class HeroSkillType {
 
   /** 墨镜球专属：投出墨镜，命中后折返造成二次伤害 */
   static SUNGLASSES = "sunglasses";
+
+  /** 拳击球专属：最近敌人在 1-2 米内时出拳 */
+  static BOXING = "boxing";
 }
 
 /**
@@ -143,6 +150,18 @@ class HeroRoster {
         LittleBallHeroConstants.SUNGLASSES_OUTBOUND_DAMAGE,
         1300,
         LittleBallHeroConstants.SUNGLASSES_RETURN_DAMAGE
+      ),
+      new HeroBallTemplate(
+        "boxing",
+        "拳击球",
+        "#e03131",
+        "#ff8787",
+        96,
+        9,
+        1.1,
+        HeroSkillType.BOXING,
+        20,
+        1100
       ),
     ];
   }
@@ -327,6 +346,40 @@ class SunglassesProjectile {
 }
 
 /**
+ * 拳击球攻击距离（1-2 米，按球半径换算像素）
+ */
+class BoxingRangeHelper {
+  static metersToPixels(meters, ballRadius) {
+    return meters * ballRadius * LittleBallHeroConstants.BOXING_METERS_TO_RADIUS_FACTOR;
+  }
+
+  static getRangePixels(ballRadius) {
+    return {
+      min: BoxingRangeHelper.metersToPixels(
+        LittleBallHeroConstants.BOXING_MIN_RANGE_METERS,
+        ballRadius
+      ),
+      max: BoxingRangeHelper.metersToPixels(
+        LittleBallHeroConstants.BOXING_MAX_RANGE_METERS,
+        ballRadius
+      ),
+    };
+  }
+
+  /**
+   * 最近敌人是否在拳击有效距离内（1-2 米）
+   */
+  static isClosestEnemyInRange(fighter, opponent) {
+    if (!opponent || !opponent.isAlive()) {
+      return false;
+    }
+    const dist = Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y);
+    const range = BoxingRangeHelper.getRangePixels(fighter.radius);
+    return dist >= range.min && dist <= range.max;
+  }
+}
+
+/**
  * 场上战斗用英雄球（自动反弹 + 自动技能）
  */
 class HeroBallFighter {
@@ -341,6 +394,8 @@ class HeroBallFighter {
     this.vy = dirY * template.moveSpeed;
     this.lastSkillTime = Date.now() - Math.random() * LittleBallHeroConstants.SKILL_INTERVAL_MS;
     this.pulseFlashUntil = 0;
+    this.punchFlashUntil = 0;
+    this.punchAngle = 0;
   }
 
   get maxHealth() {
@@ -437,7 +492,55 @@ class HeroBallFighter {
       ctx.fillText("墨镜", this.x, this.y - this.radius - 6);
     }
 
+    if (this.template.skillType === HeroSkillType.BOXING) {
+      this.drawBoxingRange(ctx);
+      this.drawBoxingPunch(ctx);
+    }
+
     ctx.textAlign = "left";
+  }
+
+  drawBoxingRange(ctx) {
+    const range = BoxingRangeHelper.getRangePixels(this.radius);
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, range.min, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255, 135, 135, 0.2)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, range.max, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255, 135, 135, 0.35)";
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  drawBoxingPunch(ctx) {
+    if (Date.now() >= this.punchFlashUntil) {
+      return;
+    }
+    const reach = this.radius + 28;
+    const px = this.x + Math.cos(this.punchAngle) * reach;
+    const py = this.y + Math.sin(this.punchAngle) * reach;
+
+    ctx.strokeStyle = "#ff6b6b";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(
+      this.x + Math.cos(this.punchAngle) * this.radius,
+      this.y + Math.sin(this.punchAngle) * this.radius
+    );
+    ctx.lineTo(px, py);
+    ctx.stroke();
+
+    ctx.fillStyle = "#fa5252";
+    ctx.beginPath();
+    ctx.arc(px, py, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 }
 
@@ -540,6 +643,15 @@ class HeroAutoSkillSystem {
     }
 
     const template = fighter.template;
+
+    if (template.skillType === HeroSkillType.BOXING) {
+      if (BoxingRangeHelper.isClosestEnemyInRange(fighter, opponent)) {
+        fighter.markSkillUsed(now);
+        HeroAutoSkillSystem.fireBoxingPunch(fighter, opponent, template.skillDamage);
+      }
+      return;
+    }
+
     fighter.markSkillUsed(now);
 
     if (template.skillType === HeroSkillType.SHOT) {
@@ -578,6 +690,29 @@ class HeroAutoSkillSystem {
         template.returnDamage
       );
     }
+  }
+
+  static fireBoxingPunch(fighter, opponent, damage) {
+    const dx = opponent.x - fighter.x;
+    const dy = opponent.y - fighter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return;
+    }
+    const nx = dx / dist;
+    const ny = dy / dist;
+
+    fighter.punchAngle = Math.atan2(dy, dx);
+    fighter.punchFlashUntil =
+      Date.now() + LittleBallHeroConstants.BOXING_PUNCH_FLASH_MS;
+    opponent.takeDamage(damage);
+
+    opponent.vx += nx * 2;
+    opponent.vy += ny * 2;
+    fighter.vx -= nx * 0.8;
+    fighter.vy -= ny * 0.8;
+    ContinuousBouncePhysics.maintainSpeed(fighter);
+    ContinuousBouncePhysics.maintainSpeed(opponent);
   }
 
   static fireSunglasses(
@@ -1185,6 +1320,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.SUNGLASSES) {
     return "回旋墨镜";
+  }
+  if (skillType === HeroSkillType.BOXING) {
+    return "近距重拳";
   }
   return "技能";
 };
