@@ -22,6 +22,11 @@ const LittleBallHeroConstants = {
   BOXING_METERS_TO_RADIUS_FACTOR: 4.5,
   BOXING_PUNCH_FLASH_MS: 280,
   AI_PICK_DELAY_MS: 500,
+  PICK_GRID_COLUMNS: 4,
+  PICK_TOP_PADDING: 72,
+  TEACHER_START_NUMBER: 1,
+  TEACHER_NUMBER_SPEED: 6.5,
+  TEACHER_NUMBER_HOMING: 0.12,
 };
 
 /**
@@ -42,6 +47,9 @@ class HeroSkillType {
 
   /** 拳击球专属：最近敌人在 1-2 米内时出拳 */
   static BOXING = "boxing";
+
+  /** 数字老师球专属：头顶数字追踪敌人，命中后数字增长 */
+  static NUMBER_TEACHER = "number_teacher";
 }
 
 /**
@@ -163,6 +171,18 @@ class HeroRoster {
         20,
         1100
       ),
+      new HeroBallTemplate(
+        "number_teacher",
+        "数字老师球",
+        "#4c6ef5",
+        "#748ffc",
+        94,
+        9,
+        1.0,
+        HeroSkillType.NUMBER_TEACHER,
+        LittleBallHeroConstants.TEACHER_START_NUMBER,
+        1200
+      ),
     ];
   }
 
@@ -173,6 +193,187 @@ class HeroRoster {
   static pickRandom(available) {
     const list = available.length > 0 ? available : HeroRoster.getAll();
     return list[Math.floor(Math.random() * list.length)];
+  }
+}
+
+/**
+ * 数字老师球追踪数字弹（伤害=数字值，命中后发射者数字+1）
+ */
+class TeacherNumberProjectile {
+  constructor(x, y, numberValue, ownerId, target, ownerFighter) {
+    this.x = x;
+    this.y = y;
+    this.numberValue = numberValue;
+    this.ownerId = ownerId;
+    this.target = target;
+    this.ownerFighter = ownerFighter;
+    this.alive = true;
+    this.radius = 16;
+    this.damage = numberValue;
+  }
+
+  update() {
+    if (!this.target || !this.target.isAlive()) {
+      this.alive = false;
+      return;
+    }
+
+    const dx = this.target.x - this.x;
+    const dy = this.target.y - this.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return;
+    }
+
+    const speed = LittleBallHeroConstants.TEACHER_NUMBER_SPEED;
+    const homing = LittleBallHeroConstants.TEACHER_NUMBER_HOMING;
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+    this.x += dirX * speed + dirX * homing * dist * 0.05;
+    this.y += dirY * speed + dirY * homing * dist * 0.05;
+  }
+
+  isOutOfBounds() {
+    return false;
+  }
+
+  draw(ctx) {
+    const text = String(this.numberValue);
+    const fontSize = Math.min(22, 12 + Math.log10(this.numberValue + 1) * 5);
+
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 212, 59, 0.25)";
+    ctx.fill();
+
+    ctx.fillStyle = "#ffd43b";
+    ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.strokeStyle = "#1a1a2e";
+    ctx.lineWidth = 2;
+    ctx.strokeText(text, this.x, this.y);
+    ctx.fillText(text, this.x, this.y);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+  }
+}
+
+/**
+ * 选球界面网格布局（双行展示，避免末位球体被挤出画面）
+ */
+class HeroPickScreenLayout {
+  static computeSlots(heroCount, arena) {
+    const columns = LittleBallHeroConstants.PICK_GRID_COLUMNS;
+    const rows = Math.ceil(heroCount / columns);
+    const arenaWidth = arena.right - arena.left;
+    const arenaHeight = arena.bottom - arena.top;
+    const cellWidth = arenaWidth / columns;
+    const cellHeight =
+      (arenaHeight - LittleBallHeroConstants.PICK_TOP_PADDING) / rows;
+    const ballRadius = Math.min(30, cellWidth * 0.22, cellHeight * 0.26);
+    const slots = [];
+
+    for (let index = 0; index < heroCount; index += 1) {
+      const row = Math.floor(index / columns);
+      const col = index % columns;
+      const rowStartIndex = row * columns;
+      const itemsInRow = Math.min(columns, heroCount - rowStartIndex);
+      const rowWidth = itemsInRow * cellWidth;
+      const rowStartX = arena.left + (arenaWidth - rowWidth) / 2;
+
+      slots.push({
+        cx: rowStartX + col * cellWidth + cellWidth / 2,
+        cy:
+          arena.top +
+          LittleBallHeroConstants.PICK_TOP_PADDING +
+          row * cellHeight +
+          cellHeight * 0.4,
+        ballRadius,
+      });
+    }
+
+    return slots;
+  }
+}
+
+/**
+ * 选球界面英雄预览绘制（拳击球、老师球等一眼可辨）
+ */
+class HeroPickPreviewRenderer {
+  static draw(ctx, hero, cx, cy, radius, taken) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 5, 0, Math.PI * 2);
+    ctx.fillStyle = taken ? "#333" : hero.glow;
+    ctx.globalAlpha = taken ? 0.2 : 0.35;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = taken ? "#444" : hero.color;
+    ctx.globalAlpha = taken ? 0.35 : 1;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = taken ? "#666" : "#fff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    if (!taken) {
+      HeroPickPreviewRenderer.drawTraitIcon(ctx, hero, cx, cy, radius);
+    }
+  }
+
+  static drawTraitIcon(ctx, hero, cx, cy, radius) {
+    if (hero.skillType === HeroSkillType.BOXING) {
+      ctx.fillStyle = "#fff";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("拳", cx, cy);
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.NUMBER_TEACHER) {
+      const badgeY = cy - radius - 6;
+      ctx.fillStyle = "rgba(26, 26, 46, 0.9)";
+      ctx.fillRect(cx - 14, badgeY - 10, 28, 20);
+      ctx.fillStyle = "#ffd43b";
+      ctx.font = "bold 12px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("1", cx, badgeY);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.SUNGLASSES) {
+      const lensW = radius * 0.55;
+      const lensH = radius * 0.38;
+      ctx.fillStyle = "#111";
+      ctx.strokeStyle = "#ffd43b";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(cx - lensW * 0.55, cy, lensW, lensH, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(cx + lensW * 0.55, cy, lensW, lensH, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.REVOLVER) {
+      ctx.fillStyle = "#3d2914";
+      ctx.font = `bold ${Math.max(9, radius * 0.4)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("牛仔", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+    }
   }
 }
 
@@ -396,6 +597,10 @@ class HeroBallFighter {
     this.pulseFlashUntil = 0;
     this.punchFlashUntil = 0;
     this.punchAngle = 0;
+    this.attackNumber =
+      template.skillType === HeroSkillType.NUMBER_TEACHER
+        ? LittleBallHeroConstants.TEACHER_START_NUMBER
+        : 0;
   }
 
   get maxHealth() {
@@ -492,12 +697,32 @@ class HeroBallFighter {
       ctx.fillText("墨镜", this.x, this.y - this.radius - 6);
     }
 
+    if (this.template.skillType === HeroSkillType.NUMBER_TEACHER) {
+      this.drawTeacherNumberBadge(ctx);
+    }
+
     if (this.template.skillType === HeroSkillType.BOXING) {
       this.drawBoxingRange(ctx);
       this.drawBoxingPunch(ctx);
     }
 
     ctx.textAlign = "left";
+  }
+
+  drawTeacherNumberBadge(ctx) {
+    const text = String(this.attackNumber);
+    const badgeY = this.y - this.radius - 14;
+    const fontSize = Math.min(16, 11 + Math.log10(this.attackNumber + 1) * 4);
+
+    ctx.fillStyle = "rgba(26, 26, 46, 0.85)";
+    ctx.fillRect(this.x - 16, badgeY - 10, 32, 20);
+    ctx.fillStyle = "#ffd43b";
+    ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, this.x, badgeY);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
   }
 
   drawBoxingRange(ctx) {
@@ -654,6 +879,12 @@ class HeroAutoSkillSystem {
       return;
     }
 
+    if (template.skillType === HeroSkillType.NUMBER_TEACHER) {
+      fighter.markSkillUsed(now);
+      HeroAutoSkillSystem.fireTeacherNumber(fighter, opponent, projectiles);
+      return;
+    }
+
     fighter.markSkillUsed(now);
 
     if (template.skillType === HeroSkillType.SHOT) {
@@ -692,6 +923,24 @@ class HeroAutoSkillSystem {
         template.returnDamage
       );
     }
+  }
+
+  static fireTeacherNumber(fighter, opponent, projectiles) {
+    if (!opponent || !opponent.isAlive()) {
+      return;
+    }
+
+    const numberValue = fighter.attackNumber || LittleBallHeroConstants.TEACHER_START_NUMBER;
+    projectiles.push(
+      new TeacherNumberProjectile(
+        fighter.x,
+        fighter.y - fighter.radius - 6,
+        numberValue,
+        fighter.playerId,
+        opponent,
+        fighter
+      )
+    );
   }
 
   static fireBoxingPunch(fighter, opponent, damage) {
@@ -1099,6 +1348,36 @@ class LittleBallHeroGame {
     for (let i = this.projectiles.length - 1; i >= 0; i -= 1) {
       const proj = this.projectiles[i];
 
+      if (proj instanceof TeacherNumberProjectile) {
+        proj.update();
+
+        if (!proj.alive) {
+          this.projectiles.splice(i, 1);
+          continue;
+        }
+
+        const target = proj.target;
+        if (
+          target &&
+          target.isAlive() &&
+          CollisionDetector.circleHitsCircle(
+            proj.x,
+            proj.y,
+            proj.radius,
+            target.x,
+            target.y,
+            target.radius
+          )
+        ) {
+          target.takeDamage(proj.numberValue);
+          if (proj.ownerFighter) {
+            proj.ownerFighter.attackNumber += 1;
+          }
+          this.projectiles.splice(i, 1);
+        }
+        continue;
+      }
+
       if (proj instanceof SunglassesProjectile) {
         const owner = this.getFighter(proj.ownerId);
         proj.update(owner);
@@ -1217,32 +1496,31 @@ class LittleBallHeroGame {
       this.arena.top + 56
     );
 
-    const cardWidth = Math.min(100, (this.width - 80) / heroes.length);
-    const startX = this.width / 2 - (heroes.length * cardWidth) / 2;
+    const slots = HeroPickScreenLayout.computeSlots(heroes.length, this.arena);
     heroes.forEach((hero, i) => {
-      const cx = startX + i * cardWidth + cardWidth / 2;
-      const cy = this.height / 2;
+      const slot = slots[i];
       const taken = this.takenHeroIds.has(hero.id);
 
-      this.ctx.beginPath();
-      this.ctx.arc(cx, cy, 32, 0, Math.PI * 2);
-      this.ctx.fillStyle = taken ? "#444" : hero.color;
-      this.ctx.globalAlpha = taken ? 0.35 : 1;
-      this.ctx.fill();
-      this.ctx.globalAlpha = 1;
-      this.ctx.strokeStyle = "#fff";
-      this.ctx.lineWidth = 2;
-      this.ctx.stroke();
+      HeroPickPreviewRenderer.draw(
+        this.ctx,
+        hero,
+        slot.cx,
+        slot.cy,
+        slot.ballRadius,
+        taken
+      );
 
-      this.ctx.fillStyle = "#fff";
-      this.ctx.font = "12px system-ui, sans-serif";
-      this.ctx.fillText(`${i + 1}. ${hero.name}`, cx, cy + 48);
+      this.ctx.fillStyle = taken ? "#888" : "#fff";
+      this.ctx.font = "bold 12px system-ui, sans-serif";
+      this.ctx.fillText(`${i + 1}. ${hero.name}`, slot.cx, slot.cy + slot.ballRadius + 18);
+
       const skillLabel = HeroAutoSkillSystem.getSkillLabel(hero.skillType);
       this.ctx.fillStyle = "#aaa";
-      this.ctx.fillText(`自动·${skillLabel}`, cx, cy + 64);
+      this.ctx.font = "11px system-ui, sans-serif";
+      this.ctx.fillText(`自动·${skillLabel}`, slot.cx, slot.cy + slot.ballRadius + 34);
       if (taken) {
-        this.ctx.fillStyle = "#888";
-        this.ctx.fillText("已选", cx, cy + 78);
+        this.ctx.fillStyle = "#666";
+        this.ctx.fillText("已选", slot.cx, slot.cy + slot.ballRadius + 48);
       }
     });
     this.ctx.textAlign = "left";
@@ -1307,6 +1585,14 @@ class LittleBallHeroGame {
   }
 }
 
+HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter) {
+  const baseLabel = HeroAutoSkillSystem.getSkillLabel(fighter.template.skillType);
+  if (fighter.template.skillType === HeroSkillType.NUMBER_TEACHER) {
+    return `${baseLabel}·${fighter.attackNumber}`;
+  }
+  return baseLabel;
+};
+
 HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   if (skillType === HeroSkillType.SHOT) {
     return "弹射";
@@ -1325,6 +1611,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.BOXING) {
     return "近距重拳";
+  }
+  if (skillType === HeroSkillType.NUMBER_TEACHER) {
+    return "追踪数字";
   }
   return "技能";
 };
