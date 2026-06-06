@@ -549,6 +549,17 @@ kbd {
   border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
+.self-def-slot-deco {
+  color: #ffd43b;
+  font-size: 0.72rem;
+  flex-shrink: 0;
+}
+
+.self-def-form-grid input::placeholder {
+  color: #777;
+  font-size: 0.8rem;
+}
+
 .self-def-form {
   width: min(720px, 92vw);
   margin-top: 0.75rem;

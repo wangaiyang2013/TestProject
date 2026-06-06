@@ -40,7 +40,7 @@
       <h1>自定义模式</h1>
       <div class="rules">
         <p>玩法同<strong>小球英雄</strong>：限时选球，双球自动反弹，技能自动释放</p>
-        <p>在<strong>自创球房间</strong>中自由创建全部 8 颗球，任何人可编辑任意球体属性</p>
+        <p>在<strong>自创球房间</strong>中自由创建全部 8 颗球：名称、技能名想输什么就输什么，还可加装饰</p>
       </div>
       <div class="menu-buttons">
         <button id="self-def-training-btn" type="button" class="btn-primary">训练场</button>
@@ -55,18 +55,36 @@
       <div id="self-def-slots" class="self-def-slots"></div>
       <form id="self-def-form" class="self-def-form" onsubmit="return false;">
         <div class="self-def-form-grid">
-          <label>名称 <input id="sdf-name" type="text" maxlength="12" /></label>
-          <label>球体颜色 <input id="sdf-color" type="color" /></label>
-          <label>光晕颜色 <input id="sdf-glow" type="color" /></label>
-          <label>生命值 <input id="sdf-health" type="number" min="50" max="200" /></label>
-          <label>移动速度 <input id="sdf-speed" type="number" min="5" max="14" step="0.1" /></label>
-          <label>质量 <input id="sdf-mass" type="number" min="0.5" max="2" step="0.05" /></label>
-          <label>技能类型
-            <select id="sdf-skill"></select>
+          <label>名称（最多 12 字，想输什么就输什么）
+            <input id="sdf-name" type="text" maxlength="12" placeholder="如：烈焰丸" />
           </label>
-          <label>技能伤害 <input id="sdf-damage" type="number" min="5" max="30" /></label>
-          <label>技能间隔(ms) <input id="sdf-interval" type="number" min="600" max="3000" step="100" /></label>
-          <label id="sdf-return-row">折返伤害 <input id="sdf-return" type="number" min="5" max="25" /></label>
+          <label>球体颜色
+            <input id="sdf-color" type="color" />
+          </label>
+          <label>光晕颜色
+            <input id="sdf-glow" type="color" />
+          </label>
+          <label>装饰（最多 12 字，显示在球上）
+            <input id="sdf-decoration" type="text" maxlength="12" placeholder="如：★皇冠、翅膀" />
+          </label>
+          <label>生命值（50–200）
+            <input id="sdf-health" type="number" min="50" max="200" />
+          </label>
+          <label>移动速度（5–14）
+            <input id="sdf-speed" type="number" min="5" max="14" step="0.1" />
+          </label>
+          <label>质量（0.5–2.0）
+            <input id="sdf-mass" type="number" min="0.5" max="2" step="0.05" />
+          </label>
+          <label>技能类型（最多 12 字，想输什么就输什么）
+            <input id="sdf-skill" type="text" maxlength="12" placeholder="如：烈焰冲击、回旋拳" />
+          </label>
+          <label>技能伤害（不超过 100）
+            <input id="sdf-damage" type="text" maxlength="6" placeholder="1–100 或 80%" />
+          </label>
+          <label>技能间隔（0.5–5 秒）
+            <input id="sdf-interval" type="number" min="0.5" max="5" step="0.1" />
+          </label>
         </div>
       </form>
       <div class="menu-buttons">

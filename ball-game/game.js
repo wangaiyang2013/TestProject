@@ -922,14 +922,13 @@ class GameUI {
       name: document.getElementById("sdf-name"),
       color: document.getElementById("sdf-color"),
       glow: document.getElementById("sdf-glow"),
+      decoration: document.getElementById("sdf-decoration"),
       maxHealth: document.getElementById("sdf-health"),
       moveSpeed: document.getElementById("sdf-speed"),
       mass: document.getElementById("sdf-mass"),
-      skillType: document.getElementById("sdf-skill"),
+      skillTypeName: document.getElementById("sdf-skill"),
       skillDamage: document.getElementById("sdf-damage"),
-      skillIntervalMs: document.getElementById("sdf-interval"),
-      returnDamage: document.getElementById("sdf-return"),
-      returnDamageRow: document.getElementById("sdf-return-row"),
+      skillIntervalSec: document.getElementById("sdf-interval"),
       confirmBtn: this.selfDefConfirmBtn,
     });
     this.selfDefRoomPanel.onConfirm = (templates) => {

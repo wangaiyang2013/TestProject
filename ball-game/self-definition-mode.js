@@ -10,34 +10,54 @@ const SelfDefinitionConstants = {
   MAX_SPEED: 14,
   MIN_MASS: 0.5,
   MAX_MASS: 2.0,
-  MIN_DAMAGE: 5,
-  MAX_DAMAGE: 30,
-  MIN_INTERVAL_MS: 600,
-  MAX_INTERVAL_MS: 3000,
-  MIN_RETURN_DAMAGE: 5,
-  MAX_RETURN_DAMAGE: 25,
+  MIN_DAMAGE: 1,
+  MAX_DAMAGE: 100,
+  MIN_INTERVAL_SEC: 0.5,
+  MAX_INTERVAL_SEC: 5.0,
   MAX_NAME_LENGTH: 12,
+  MAX_SKILL_NAME_LENGTH: 12,
+  MAX_DECORATION_LENGTH: 12,
 };
 
 /**
- * 技能类型选项（供自创球房间下拉选择）
+ * 将玩家自由输入的技能名映射为引擎技能类型
  */
-class CustomBallSkillOption {
-  constructor(value, label) {
-    this.value = value;
-    this.label = label;
+class CustomSkillTypeParser {
+  static parse(skillTypeName) {
+    const text = String(skillTypeName || "").trim().toLowerCase();
+    if (!text) {
+      return HeroSkillType.SHOT;
+    }
+    if (text.includes("数字") || text.includes("老师") || text.includes("number")) {
+      return HeroSkillType.NUMBER_TEACHER;
+    }
+    if (text.includes("拳") || text.includes("box")) {
+      return HeroSkillType.BOXING;
+    }
+    if (text.includes("墨镜") || text.includes("眼镜") || text.includes("sun")) {
+      return HeroSkillType.SUNGLASSES;
+    }
+    if (text.includes("牛仔") || text.includes("左轮") || text.includes("revolver")) {
+      return HeroSkillType.REVOLVER;
+    }
+    if (text.includes("震荡") || text.includes("脉冲") || text.includes("pulse")) {
+      return HeroSkillType.PULSE;
+    }
+    if (text.includes("冲击") || text.includes("撞") || text.includes("bump")) {
+      return HeroSkillType.BUMP;
+    }
+    if (text.includes("射") || text.includes("弹") || text.includes("shot")) {
+      return HeroSkillType.SHOT;
+    }
+    return HeroSkillType.SHOT;
   }
 
-  static getAll() {
-    return [
-      new CustomBallSkillOption(HeroSkillType.SHOT, "弹射"),
-      new CustomBallSkillOption(HeroSkillType.PULSE, "震荡"),
-      new CustomBallSkillOption(HeroSkillType.BUMP, "冲击"),
-      new CustomBallSkillOption(HeroSkillType.REVOLVER, "左轮双射"),
-      new CustomBallSkillOption(HeroSkillType.SUNGLASSES, "回旋墨镜"),
-      new CustomBallSkillOption(HeroSkillType.BOXING, "近距重拳"),
-      new CustomBallSkillOption(HeroSkillType.NUMBER_TEACHER, "追踪数字"),
-    ];
+  static normalizeSkillName(skillTypeName) {
+    const trimmed = String(skillTypeName || "").trim();
+    if (!trimmed) {
+      return "自定义技能";
+    }
+    return trimmed.slice(0, SelfDefinitionConstants.MAX_SKILL_NAME_LENGTH);
   }
 }
 
@@ -51,12 +71,14 @@ class CustomBallBlueprint {
     this.name = `自创球 ${slotIndex}`;
     this.color = "#e94560";
     this.glow = "#ff6b6b";
+    this.decoration = "";
     this.maxHealth = 100;
     this.moveSpeed = 9;
     this.mass = 1.0;
+    this.skillTypeName = "弹射";
     this.skillType = HeroSkillType.SHOT;
     this.skillDamage = 16;
-    this.skillIntervalMs = 1400;
+    this.skillIntervalSec = 1.4;
     this.returnDamage = 12;
   }
 
@@ -67,12 +89,14 @@ class CustomBallBlueprint {
     blueprint.name = `自创球 ${slotIndex}`;
     blueprint.color = preset.color;
     blueprint.glow = preset.glow;
-    blueprint.skillType = preset.skillType;
+    blueprint.decoration = preset.decoration;
+    blueprint.skillTypeName = preset.skillTypeName;
+    blueprint.skillType = CustomSkillTypeParser.parse(preset.skillTypeName);
     blueprint.skillDamage = preset.skillDamage;
     blueprint.maxHealth = preset.maxHealth;
     blueprint.moveSpeed = preset.moveSpeed;
     blueprint.mass = preset.mass;
-    blueprint.skillIntervalMs = preset.skillIntervalMs;
+    blueprint.skillIntervalSec = preset.skillIntervalSec;
     blueprint.returnDamage = preset.returnDamage;
     return blueprint;
   }
@@ -82,96 +106,105 @@ class CustomBallBlueprint {
       {
         color: "#e94560",
         glow: "#ff6b6b",
-        skillType: HeroSkillType.SHOT,
+        decoration: "★",
+        skillTypeName: "弹射",
         skillDamage: 16,
         maxHealth: 100,
         moveSpeed: 9,
         mass: 1.0,
-        skillIntervalMs: 1400,
+        skillIntervalSec: 1.4,
         returnDamage: 12,
       },
       {
         color: "#51cf66",
         glow: "#8ce99a",
-        skillType: HeroSkillType.BUMP,
+        decoration: "风",
+        skillTypeName: "冲击波",
         skillDamage: 12,
         maxHealth: 85,
         moveSpeed: 10,
         mass: 0.85,
-        skillIntervalMs: 1200,
+        skillIntervalSec: 1.2,
         returnDamage: 10,
       },
       {
         color: "#868e96",
         glow: "#ced4da",
-        skillType: HeroSkillType.PULSE,
+        decoration: "盾",
+        skillTypeName: "震荡",
         skillDamage: 18,
         maxHealth: 130,
         moveSpeed: 8,
         mass: 1.4,
-        skillIntervalMs: 1600,
+        skillIntervalSec: 1.6,
         returnDamage: 14,
       },
       {
         color: "#fcc419",
         glow: "#ffe066",
-        skillType: HeroSkillType.SHOT,
+        decoration: "⚡",
+        skillTypeName: "闪电弹",
         skillDamage: 14,
         maxHealth: 95,
         moveSpeed: 9,
         mass: 1.0,
-        skillIntervalMs: 1300,
+        skillIntervalSec: 1.3,
         returnDamage: 11,
       },
       {
         color: "#c68642",
         glow: "#e9b872",
-        skillType: HeroSkillType.REVOLVER,
+        decoration: "牛仔帽",
+        skillTypeName: "左轮双射",
         skillDamage: 12,
         maxHealth: 92,
         moveSpeed: 10,
         mass: 0.95,
-        skillIntervalMs: 1000,
+        skillIntervalSec: 1.0,
         returnDamage: 10,
       },
       {
         color: "#212529",
         glow: "#495057",
-        skillType: HeroSkillType.SUNGLASSES,
+        decoration: "墨镜",
+        skillTypeName: "回旋墨镜",
         skillDamage: 14,
         maxHealth: 88,
         moveSpeed: 9,
         mass: 0.9,
-        skillIntervalMs: 1300,
+        skillIntervalSec: 1.3,
         returnDamage: 11,
       },
       {
         color: "#e03131",
         glow: "#ff8787",
-        skillType: HeroSkillType.BOXING,
+        decoration: "拳套",
+        skillTypeName: "近距重拳",
         skillDamage: 20,
         maxHealth: 96,
         moveSpeed: 9,
         mass: 1.1,
-        skillIntervalMs: 1100,
+        skillIntervalSec: 1.1,
         returnDamage: 16,
       },
       {
         color: "#4c6ef5",
         glow: "#748ffc",
-        skillType: HeroSkillType.NUMBER_TEACHER,
+        decoration: "123",
+        skillTypeName: "追踪数字",
         skillDamage: 1,
         maxHealth: 94,
         moveSpeed: 9,
         mass: 1.0,
-        skillIntervalMs: 1200,
+        skillIntervalSec: 1.2,
         returnDamage: 1,
       },
     ];
   }
 
   toTemplate() {
-    return new HeroBallTemplate(
+    const skillIntervalMs = Math.round(this.skillIntervalSec * 1000);
+    const template = new HeroBallTemplate(
       this.id,
       this.name,
       this.color,
@@ -181,9 +214,12 @@ class CustomBallBlueprint {
       this.mass,
       this.skillType,
       this.skillDamage,
-      this.skillIntervalMs,
+      skillIntervalMs,
       this.returnDamage
     );
+    template.skillDisplayName = CustomSkillTypeParser.normalizeSkillName(this.skillTypeName);
+    template.decoration = this.decoration;
+    return template;
   }
 }
 
@@ -227,6 +263,31 @@ class CustomBallValueClamper {
     return Math.max(min, Math.min(max, parsed));
   }
 
+  static parseDamageInput(input) {
+    const cleaned = String(input || "").replace(/%/g, "").trim();
+    const parsed = Number(cleaned);
+    if (Number.isNaN(parsed)) {
+      return SelfDefinitionConstants.MIN_DAMAGE;
+    }
+    return CustomBallValueClamper.clamp(
+      parsed,
+      SelfDefinitionConstants.MIN_DAMAGE,
+      SelfDefinitionConstants.MAX_DAMAGE
+    );
+  }
+
+  static parseIntervalSecondsInput(input) {
+    const parsed = Number(String(input || "").trim());
+    if (Number.isNaN(parsed)) {
+      return SelfDefinitionConstants.MIN_INTERVAL_SEC;
+    }
+    return CustomBallValueClamper.clamp(
+      parsed,
+      SelfDefinitionConstants.MIN_INTERVAL_SEC,
+      SelfDefinitionConstants.MAX_INTERVAL_SEC
+    );
+  }
+
   static clampBlueprint(blueprint) {
     blueprint.maxHealth = CustomBallValueClamper.clamp(
       blueprint.maxHealth,
@@ -248,15 +309,10 @@ class CustomBallValueClamper {
       SelfDefinitionConstants.MIN_DAMAGE,
       SelfDefinitionConstants.MAX_DAMAGE
     );
-    blueprint.skillIntervalMs = CustomBallValueClamper.clamp(
-      blueprint.skillIntervalMs,
-      SelfDefinitionConstants.MIN_INTERVAL_MS,
-      SelfDefinitionConstants.MAX_INTERVAL_MS
-    );
-    blueprint.returnDamage = CustomBallValueClamper.clamp(
-      blueprint.returnDamage,
-      SelfDefinitionConstants.MIN_RETURN_DAMAGE,
-      SelfDefinitionConstants.MAX_RETURN_DAMAGE
+    blueprint.skillIntervalSec = CustomBallValueClamper.clamp(
+      blueprint.skillIntervalSec,
+      SelfDefinitionConstants.MIN_INTERVAL_SEC,
+      SelfDefinitionConstants.MAX_INTERVAL_SEC
     );
     blueprint.name = String(blueprint.name || "")
       .trim()
@@ -264,6 +320,18 @@ class CustomBallValueClamper {
     if (!blueprint.name) {
       blueprint.name = `自创球 ${blueprint.slotIndex}`;
     }
+    blueprint.skillTypeName = CustomSkillTypeParser.normalizeSkillName(blueprint.skillTypeName);
+    blueprint.skillType = CustomSkillTypeParser.parse(blueprint.skillTypeName);
+    blueprint.decoration = String(blueprint.decoration || "")
+      .trim()
+      .slice(0, SelfDefinitionConstants.MAX_DECORATION_LENGTH);
+    blueprint.returnDamage = Math.round(
+      CustomBallValueClamper.clamp(
+        blueprint.skillDamage * 0.8,
+        SelfDefinitionConstants.MIN_DAMAGE,
+        SelfDefinitionConstants.MAX_DAMAGE
+      )
+    );
   }
 }
 
@@ -276,20 +344,8 @@ class CustomBallRoomPanel {
     this.elements = elements;
     this.onConfirm = null;
     this.bindEvents();
-    this.populateSkillOptions();
     this.renderSlots();
     this.loadBlueprintToForm(this.room.getSelectedBlueprint());
-  }
-
-  populateSkillOptions() {
-    const select = this.elements.skillType;
-    select.innerHTML = "";
-    for (const option of CustomBallSkillOption.getAll()) {
-      const node = document.createElement("option");
-      node.value = option.value;
-      node.textContent = option.label;
-      select.appendChild(node);
-    }
   }
 
   bindEvents() {
@@ -309,13 +365,13 @@ class CustomBallRoomPanel {
       this.elements.name,
       this.elements.color,
       this.elements.glow,
+      this.elements.decoration,
       this.elements.maxHealth,
       this.elements.moveSpeed,
       this.elements.mass,
-      this.elements.skillType,
+      this.elements.skillTypeName,
       this.elements.skillDamage,
-      this.elements.skillIntervalMs,
-      this.elements.returnDamage,
+      this.elements.skillIntervalSec,
     ];
 
     for (const input of formInputs) {
@@ -347,8 +403,12 @@ class CustomBallRoomPanel {
         button.classList.add("active");
       }
       button.setAttribute("data-slot-index", String(index));
+      const deco = blueprint.decoration
+        ? `<span class="self-def-slot-deco">${blueprint.decoration}</span>`
+        : "";
       button.innerHTML = `
         <span class="self-def-slot-dot" style="background:${blueprint.color}"></span>
+        ${deco}
         <span class="self-def-slot-label">${index + 1}. ${blueprint.name}</span>
       `;
       this.elements.slotsContainer.appendChild(button);
@@ -359,14 +419,13 @@ class CustomBallRoomPanel {
     this.elements.name.value = blueprint.name;
     this.elements.color.value = blueprint.color;
     this.elements.glow.value = blueprint.glow;
+    this.elements.decoration.value = blueprint.decoration;
     this.elements.maxHealth.value = String(blueprint.maxHealth);
     this.elements.moveSpeed.value = String(blueprint.moveSpeed);
     this.elements.mass.value = String(blueprint.mass);
-    this.elements.skillType.value = blueprint.skillType;
+    this.elements.skillTypeName.value = blueprint.skillTypeName;
     this.elements.skillDamage.value = String(blueprint.skillDamage);
-    this.elements.skillIntervalMs.value = String(blueprint.skillIntervalMs);
-    this.elements.returnDamage.value = String(blueprint.returnDamage);
-    this.updateReturnDamageVisibility(blueprint.skillType);
+    this.elements.skillIntervalSec.value = String(blueprint.skillIntervalSec);
   }
 
   saveFormToBlueprint() {
@@ -374,21 +433,19 @@ class CustomBallRoomPanel {
     blueprint.name = this.elements.name.value;
     blueprint.color = this.elements.color.value;
     blueprint.glow = this.elements.glow.value;
+    blueprint.decoration = this.elements.decoration.value;
     blueprint.maxHealth = Number(this.elements.maxHealth.value);
     blueprint.moveSpeed = Number(this.elements.moveSpeed.value);
     blueprint.mass = Number(this.elements.mass.value);
-    blueprint.skillType = this.elements.skillType.value;
-    blueprint.skillDamage = Number(this.elements.skillDamage.value);
-    blueprint.skillIntervalMs = Number(this.elements.skillIntervalMs.value);
-    blueprint.returnDamage = Number(this.elements.returnDamage.value);
+    blueprint.skillTypeName = this.elements.skillTypeName.value;
+    blueprint.skillDamage = CustomBallValueClamper.parseDamageInput(
+      this.elements.skillDamage.value
+    );
+    blueprint.skillIntervalSec = CustomBallValueClamper.parseIntervalSecondsInput(
+      this.elements.skillIntervalSec.value
+    );
     CustomBallValueClamper.clampBlueprint(blueprint);
     this.loadBlueprintToForm(blueprint);
-    this.updateReturnDamageVisibility(blueprint.skillType);
-  }
-
-  updateReturnDamageVisibility(skillType) {
-    const showReturn = skillType === HeroSkillType.SUNGLASSES;
-    this.elements.returnDamageRow.classList.toggle("hidden", !showReturn);
   }
 
   reset() {

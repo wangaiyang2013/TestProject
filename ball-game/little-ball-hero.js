@@ -685,6 +685,12 @@ class HeroBallFighter {
     ctx.textAlign = "center";
     ctx.fillText(this.template.name, this.x, this.y + this.radius + 14);
 
+    if (this.template.decoration) {
+      ctx.fillStyle = "#ffd43b";
+      ctx.font = "bold 10px system-ui, sans-serif";
+      ctx.fillText(this.template.decoration, this.x, this.y - this.radius - 8);
+    }
+
     if (this.template.id === "jiangxi_cowboy") {
       ctx.fillStyle = "#3d2914";
       ctx.font = "bold 8px system-ui, sans-serif";
@@ -1533,10 +1539,15 @@ class LittleBallHeroGame {
       this.ctx.font = "bold 12px system-ui, sans-serif";
       this.ctx.fillText(`${i + 1}. ${hero.name}`, slot.cx, slot.cy + slot.ballRadius + 18);
 
-      const skillLabel = HeroAutoSkillSystem.getSkillLabel(hero.skillType);
+      const skillLabel =
+        hero.skillDisplayName || HeroAutoSkillSystem.getSkillLabel(hero.skillType);
       this.ctx.fillStyle = "#aaa";
       this.ctx.font = "11px system-ui, sans-serif";
       this.ctx.fillText(`自动·${skillLabel}`, slot.cx, slot.cy + slot.ballRadius + 34);
+      if (hero.decoration) {
+        this.ctx.fillStyle = "#ffd43b";
+        this.ctx.fillText(hero.decoration, slot.cx, slot.cy - slot.ballRadius - 10);
+      }
       if (taken) {
         this.ctx.fillStyle = "#666";
         this.ctx.fillText("已选", slot.cx, slot.cy + slot.ballRadius + 48);
@@ -1608,7 +1619,9 @@ class LittleBallHeroGame {
 }
 
 HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter) {
-  const baseLabel = HeroAutoSkillSystem.getSkillLabel(fighter.template.skillType);
+  const baseLabel =
+    fighter.template.skillDisplayName ||
+    HeroAutoSkillSystem.getSkillLabel(fighter.template.skillType);
   if (fighter.template.skillType === HeroSkillType.NUMBER_TEACHER) {
     return `${baseLabel}·${fighter.attackNumber}`;
   }
