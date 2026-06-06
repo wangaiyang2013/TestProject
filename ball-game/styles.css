@@ -439,3 +439,55 @@ kbd {
 .health-bar.enemy span {
   color: #adb5bd;
 }
+
+.btn-number {
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #7950f2, #5f3dc4);
+  color: #fff;
+  font-weight: 600;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.btn-number:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(121, 80, 242, 0.45);
+}
+
+.number-teacher-hud {
+  position: absolute;
+  top: 3.2rem;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.number-teacher-hud.hidden {
+  display: none;
+}
+
+.nt-num {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.nt-num.p1 {
+  color: #748ffc;
+}
+
+.nt-num.p2 {
+  color: #ff8787;
+}
+
+.nt-hit-msg {
+  color: #ffd43b;
+  font-size: 0.75rem;
+}

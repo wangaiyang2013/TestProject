@@ -31,7 +31,21 @@
         <button id="group-battle-btn" type="button" class="btn-accent">组团战斗</button>
         <button id="hero-mode-btn" type="button" class="btn-hero">小球英雄</button>
         <button id="west-bulldog-btn" type="button" class="btn-west">西部斗牛球</button>
+        <button id="number-teacher-btn" type="button" class="btn-number">数字老师</button>
       </div>
+    </div>
+
+    <div id="number-teacher-setup" class="overlay hidden">
+      <h1>数字老师</h1>
+      <div class="rules">
+        <p>头顶显示数字，数字<strong>自动飞出追踪</strong>最近敌人</p>
+        <p>命中伤害 = 数字大小，命中后数字 <strong>+1</strong>（无上限）</p>
+      </div>
+      <div class="menu-buttons">
+        <button id="nt-training-btn" type="button" class="btn-primary">训练场</button>
+        <button id="nt-versus-btn" type="button" class="btn-secondary">双人模式</button>
+      </div>
+      <button id="nt-setup-back" type="button" class="btn-text">返回主菜单</button>
     </div>
 
     <div id="hero-setup-overlay" class="overlay hidden">
@@ -83,6 +97,12 @@
       </div>
     </div>
 
+    <div id="number-teacher-hud" class="number-teacher-hud hidden">
+      <span id="nt-p1-num" class="nt-num p1">红队 数字 1</span>
+      <span id="nt-p2-num" class="nt-num p2">蓝队 数字 1</span>
+      <span id="nt-hit-msg" class="nt-hit-msg"></span>
+    </div>
+
     <div id="west-hud" class="west-hud hidden">
       <span id="west-hud-title">西部斗牛球</span>
       <span id="west-hit-msg" class="west-hit-msg"></span>
@@ -110,5 +130,6 @@
   <script src="group-battle.js"></script>
   <script src="little-ball-hero.js"></script>
   <script src="west-bulldog.js"></script>
+  <script src="number-teacher.js"></script>
 </body>
 </html>

@@ -43,6 +43,8 @@ class GameMode {
   static LITTLE_BALL_HERO = "little_ball_hero";
 
   static WEST_BULLDOG = "west_bulldog";
+
+  static NUMBER_TEACHER = "number_teacher";
 }
 
 /**
@@ -900,7 +902,17 @@ class GameUI {
     this.groupBattle = new GroupBattleGame(this.canvas);
     this.littleBallHero = new LittleBallHeroGame(this.canvas);
     this.westBulldog = new WestBulldogGame(this.canvas);
+    this.numberTeacher = new NumberTeacherGame(this.canvas);
     this.westBulldogBtn = document.getElementById("west-bulldog-btn");
+    this.numberTeacherBtn = document.getElementById("number-teacher-btn");
+    this.numberTeacherSetup = document.getElementById("number-teacher-setup");
+    this.ntTrainingBtn = document.getElementById("nt-training-btn");
+    this.ntVersusBtn = document.getElementById("nt-versus-btn");
+    this.ntSetupBack = document.getElementById("nt-setup-back");
+    this.numberTeacherHud = document.getElementById("number-teacher-hud");
+    this.ntP1Num = document.getElementById("nt-p1-num");
+    this.ntP2Num = document.getElementById("nt-p2-num");
+    this.ntHitMsg = document.getElementById("nt-hit-msg");
     this.westHud = document.getElementById("west-hud");
     this.westHitMsg = document.getElementById("west-hit-msg");
     this.heroSetupOverlay = document.getElementById("hero-setup-overlay");
@@ -917,6 +929,7 @@ class GameUI {
     this.bindGroupBattleGame();
     this.bindLittleBallHeroGame();
     this.bindWestBulldogGame();
+    this.bindNumberTeacherGame();
     this.bindMenuButtons();
 
     window.addEventListener("keydown", (e) => {
@@ -924,7 +937,8 @@ class GameUI {
         this.game.state === "playing" ||
         this.groupBattle.state === "playing" ||
         this.littleBallHero.state === "playing" ||
-        this.westBulldog.state === "playing";
+        this.westBulldog.state === "playing" ||
+        this.numberTeacher.state === "playing";
       if (e.code === "ControlRight" && playing) {
         e.preventDefault();
       }
@@ -951,6 +965,31 @@ class GameUI {
 
     this.groupBattle.onGameOver = () => {
       this.showMainOverlay("组团失败，全员阵亡，再试一次！");
+    };
+  }
+
+  bindNumberTeacherGame() {
+    this.numberTeacher.onHudUpdate = (snap) => {
+      this.ntP1Num.textContent = `红队 数字 ${snap.p1Number}`;
+      this.ntP2Num.textContent = `蓝队 数字 ${snap.p2Number}`;
+      if (snap.lastHit) {
+        this.ntHitMsg.textContent = snap.lastHit;
+      }
+    };
+
+    this.numberTeacher.onGameOver = (winnerId) => {
+      const p1 = this.numberTeacher.getFighter(1);
+      const p2 = this.numberTeacher.getFighter(2);
+      const winNum = winnerId === 1 ? p1.attackNumber : p2.attackNumber;
+      const msg =
+        this.numberTeacher.subMode === "training"
+          ? winnerId === 1
+            ? `胜利！你的数字已达 ${winNum}`
+            : "失败！再试一次！"
+          : winnerId === 1
+            ? `红队获胜！数字 ${winNum}`
+            : `蓝队获胜！数字 ${winNum}`;
+      this.showMainOverlay(msg);
     };
   }
 
@@ -994,6 +1033,14 @@ class GameUI {
     this.groupBattleBtn.addEventListener("click", () => this.showGroupSetup());
     this.heroModeBtn.addEventListener("click", () => this.showHeroSetup());
     this.westBulldogBtn.addEventListener("click", () => this.beginWestBulldog());
+    this.numberTeacherBtn.addEventListener("click", () => this.showNumberTeacherSetup());
+    this.ntTrainingBtn.addEventListener("click", () =>
+      this.beginNumberTeacher("training")
+    );
+    this.ntVersusBtn.addEventListener("click", () =>
+      this.beginNumberTeacher("versus")
+    );
+    this.ntSetupBack.addEventListener("click", () => this.showMainMenu());
     this.group1pBtn.addEventListener("click", () => this.beginGroupBattle(1));
     this.group2pBtn.addEventListener("click", () => this.beginGroupBattle(2));
     this.groupSetupBack.addEventListener("click", () => this.showMainMenu());
@@ -1018,6 +1065,43 @@ class GameUI {
     this.groupSetupOverlay.classList.add("hidden");
     this.cardOverlay.classList.add("hidden");
     this.heroSetupOverlay.classList.add("hidden");
+    this.numberTeacherSetup.classList.add("hidden");
+  }
+
+  showNumberTeacherSetup() {
+    this.hideAllOverlays();
+    this.numberTeacherSetup.classList.remove("hidden");
+  }
+
+  beginNumberTeacher(subMode) {
+    this.currentMode = GameMode.NUMBER_TEACHER;
+    this.hideAllOverlays();
+    this.hud.classList.remove("hidden");
+    this.groupHud.classList.add("hidden");
+    this.heroHud.classList.add("hidden");
+    this.westHud.classList.add("hidden");
+    this.numberTeacherHud.classList.remove("hidden");
+    this.p2Bar.classList.remove("hidden-bar");
+    this.modeBadge.classList.remove("hidden");
+    this.modeBadge.textContent = "数字老师";
+
+    this.p1HudLabel.textContent = "红队";
+    this.p2Label.textContent = subMode === "training" ? "AI" : "蓝队";
+    this.ntHitMsg.textContent = "";
+
+    this.numberTeacher.start(subMode);
+    this.trackNumberTeacherHealth();
+  }
+
+  trackNumberTeacherHealth() {
+    const tick = () => {
+      if (this.numberTeacher.state === "playing") {
+        this.hpP1.style.width = `${this.numberTeacher.getHealthPercent(1)}%`;
+        this.hpP2.style.width = `${this.numberTeacher.getHealthPercent(2)}%`;
+        requestAnimationFrame(tick);
+      }
+    };
+    requestAnimationFrame(tick);
   }
 
   showHeroSetup() {
@@ -1032,6 +1116,7 @@ class GameUI {
     this.groupHud.classList.add("hidden");
     this.heroHud.classList.add("hidden");
     this.westHud.classList.remove("hidden");
+    this.numberTeacherHud.classList.add("hidden");
     this.p2Bar.classList.remove("hidden-bar");
     this.modeBadge.classList.remove("hidden");
     this.modeBadge.textContent = "西部斗牛球";
@@ -1061,6 +1146,7 @@ class GameUI {
     this.hud.classList.remove("hidden");
     this.groupHud.classList.add("hidden");
     this.westHud.classList.add("hidden");
+    this.numberTeacherHud.classList.add("hidden");
     this.heroHud.classList.remove("hidden");
     this.p2Bar.classList.remove("hidden-bar");
     this.modeBadge.classList.remove("hidden");
@@ -1125,6 +1211,7 @@ class GameUI {
     this.groupHud.classList.add("hidden");
     this.heroHud.classList.add("hidden");
     this.westHud.classList.add("hidden");
+    this.numberTeacherHud.classList.add("hidden");
     this.modeBadge.classList.add("hidden");
     this.overlay.querySelector("h1").textContent = "双球对战";
     this.rulesVersus.classList.remove("hidden");
@@ -1135,6 +1222,7 @@ class GameUI {
     this.groupBattleBtn.textContent = "组团战斗";
     this.heroModeBtn.textContent = "小球英雄";
     this.westBulldogBtn.textContent = "西部斗牛球";
+    this.numberTeacherBtn.textContent = "数字老师";
   }
 
   showGroupSetup() {
@@ -1152,6 +1240,7 @@ class GameUI {
     this.groupHud.classList.add("hidden");
     this.heroHud.classList.add("hidden");
     this.westHud.classList.add("hidden");
+    this.numberTeacherHud.classList.add("hidden");
     this.p2Bar.classList.remove("hidden-bar");
     this.modeBadge.classList.toggle("hidden", !isTraining);
     this.modeBadge.textContent = "训练模式";
@@ -1169,6 +1258,7 @@ class GameUI {
     this.hud.classList.remove("hidden");
     this.heroHud.classList.add("hidden");
     this.westHud.classList.add("hidden");
+    this.numberTeacherHud.classList.add("hidden");
     this.groupHud.classList.remove("hidden");
     this.modeBadge.classList.remove("hidden");
     this.modeBadge.textContent = "组团战斗";
@@ -1246,6 +1336,7 @@ class GameUI {
     this.groupHud.classList.add("hidden");
     this.heroHud.classList.add("hidden");
     this.westHud.classList.add("hidden");
+    this.numberTeacherHud.classList.add("hidden");
     this.modeBadge.classList.add("hidden");
     this.overlay.querySelector("h1").textContent = message;
     this.rulesVersus.classList.remove("hidden");
@@ -1256,6 +1347,7 @@ class GameUI {
     this.groupBattleBtn.textContent = "组团战斗";
     this.heroModeBtn.textContent = "小球英雄";
     this.westBulldogBtn.textContent = "西部斗牛球";
+    this.numberTeacherBtn.textContent = "数字老师";
   }
 }
 
