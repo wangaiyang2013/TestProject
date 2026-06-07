@@ -15,7 +15,6 @@ const SelfDefinitionConstants = {
   MIN_INTERVAL_SEC: 0.5,
   MAX_INTERVAL_SEC: 5.0,
   MAX_NAME_LENGTH: 12,
-  MAX_SKILL_NAME_LENGTH: 12,
   MAX_DECORATION_LENGTH: 12,
 };
 
@@ -57,7 +56,7 @@ class CustomSkillTypeParser {
     if (!trimmed) {
       return "自定义技能";
     }
-    return trimmed.slice(0, SelfDefinitionConstants.MAX_SKILL_NAME_LENGTH);
+    return trimmed;
   }
 }
 
