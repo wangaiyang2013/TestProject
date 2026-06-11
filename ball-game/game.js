@@ -900,6 +900,27 @@ class GameUI {
     this.gbP2Block = document.getElementById("gb-p2-block");
     this.gbPhase = document.getElementById("gb-phase");
     this.currentMode = GameMode.VERSUS;
+    this.economy = GameEconomyService.getInstance();
+    this.coinHud = document.getElementById("coin-hud");
+    this.matchCoinReward = document.getElementById("match-coin-reward");
+    this.shopOverlay = document.getElementById("shop-overlay");
+    this.shopBtn = document.getElementById("shop-btn");
+    this.shopPanel = new ShopPanel(
+      {
+        overlay: this.shopOverlay,
+        openBtn: this.shopBtn,
+        closeBtn: document.getElementById("shop-close-btn"),
+        backBtn: document.getElementById("shop-back-btn"),
+        coinHud: this.coinHud,
+        shopCoins: document.getElementById("shop-coins"),
+        list: document.getElementById("shop-item-list"),
+        message: document.getElementById("shop-message"),
+        tabButtons: Array.from(document.querySelectorAll(".shop-tab-btn")),
+      },
+      this.economy
+    );
+    this.shopPanel.onBack = () => this.showMainMenu();
+    this.updateCoinHud();
     this.game = new DualBallGame(this.canvas);
     this.groupBattle = new GroupBattleGame(this.canvas);
     this.littleBallHero = new LittleBallHeroGame(this.canvas);
@@ -981,7 +1002,9 @@ class GameUI {
   bindDualBallGame() {
     this.game.onGameOver = (winnerId) => {
       const winnerText = this.getWinnerMessage(winnerId);
-      this.showMainOverlay(winnerText);
+      const playerWon =
+        this.currentMode === GameMode.TRAINING ? winnerId === 1 : winnerId === 1;
+      this.finishMatchWithCoins(winnerText, playerWon);
     };
   }
 
@@ -993,11 +1016,11 @@ class GameUI {
     };
 
     this.groupBattle.onGameVictory = () => {
-      this.showMainOverlay("恭喜通关！30 个 Boss 全部击败！");
+      this.finishMatchWithCoins("恭喜通关！30 个 Boss 全部击败！", true);
     };
 
     this.groupBattle.onGameOver = () => {
-      this.showMainOverlay("组团失败，全员阵亡，再试一次！");
+      this.finishMatchWithCoins("组团失败，全员阵亡，再试一次！", false);
     };
   }
 
@@ -1022,7 +1045,7 @@ class GameUI {
           : winnerId === 1
             ? `红队获胜！数字 ${winNum}`
             : `蓝队获胜！数字 ${winNum}`;
-      this.showMainOverlay(msg);
+      this.finishMatchWithCoins(msg, winnerId === 1);
     };
   }
 
@@ -1034,8 +1057,9 @@ class GameUI {
     };
 
     this.westBulldog.onGameOver = (playerWon) => {
-      this.showMainOverlay(
-        playerWon ? "西部斗牛球胜利！对手已倒下" : "你被对手撞倒了，再试一次！"
+      this.finishMatchWithCoins(
+        playerWon ? "西部斗牛球胜利！对手已倒下" : "你被对手撞倒了，再试一次！",
+        playerWon
       );
     };
   }
@@ -1052,7 +1076,7 @@ class GameUI {
           : winnerId === 1
             ? "红队（玩家1）获胜！"
             : "蓝队（玩家2）获胜！";
-      this.showMainOverlay(msg);
+      this.finishMatchWithCoins(msg, winnerId === 1);
     };
   }
 
@@ -1068,7 +1092,7 @@ class GameUI {
           : winnerId === 1
             ? "红队（玩家1）获胜！"
             : "蓝队（玩家2）获胜！";
-      this.showMainOverlay(msg);
+      this.finishMatchWithCoins(msg, winnerId === 1);
     };
   }
 
@@ -1126,6 +1150,17 @@ class GameUI {
     this.numberTeacherSetup.classList.add("hidden");
     this.selfDefSetup.classList.add("hidden");
     this.selfDefRoom.classList.add("hidden");
+    this.shopOverlay.classList.add("hidden");
+  }
+
+  updateCoinHud() {
+    this.coinHud.textContent = `金币：${this.economy.wallet.getCoins()}`;
+  }
+
+  finishMatchWithCoins(message, playerWon) {
+    const reward = this.economy.awardMatchCoins(playerWon);
+    this.updateCoinHud();
+    this.showMainOverlay(message, reward);
   }
 
   /**
@@ -1330,12 +1365,12 @@ class GameUI {
     if (snap.phase === "pick") {
       const sec = Math.ceil(snap.pickRemainingMs / 1000);
       if (snap.pickStep === 1) {
-        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒（1-8）`;
+        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒（1-${HeroRoster.getAll().length}）`;
       } else {
         this.heroPhaseText.textContent =
           snap.subMode === "training"
             ? "AI 选球中…"
-            : `蓝队选球 · 剩余 ${sec} 秒（1-8）`;
+            : `蓝队选球 · 剩余 ${sec} 秒（1-${HeroRoster.getAll().length}）`;
       }
       this.heroP1Info.textContent = snap.p1HeroId
         ? `红队 · ${HeroRoster.getById(snap.p1HeroId).name}`
@@ -1373,7 +1408,9 @@ class GameUI {
 
   showMainMenu() {
     this.hideAllOverlays();
+    this.matchCoinReward.classList.add("hidden");
     this.overlay.classList.remove("hidden");
+    this.updateCoinHud();
     this.hud.classList.add("hidden");
     this.groupHud.classList.add("hidden");
     this.heroHud.classList.add("hidden");
@@ -1391,6 +1428,7 @@ class GameUI {
     this.westBulldogBtn.textContent = "西部斗牛球";
     this.numberTeacherBtn.textContent = "数字老师";
     this.selfDefBtn.textContent = "自定义模式";
+    this.shopBtn.textContent = "商店";
   }
 
   showGroupSetup() {
@@ -1499,9 +1537,10 @@ class GameUI {
     }
   }
 
-  showMainOverlay(message) {
+  showMainOverlay(message, coinReward) {
     this.hideAllOverlays();
     this.overlay.classList.remove("hidden");
+    this.updateCoinHud();
     this.hud.classList.add("hidden");
     this.groupHud.classList.add("hidden");
     this.heroHud.classList.add("hidden");
@@ -1509,6 +1548,12 @@ class GameUI {
     this.numberTeacherHud.classList.add("hidden");
     this.modeBadge.classList.add("hidden");
     this.overlay.querySelector("h1").textContent = message;
+    if (coinReward && coinReward.earned > 0) {
+      this.matchCoinReward.textContent = `+${coinReward.earned} 金币（本局价值 ${coinReward.matchValue}，获得 50%）`;
+      this.matchCoinReward.classList.remove("hidden");
+    } else {
+      this.matchCoinReward.classList.add("hidden");
+    }
     this.rulesVersus.classList.remove("hidden");
     this.rulesTraining.classList.add("hidden");
     this.rulesGroup.classList.add("hidden");
@@ -1519,6 +1564,7 @@ class GameUI {
     this.westBulldogBtn.textContent = "西部斗牛球";
     this.numberTeacherBtn.textContent = "数字老师";
     this.selfDefBtn.textContent = "自定义模式";
+    this.shopBtn.textContent = "商店";
   }
 }
 

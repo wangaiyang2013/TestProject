@@ -26,6 +26,130 @@ body {
   height: 100%;
 }
 
+.coin-hud {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 12;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(255, 212, 59, 0.18);
+  color: #ffd43b;
+  font-size: 0.9rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.match-coin-reward {
+  color: #ffd43b;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.match-coin-reward.hidden {
+  display: none;
+}
+
+.btn-shop {
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #fab005, #f08c00);
+  color: #1a1a2e;
+  font-weight: 700;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.btn-shop:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(250, 176, 5, 0.45);
+}
+
+.shop-overlay {
+  justify-content: flex-start;
+  padding-top: 1rem;
+  overflow-y: auto;
+}
+
+.shop-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.shop-tab-btn {
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  border: 1px solid #555;
+  background: rgba(255, 255, 255, 0.06);
+  color: #eee;
+  cursor: pointer;
+}
+
+.shop-tab-btn.active {
+  border-color: #fab005;
+  background: rgba(250, 176, 5, 0.2);
+  color: #ffd43b;
+}
+
+.shop-item-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+  width: min(900px, 94vw);
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.shop-item-card {
+  padding: 0.85rem;
+  border-radius: 10px;
+  border: 1px solid #444;
+  background: rgba(255, 255, 255, 0.05);
+  text-align: left;
+}
+
+.shop-item-card h3 {
+  font-size: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.shop-item-card p {
+  font-size: 0.82rem;
+  color: #bbb;
+  margin-bottom: 0.35rem;
+}
+
+.shop-price {
+  color: #ffd43b !important;
+  font-weight: 700;
+}
+
+.shop-buy-btn {
+  margin-top: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  border-radius: 6px;
+  background: #fab005;
+  color: #1a1a2e;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shop-buy-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.shop-message {
+  min-height: 1.2rem;
+  color: #51cf66;
+  font-size: 0.85rem;
+}
+
 .overlay {
   position: absolute;
   inset: 0;

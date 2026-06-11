@@ -10,8 +10,11 @@
   <div id="game-container">
     <canvas id="game-canvas"></canvas>
 
+    <div id="coin-hud" class="coin-hud">金币：0</div>
+
     <div id="overlay" class="overlay visible">
       <h1>双球对战</h1>
+      <p id="match-coin-reward" class="match-coin-reward hidden"></p>
       <div class="rules" id="rules-versus">
         <p><span class="p1-tag">玩家1（红）</span> 方向键移动，<kbd>Ctrl</kbd> 攻击</p>
         <p><span class="p2-tag">玩家2（蓝）</span> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>Z</kbd> 移动，<kbd>Y</kbd> 攻击</p>
@@ -33,7 +36,23 @@
         <button id="west-bulldog-btn" type="button" class="btn-west">西部斗牛球</button>
         <button id="number-teacher-btn" type="button" class="btn-number">数字老师</button>
         <button id="self-def-btn" type="button" class="btn-self-def">自定义模式</button>
+        <button id="shop-btn" type="button" class="btn-shop">商店</button>
       </div>
+    </div>
+
+    <div id="shop-overlay" class="overlay shop-overlay hidden">
+      <h1>游戏商店</h1>
+      <p id="shop-coins" class="setup-hint">当前金币：0</p>
+      <p class="setup-hint">完成一局后可购买；收益为本局价值的 50% 金币</p>
+      <div class="shop-tabs">
+        <button type="button" class="shop-tab-btn active" data-shop-tab="skin">皮肤</button>
+        <button type="button" class="shop-tab-btn" data-shop-tab="accessory">配饰</button>
+        <button type="button" class="shop-tab-btn" data-shop-tab="custom_ball">自创球</button>
+      </div>
+      <div id="shop-item-list" class="shop-item-list"></div>
+      <p id="shop-message" class="shop-message"></p>
+      <button id="shop-close-btn" type="button" class="btn-text">关闭商店</button>
+      <button id="shop-back-btn" type="button" class="btn-text">返回主菜单</button>
     </div>
 
     <div id="self-def-setup" class="overlay hidden">
@@ -187,6 +206,7 @@
   <script src="game.js"></script>
   <script src="group-battle.js"></script>
   <script src="little-ball-hero.js"></script>
+  <script src="shop-system.js"></script>
   <script src="west-bulldog.js"></script>
   <script src="number-teacher.js"></script>
   <script src="self-definition-mode.js"></script>

@@ -88,7 +88,7 @@ class HeroBallTemplate {
  * 英雄球图鉴
  */
 class HeroRoster {
-  static getAll() {
+  static getBaseHeroes() {
     return [
       new HeroBallTemplate(
         "flame",
@@ -184,6 +184,17 @@ class HeroRoster {
         1200
       ),
     ];
+  }
+
+  static getPurchasedHeroes() {
+    if (typeof GameEconomyService === "undefined") {
+      return [];
+    }
+    return GameEconomyService.getInstance().inventory.getPurchasedCustomBallTemplates();
+  }
+
+  static getAll() {
+    return [...HeroRoster.getBaseHeroes(), ...HeroRoster.getPurchasedHeroes()];
   }
 
   static getById(id) {
@@ -649,6 +660,21 @@ class HeroBallFighter {
   }
 
   draw(ctx) {
+    let drawColor = this.color;
+    let drawGlow = this.glow;
+    let decorationText = this.template.decoration || "";
+
+    if (typeof GameEconomyService !== "undefined" && !this.template.isShopItem) {
+      const inventory = GameEconomyService.getInstance().inventory;
+      const colors = ShopCosmeticRenderer.resolveColors(this.template, inventory);
+      drawColor = colors.color;
+      drawGlow = colors.glow;
+      decorationText = ShopCosmeticRenderer.resolveDecoration(
+        this.template,
+        inventory
+      );
+    }
+
     if (Date.now() < this.pulseFlashUntil) {
       ctx.beginPath();
       ctx.arc(this.x, this.y, LittleBallHeroConstants.PULSE_RANGE, 0, Math.PI * 2);
@@ -659,14 +685,14 @@ class HeroBallFighter {
 
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.radius + 6, 0, Math.PI * 2);
-    ctx.fillStyle = this.glow;
+    ctx.fillStyle = drawGlow;
     ctx.globalAlpha = 0.35;
     ctx.fill();
     ctx.globalAlpha = 1;
 
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    ctx.fillStyle = this.color;
+    ctx.fillStyle = drawColor;
     ctx.fill();
     ctx.strokeStyle = "#fff";
     ctx.lineWidth = 3;
@@ -677,7 +703,7 @@ class HeroBallFighter {
     const barY = this.y - this.radius - 16;
     ctx.fillStyle = "#2a2a40";
     ctx.fillRect(barX, barY, barW, 5);
-    ctx.fillStyle = this.color;
+    ctx.fillStyle = drawColor;
     ctx.fillRect(barX, barY, barW * (this.health / this.maxHealth), 5);
 
     ctx.fillStyle = "#fff";
@@ -685,10 +711,14 @@ class HeroBallFighter {
     ctx.textAlign = "center";
     ctx.fillText(this.template.name, this.x, this.y + this.radius + 14);
 
-    if (this.template.decoration) {
-      ctx.fillStyle = "#ffd43b";
-      ctx.font = "bold 10px system-ui, sans-serif";
-      ctx.fillText(this.template.decoration, this.x, this.y - this.radius - 8);
+    if (decorationText) {
+      ShopCosmeticRenderer.drawEquippedAccessory(
+        ctx,
+        this.x,
+        this.y,
+        this.radius,
+        decorationText
+      );
     }
 
     if (this.template.id === "jiangxi_cowboy") {
