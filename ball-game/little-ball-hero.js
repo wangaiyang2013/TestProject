@@ -41,6 +41,9 @@ const LittleBallHeroConstants = {
   TEACHER_START_NUMBER: 1,
   TEACHER_NUMBER_SPEED: 6.5,
   TEACHER_NUMBER_HOMING: 0.12,
+  /** 橙算球：叠乘伤害上限，防止数值溢出 */
+  ORANGE_CALC_MAX_DAMAGE: 99999,
+  ORANGE_CALC_FLASH_MS: 280,
 };
 
 /**
@@ -79,6 +82,9 @@ class HeroSkillType {
 
   /** 元素球专属：周期召唤四颗随机元素子弹 */
   static ELEMENT_BURST = "element_burst";
+
+  /** 橙算球专属：每次攻击后，下次攻击伤害乘以上次攻击伤害 */
+  static ORANGE_CALC = "orange_calc";
 }
 
 /**
@@ -247,6 +253,18 @@ class HeroRoster {
         HeroSkillType.ELEMENT_BURST,
         12,
         2600
+      ),
+      new HeroBallTemplate(
+        "orange_calc",
+        "橙算球",
+        "#ff922b",
+        "#ffc078",
+        92,
+        9,
+        0.95,
+        HeroSkillType.ORANGE_CALC,
+        10,
+        1500
       ),
     ];
   }
@@ -617,6 +635,68 @@ class IronWallSkillSystem {
 }
 
 /**
+ * 橙算球技能：每次攻击后，下次攻击伤害 = 基础伤害 × 上次攻击伤害
+ */
+class OrangeCalcSkillSystem {
+  static initFighter(fighter) {
+    fighter.orangeCalcLastDamage = 0;
+    fighter.orangeCalcFlashUntil = 0;
+  }
+
+  static isOrangeCalcFighter(fighter) {
+    return fighter && fighter.template.skillType === HeroSkillType.ORANGE_CALC;
+  }
+
+  static computeAttackDamage(fighter, baseDamage) {
+    const lastDamage = fighter.orangeCalcLastDamage || 0;
+    if (lastDamage <= 0) {
+      return baseDamage;
+    }
+
+    const multiplied = baseDamage * lastDamage;
+    return Math.min(
+      multiplied,
+      LittleBallHeroConstants.ORANGE_CALC_MAX_DAMAGE
+    );
+  }
+
+  static recordAttackDamage(fighter, attackDamage) {
+    fighter.orangeCalcLastDamage = attackDamage;
+    fighter.orangeCalcFlashUntil =
+      Date.now() + LittleBallHeroConstants.ORANGE_CALC_FLASH_MS;
+  }
+
+  static getNextDamagePreview(fighter, baseDamage) {
+    return OrangeCalcSkillSystem.computeAttackDamage(fighter, baseDamage);
+  }
+
+  static drawEffect(ctx, fighter) {
+    const preview = OrangeCalcSkillSystem.getNextDamagePreview(
+      fighter,
+      fighter.template.skillDamage
+    );
+    const badgeY = fighter.y - fighter.radius - 16;
+    ctx.fillStyle = "rgba(26, 26, 46, 0.85)";
+    ctx.fillRect(fighter.x - 22, badgeY - 10, 44, 20);
+    ctx.fillStyle = "#ffc078";
+    ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`×${preview}`, fighter.x, badgeY);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+
+    if (Date.now() < fighter.orangeCalcFlashUntil) {
+      ctx.beginPath();
+      ctx.arc(fighter.x, fighter.y, fighter.radius + 11, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255, 146, 43, 0.75)";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+  }
+}
+
+/**
  * 尖刺球反伤系统（受击时对攻击者造成伤害）
  */
 class SpikeReflectSystem {
@@ -944,6 +1024,10 @@ class HeroBallFighter {
         ? LittleBallHeroConstants.TEACHER_START_NUMBER
         : 0;
 
+    if (OrangeCalcSkillSystem.isOrangeCalcFighter(this)) {
+      OrangeCalcSkillSystem.initFighter(this);
+    }
+
     if (typeof ElementStatusEffectSystem !== "undefined") {
       ElementStatusEffectSystem.initFighter(this);
     }
@@ -1109,6 +1193,10 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.ELEMENT_BURST) {
       ElementBurstSystem.drawBurstFlash(ctx, this);
+    }
+
+    if (this.template.skillType === HeroSkillType.ORANGE_CALC) {
+      OrangeCalcSkillSystem.drawEffect(ctx, this);
     }
 
     if (typeof ElementStatusEffectSystem !== "undefined") {
@@ -1457,6 +1545,18 @@ class HeroAutoSkillSystem {
       return;
     }
 
+    if (template.skillType === HeroSkillType.ORANGE_CALC) {
+      fighter.markSkillUsed(now);
+      HeroAutoSkillSystem.fireOrangeCalc(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius,
+        template.skillDamage
+      );
+      return;
+    }
+
     fighter.markSkillUsed(now);
 
     if (template.skillType === HeroSkillType.SHOT) {
@@ -1677,6 +1777,36 @@ class HeroAutoSkillSystem {
         )
       );
     }
+  }
+
+  static fireOrangeCalc(fighter, opponent, projectiles, radius, baseDamage) {
+    const attackDamage = OrangeCalcSkillSystem.computeAttackDamage(
+      fighter,
+      baseDamage
+    );
+    OrangeCalcSkillSystem.recordAttackDamage(fighter, attackDamage);
+
+    const dx = opponent.x - fighter.x;
+    const dy = opponent.y - fighter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return;
+    }
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+    const offset = fighter.radius + radius + 4;
+    projectiles.push(
+      new HeroSkillProjectile(
+        fighter.x + dirX * offset,
+        fighter.y + dirY * offset,
+        dirX,
+        dirY,
+        radius,
+        fighter.playerId,
+        "#ffc078",
+        attackDamage
+      )
+    );
   }
 
   static fireShot(fighter, opponent, projectiles, radius, damage) {
@@ -2003,6 +2133,9 @@ class LittleBallHeroGame {
     if (index === 10) {
       return "Minus";
     }
+    if (index === 11) {
+      return "Equal";
+    }
     return null;
   }
 
@@ -2013,7 +2146,10 @@ class LittleBallHeroGame {
     if (heroCount === 10) {
       return "1-9、0";
     }
-    return "1-9、0、-";
+    if (heroCount === 11) {
+      return "1-9、0、-";
+    }
+    return "1-9、0、-、=";
   }
 
   updateBattle() {
@@ -2344,6 +2480,13 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
   if (fighter.template.skillType === HeroSkillType.BROKEN_BLADE) {
     return `${baseLabel}·${fighter.bladeDamage}`;
   }
+  if (fighter.template.skillType === HeroSkillType.ORANGE_CALC) {
+    const nextDamage = OrangeCalcSkillSystem.getNextDamagePreview(
+      fighter,
+      fighter.template.skillDamage
+    );
+    return `${baseLabel}·${nextDamage}`;
+  }
   return baseLabel;
 };
 
@@ -2383,6 +2526,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.ELEMENT_BURST) {
     return "元素爆破";
+  }
+  if (skillType === HeroSkillType.ORANGE_CALC) {
+    return "橙算叠乘";
   }
   return "技能";
 };
