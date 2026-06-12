@@ -17,6 +17,27 @@ class BallHealthResolver {
   }
 }
 
+/**
+ * 在球体上方绘制生命值上限文字（替代生命条）
+ */
+class BallMaxHealthLabelRenderer {
+  static drawAboveHead(ctx, x, y, radius, maxHealth, options) {
+    const config = options || {};
+    const offsetY = config.offsetY !== undefined ? config.offsetY : 16;
+    const fontSize = config.fontSize !== undefined ? config.fontSize : 11;
+    const textColor = config.textColor !== undefined ? config.textColor : "#fff";
+    const labelY = y - radius - offsetY;
+
+    ctx.fillStyle = textColor;
+    ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(maxHealth), x, labelY);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+  }
+}
+
 const GameConstants = {
   MAX_HEALTH: BallHealthResolver.getDefaultMaxHealth(),
   BALL_RADIUS_RATIO: 0.035,

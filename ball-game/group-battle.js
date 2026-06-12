@@ -317,20 +317,23 @@ class BattleMonster {
     ctx.lineWidth = this.isBoss ? 4 : 2;
     ctx.stroke();
 
-    const barW = this.radius * 2;
-    const barH = 5;
-    const barX = this.x - this.radius;
-    const barY = this.y - this.radius - 12;
-    ctx.fillStyle = "#2a2a40";
-    ctx.fillRect(barX, barY, barW, barH);
-    ctx.fillStyle = this.isBoss ? "#ff922b" : "#94d82d";
-    ctx.fillRect(barX, barY, barW * (this.health / this.maxHealth), barH);
+    BallMaxHealthLabelRenderer.drawAboveHead(
+      ctx,
+      this.x,
+      this.y,
+      this.radius,
+      this.maxHealth,
+      {
+        offsetY: 12,
+        textColor: this.isBoss ? "#ff922b" : "#94d82d",
+      }
+    );
 
     if (this.isBoss) {
       ctx.fillStyle = "#ffd43b";
       ctx.font = "bold 11px system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("BOSS", this.x, barY - 4);
+      ctx.fillText("BOSS", this.x, this.y - this.radius - 24);
       ctx.textAlign = "left";
     }
   }

@@ -1129,13 +1129,14 @@ class HeroBallFighter {
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    const barW = this.radius * 2.2;
-    const barX = this.x - barW / 2;
-    const barY = this.y - this.radius - 16;
-    ctx.fillStyle = "#2a2a40";
-    ctx.fillRect(barX, barY, barW, 5);
-    ctx.fillStyle = drawColor;
-    ctx.fillRect(barX, barY, barW * (this.health / this.maxHealth), 5);
+    BallMaxHealthLabelRenderer.drawAboveHead(
+      ctx,
+      this.x,
+      this.y,
+      this.radius,
+      this.maxHealth,
+      { offsetY: 16, textColor: drawColor }
+    );
 
     ctx.fillStyle = "#fff";
     ctx.font = "10px system-ui, sans-serif";
