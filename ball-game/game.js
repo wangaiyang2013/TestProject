@@ -1012,6 +1012,7 @@ class GameUI {
     this.heroPickInput = document.getElementById("hero-pick-input");
     this.heroPickConfirm = document.getElementById("hero-pick-confirm");
     this.heroPickMatch = document.getElementById("hero-pick-match");
+    this.heroPickPanelKey = "";
     this.heroModeBtn = document.getElementById("hero-mode-btn");
     this.heroTrainingBtn = document.getElementById("hero-training-btn");
     this.heroVersusBtn = document.getElementById("hero-versus-btn");
@@ -1133,27 +1134,27 @@ class GameUI {
     return null;
   }
 
-  showHeroPickPanel(snap) {
-    const game = this.getActiveHeroPickGame();
-    if (!game) {
-      return;
-    }
-
+  showHeroPickPanel(snap, game) {
     this.heroPickPanel.classList.remove("hidden");
     const heroCount = game.getHeroes().length;
-    const teamLabel = snap.pickStep === 1 ? "红队" : "蓝队";
+    const teamLabel = game.getCurrentPickerTeamLabel();
     this.heroPickInput.placeholder = `${teamLabel}：输入角色名或编号（1-${heroCount}）`;
-    this.updateHeroPickPreview();
-
-    if (document.activeElement !== this.heroPickInput) {
-      this.heroPickInput.focus();
-    }
+    this.heroPickConfirm.textContent =
+      snap.pickStep === 1 ? "确认选球（红队）" : "确认选球（蓝队）";
+    this.heroPickInput.focus();
   }
 
   hideHeroPickPanel() {
     this.heroPickPanel.classList.add("hidden");
     this.heroPickInput.value = "";
     this.heroPickMatch.textContent = "输入角色名或编号，下方显示对弈编号";
+    this.heroPickPanelKey = "";
+  }
+
+  resetHeroPickInputForStep(snap, game) {
+    this.heroPickInput.value = "";
+    const context = game.getPickInputContext();
+    this.heroPickMatch.textContent = context.emptyHint;
   }
 
   updateHeroPickPreview() {
@@ -1168,7 +1169,17 @@ class GameUI {
 
   submitHeroPick() {
     const game = this.getActiveHeroPickGame();
-    if (!game || !game.canPlayerPickNow()) {
+    if (!game) {
+      this.heroPickMatch.textContent = "当前模式无法选球";
+      return;
+    }
+    if (!game.canPlayerPickNow()) {
+      if (game.phase === "pick" && game.pickStep === 2 && !game.isTwoPlayer()) {
+        this.heroPickMatch.textContent =
+          "训练场蓝队由 AI 自动选球，请使用「双人模式」让蓝队手动输入";
+      } else {
+        this.heroPickMatch.textContent = "当前不可选球，请等待回合切换";
+      }
       return;
     }
 
@@ -1193,7 +1204,18 @@ class GameUI {
       return;
     }
 
-    this.showHeroPickPanel(snap);
+    const game = this.getActiveHeroPickGame();
+    if (!game) {
+      return;
+    }
+
+    const panelKey = `${snap.phase}:${snap.pickStep}:${snap.subMode}:${snap.p1HeroId || ""}`;
+    if (this.heroPickPanelKey !== panelKey) {
+      this.heroPickPanelKey = panelKey;
+      this.resetHeroPickInputForStep(snap, game);
+    }
+
+    this.showHeroPickPanel(snap, game);
   }
 
   bindSelfDefinitionGame() {

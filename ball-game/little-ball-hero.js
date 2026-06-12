@@ -395,7 +395,10 @@ class HeroPickScreenLayout {
  * 选球输入解析：支持角色名称或列表编号
  */
 class HeroPickInputResolver {
-  static resolve(fullHeroes, availableHeroes, rawInput) {
+  static TEAM_KEYWORDS = ["红队", "蓝队", "红", "蓝", "玩家1", "玩家2", "p1", "p2"];
+
+  static resolve(fullHeroes, availableHeroes, rawInput, options) {
+    const config = options || {};
     const text = String(rawInput || "").trim();
     if (!text) {
       return {
@@ -405,18 +408,39 @@ class HeroPickInputResolver {
       };
     }
 
+    if (HeroPickInputResolver.isTeamKeyword(text)) {
+      return {
+        hero: null,
+        pickNumber: 0,
+        message: "请直接输入角色名或列表编号，不要输入「红队/蓝队」",
+      };
+    }
+
     if (/^\d+$/.test(text)) {
       return HeroPickInputResolver.resolveByNumber(
         fullHeroes,
         availableHeroes,
-        parseInt(text, 10)
+        parseInt(text, 10),
+        config
       );
     }
 
-    return HeroPickInputResolver.resolveByName(fullHeroes, availableHeroes, text);
+    return HeroPickInputResolver.resolveByName(
+      fullHeroes,
+      availableHeroes,
+      text,
+      config
+    );
   }
 
-  static resolveByNumber(fullHeroes, availableHeroes, pickNumber) {
+  static isTeamKeyword(text) {
+    const lowerText = text.toLowerCase();
+    return HeroPickInputResolver.TEAM_KEYWORDS.some(
+      (keyword) => keyword.toLowerCase() === lowerText
+    );
+  }
+
+  static resolveByNumber(fullHeroes, availableHeroes, pickNumber, options) {
     const index = pickNumber - 1;
     if (index < 0 || index >= fullHeroes.length) {
       return {
@@ -432,14 +456,14 @@ class HeroPickInputResolver {
       return {
         hero: null,
         pickNumber,
-        message: `${hero.name} 已被选择`,
+        message: HeroPickInputResolver.buildTakenMessage(hero.name, options),
       };
     }
 
     return { hero, pickNumber, message: "" };
   }
 
-  static resolveByName(fullHeroes, availableHeroes, text) {
+  static resolveByName(fullHeroes, availableHeroes, text, options) {
     const lowerText = text.toLowerCase();
     const matches = availableHeroes.filter((hero) => {
       const heroName = hero.name.toLowerCase();
@@ -447,6 +471,18 @@ class HeroPickInputResolver {
     });
 
     if (matches.length === 0) {
+      const takenHero = HeroPickInputResolver.findTakenHeroByName(
+        fullHeroes,
+        availableHeroes,
+        lowerText
+      );
+      if (takenHero) {
+        return {
+          hero: null,
+          pickNumber: 0,
+          message: HeroPickInputResolver.buildTakenMessage(takenHero.name, options),
+        };
+      }
       return { hero: null, pickNumber: 0, message: "未找到匹配角色" };
     }
     if (matches.length > 1) {
@@ -462,16 +498,39 @@ class HeroPickInputResolver {
     return { hero, pickNumber, message: "" };
   }
 
-  static preview(fullHeroes, availableHeroes, rawInput) {
+  static findTakenHeroByName(fullHeroes, availableHeroes, lowerText) {
+    const takenHeroes = fullHeroes.filter(
+      (hero) => !availableHeroes.some((item) => item.id === hero.id)
+    );
+    const matches = takenHeroes.filter((hero) =>
+      hero.name.toLowerCase().includes(lowerText)
+    );
+    if (matches.length === 1) {
+      return matches[0];
+    }
+    return null;
+  }
+
+  static buildTakenMessage(heroName, options) {
+    const config = options || {};
+    const ownerLabel = config.blockedByTeam || "对方";
+    return `【${heroName}】已被${ownerLabel}选择，请换其他角色`;
+  }
+
+  static preview(fullHeroes, availableHeroes, rawInput, options) {
     const result = HeroPickInputResolver.resolve(
       fullHeroes,
       availableHeroes,
-      rawInput
+      rawInput,
+      options
     );
     if (result.hero) {
       return `对弈编号：${result.pickNumber} · ${result.hero.name}`;
     }
     if (!String(rawInput || "").trim()) {
+      if (options && options.emptyHint) {
+        return options.emptyHint;
+      }
       return "输入角色名或编号，下方显示对弈编号";
     }
     return result.message;
@@ -2198,15 +2257,41 @@ class LittleBallHeroGame {
     return this.pickStep === 2 && this.isTwoPlayer();
   }
 
+  getCurrentPickerTeamLabel() {
+    return this.pickStep === 1 ? "红队" : "蓝队";
+  }
+
+  getPickInputContext() {
+    const context = {
+      emptyHint: "输入角色名或编号，下方显示对弈编号",
+      blockedByTeam: "对方",
+    };
+
+    if (this.pickStep === 2 && this.p1HeroId) {
+      const redHero = this.getHeroById(this.p1HeroId);
+      context.emptyHint = `红队已选【${redHero.name}】，蓝队请输入其他角色名或编号`;
+      context.blockedByTeam = "红队";
+    }
+
+    return context;
+  }
+
   tryPickByInput(rawInput) {
     if (!this.canPlayerPickNow()) {
+      if (this.phase === "pick" && this.pickStep === 2 && !this.isTwoPlayer()) {
+        return {
+          ok: false,
+          message: "训练场蓝队由 AI 自动选球，双人模式才需蓝队手动输入",
+        };
+      }
       return { ok: false, message: "当前不可选球" };
     }
 
     const resolved = HeroPickInputResolver.resolve(
       this.getHeroes(),
       this.getAvailableHeroes(),
-      rawInput
+      rawInput,
+      this.getPickInputContext()
     );
     if (!resolved.hero) {
       return { ok: false, message: resolved.message };
@@ -2229,7 +2314,8 @@ class LittleBallHeroGame {
     return HeroPickInputResolver.preview(
       this.getHeroes(),
       this.getAvailableHeroes(),
-      rawInput
+      rawInput,
+      this.getPickInputContext()
     );
   }
 
@@ -2463,7 +2549,9 @@ class LittleBallHeroGame {
     const pickerLabel =
       this.pickStep === 1
         ? "红队（玩家1）选球"
-        : "蓝队（玩家2）选球";
+        : this.isTwoPlayer()
+          ? "蓝队（玩家2）选球 · 不可与红队重复"
+          : "蓝队由 AI 自动选球";
 
     this.ctx.fillStyle = "rgba(0,0,0,0.55)";
     this.ctx.fillRect(
