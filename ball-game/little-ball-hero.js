@@ -76,6 +76,9 @@ class HeroSkillType {
 
   /** 斷刀球专属：近距挥刀劈砍，远离敌人时每秒叠伤 */
   static BROKEN_BLADE = "broken_blade";
+
+  /** 元素球专属：周期召唤四颗随机元素子弹 */
+  static ELEMENT_BURST = "element_burst";
 }
 
 /**
@@ -232,6 +235,18 @@ class HeroRoster {
         HeroSkillType.BROKEN_BLADE,
         20,
         800
+      ),
+      new HeroBallTemplate(
+        "element",
+        "元素球",
+        "#9775fa",
+        "#b197fc",
+        98,
+        9,
+        1.0,
+        HeroSkillType.ELEMENT_BURST,
+        12,
+        2600
       ),
     ];
   }
@@ -443,6 +458,17 @@ class HeroPickPreviewRenderer {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("壁", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.ELEMENT_BURST) {
+      ctx.fillStyle = "#f3f0ff";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("元", cx, cy);
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       return;
@@ -917,6 +943,10 @@ class HeroBallFighter {
       template.skillType === HeroSkillType.NUMBER_TEACHER
         ? LittleBallHeroConstants.TEACHER_START_NUMBER
         : 0;
+
+    if (typeof ElementStatusEffectSystem !== "undefined") {
+      ElementStatusEffectSystem.initFighter(this);
+    }
   }
 
   get maxHealth() {
@@ -962,6 +992,12 @@ class HeroBallFighter {
   }
 
   canUseSkill(now) {
+    if (
+      typeof ElementStatusEffectSystem !== "undefined" &&
+      ElementStatusEffectSystem.isSkillBlocked(this)
+    ) {
+      return false;
+    }
     const interval = this.template.skillIntervalMs;
     return now - this.lastSkillTime >= interval;
   }
@@ -1069,6 +1105,14 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.IRON_WALL) {
       this.drawIronWallEffect(ctx);
+    }
+
+    if (this.template.skillType === HeroSkillType.ELEMENT_BURST) {
+      ElementBurstSystem.drawBurstFlash(ctx, this);
+    }
+
+    if (typeof ElementStatusEffectSystem !== "undefined") {
+      ElementStatusEffectSystem.drawStatus(ctx, this);
     }
 
     if (Date.now() < this.ironCritHitFlashUntil) {
@@ -1404,6 +1448,12 @@ class HeroAutoSkillSystem {
     if (template.skillType === HeroSkillType.IRON_WALL) {
       fighter.markSkillUsed(now);
       HeroAutoSkillSystem.fireIronWallStrike(fighter, opponent, template.skillDamage);
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.ELEMENT_BURST) {
+      fighter.markSkillUsed(now);
+      ElementBurstSystem.summonOrbitBullets(fighter, template.skillDamage);
       return;
     }
 
@@ -1922,7 +1972,10 @@ class LittleBallHeroGame {
 
     const heroes = this.getHeroes();
     for (let i = 0; i < heroes.length; i += 1) {
-      const keyCode = `Digit${i + 1}`;
+      const keyCode = LittleBallHeroGame.getPickKeyCode(i);
+      if (!keyCode) {
+        continue;
+      }
       if (this.input.wasPressed(keyCode)) {
         const hero = heroes[i];
         if (hero && !this.takenHeroIds.has(hero.id)) {
@@ -1940,6 +1993,29 @@ class LittleBallHeroGame {
     return this.fighters.find((f) => f.playerId === playerId);
   }
 
+  static getPickKeyCode(index) {
+    if (index >= 0 && index < 9) {
+      return `Digit${index + 1}`;
+    }
+    if (index === 9) {
+      return "Digit0";
+    }
+    if (index === 10) {
+      return "Minus";
+    }
+    return null;
+  }
+
+  static getPickKeyHint(heroCount) {
+    if (heroCount <= 9) {
+      return `1-${heroCount}`;
+    }
+    if (heroCount === 10) {
+      return "1-9、0";
+    }
+    return "1-9、0、-";
+  }
+
   updateBattle() {
     const f1 = this.fighters[0];
     const f2 = this.fighters[1];
@@ -1947,13 +2023,23 @@ class LittleBallHeroGame {
       return;
     }
 
-    ContinuousBouncePhysics.updateBall(f1, this.arena);
-    ContinuousBouncePhysics.updateBall(f2, this.arena);
+    if (!ElementStatusEffectSystem.isFrozen(f1)) {
+      ContinuousBouncePhysics.updateBall(f1, this.arena);
+    }
+    if (!ElementStatusEffectSystem.isFrozen(f2)) {
+      ContinuousBouncePhysics.updateBall(f2, this.arena);
+    }
     ContinuousBouncePhysics.resolveBallCollision(f1, f2);
 
     const now = Date.now();
+    ElementStatusEffectSystem.tickFighter(f1, now);
+    ElementStatusEffectSystem.tickFighter(f2, now);
+
     HeroAutoSkillSystem.tryUseSkill(f1, f2, this.projectiles, this.getProjectileRadius());
     HeroAutoSkillSystem.tryUseSkill(f2, f1, this.projectiles, this.getProjectileRadius());
+
+    ElementBurstSystem.updateOrbitBullets(f1, f2, this.fighters);
+    ElementBurstSystem.updateOrbitBullets(f2, f1, this.fighters);
 
     this.updateProjectiles();
 
@@ -2145,7 +2231,7 @@ class LittleBallHeroGame {
     this.ctx.fillStyle = remainingSec <= 3 ? "#ff6b6b" : "#ccc";
     this.ctx.font = "14px system-ui, sans-serif";
     this.ctx.fillText(
-      `剩余 ${remainingSec} 秒 · 按 1-${heroes.length} 选球，超时随机`,
+      `剩余 ${remainingSec} 秒 · 按 ${LittleBallHeroGame.getPickKeyHint(heroes.length)} 选球，超时随机`,
       this.width / 2,
       this.arena.top + 56
     );
@@ -2207,6 +2293,7 @@ class LittleBallHeroGame {
     for (const fighter of this.fighters) {
       if (fighter.isAlive()) {
         fighter.draw(this.ctx);
+        ElementBurstSystem.drawOrbitBullets(this.ctx, fighter);
       }
     }
 
@@ -2293,6 +2380,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.BROKEN_BLADE) {
     return "斷刀劈砍";
+  }
+  if (skillType === HeroSkillType.ELEMENT_BURST) {
+    return "元素爆破";
   }
   return "技能";
 };

@@ -1365,12 +1365,12 @@ class GameUI {
     if (snap.phase === "pick") {
       const sec = Math.ceil(snap.pickRemainingMs / 1000);
       if (snap.pickStep === 1) {
-        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒（1-${HeroRoster.getAll().length}）`;
+        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒（${LittleBallHeroGame.getPickKeyHint(HeroRoster.getAll().length)}）`;
       } else {
         this.heroPhaseText.textContent =
           snap.subMode === "training"
             ? "AI 选球中…"
-            : `蓝队选球 · 剩余 ${sec} 秒（1-${HeroRoster.getAll().length}）`;
+            : `蓝队选球 · 剩余 ${sec} 秒（${LittleBallHeroGame.getPickKeyHint(HeroRoster.getAll().length)}）`;
       }
       this.heroP1Info.textContent = snap.p1HeroId
         ? `红队 · ${HeroRoster.getById(snap.p1HeroId).name}`
