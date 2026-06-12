@@ -94,6 +94,9 @@ class HeroSkillType {
 
   /** 劍刃球专属：敌人靠近挥剑吸血；周期无敌释放元素弹 */
   static SWORD_BLADE = "sword_blade";
+
+  /** 寒冰腐烂球专属：冰球减速叠层冻结；受伤后狂暴近战；踩踏吞噬 */
+  static ICE_ROT = "ice_rot";
 }
 
 /**
@@ -310,6 +313,18 @@ class HeroRoster {
         HeroSkillType.SWORD_BLADE,
         26,
         SwordBladeConstants.ULT_INTERVAL_MS
+      ),
+      new HeroBallTemplate(
+        "ice_rot",
+        "寒冰腐烂球",
+        "#15aabf",
+        "#99e9f2",
+        BallHealthResolver.resolve(96),
+        8,
+        1.05,
+        HeroSkillType.ICE_ROT,
+        14,
+        IceRotConstants.ICE_SHOT_INTERVAL_MS
       ),
     ];
   }
@@ -749,6 +764,17 @@ class HeroPickPreviewRenderer {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("劍", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.ICE_ROT) {
+      ctx.fillStyle = "#e3fafc";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("寒", cx, cy);
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       return;
@@ -1265,6 +1291,10 @@ class HeroBallFighter {
       SwordBladeSkillSystem.initFighter(this);
     }
 
+    if (IceRotSkillSystem.isIceRotFighter(this)) {
+      IceRotSkillSystem.initFighter(this);
+    }
+
     this.defenseRestrictUntil = 0;
     this.defenseRestrictSpeedRatio = 1;
 
@@ -1466,6 +1496,10 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.SWORD_BLADE) {
       SwordBladeSkillSystem.draw(ctx, this);
+    }
+
+    if (this.template.skillType === HeroSkillType.ICE_ROT) {
+      IceRotSkillSystem.draw(ctx, this);
     }
 
     if (typeof ElementStatusEffectSystem !== "undefined") {
@@ -1682,6 +1716,14 @@ class ContinuousBouncePhysics {
       ball.vx = (ball.vx / speed) * maxSpeed;
       ball.vy = (ball.vy / speed) * maxSpeed;
     }
+
+    if (typeof IceRotSkillSystem !== "undefined") {
+      const slowRatio = IceRotSkillSystem.getMoveSpeedRatio(ball);
+      if (slowRatio < 1) {
+        ball.vx *= slowRatio;
+        ball.vy *= slowRatio;
+      }
+    }
   }
 
   static updateBall(ball, arena) {
@@ -1851,6 +1893,19 @@ class HeroAutoSkillSystem {
       if (fighter.canUseSkill(now)) {
         fighter.markSkillUsed(now);
         SwordBladeSkillSystem.activateUltimate(fighter);
+      }
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.ICE_ROT) {
+      if (!IceRotSkillSystem.isCrazyBurst(fighter) && fighter.canUseSkill(now)) {
+        fighter.markSkillUsed(now);
+        IceRotSkillSystem.fireIceBall(
+          fighter,
+          opponent,
+          projectiles,
+          projectileRadius
+        );
       }
       return;
     }
@@ -2499,6 +2554,12 @@ class LittleBallHeroGame {
     if (index === 13) {
       return "BracketRight";
     }
+    if (index === 14) {
+      return "Backslash";
+    }
+    if (index === 15) {
+      return "Semicolon";
+    }
     return null;
   }
 
@@ -2518,7 +2579,13 @@ class LittleBallHeroGame {
     if (heroCount === 13) {
       return "1-9、0、-、=、[";
     }
-    return "1-9、0、-、=、[、]";
+    if (heroCount === 14) {
+      return "1-9、0、-、=、[、]";
+    }
+    if (heroCount === 15) {
+      return "1-9、0、-、=、[、]、\\";
+    }
+    return "1-9、0、-、=、[、]、\\、; 或输入 16";
   }
 
   updateBattle() {
@@ -2566,6 +2633,9 @@ class LittleBallHeroGame {
 
     ElementBurstSystem.updateOrbitBullets(f1, f2, this.fighters);
     ElementBurstSystem.updateOrbitBullets(f2, f1, this.fighters);
+
+    IceRotSkillSystem.tick(f1, f2, now);
+    IceRotSkillSystem.tick(f2, f1, now);
 
     this.updateProjectiles();
 
@@ -2665,6 +2735,37 @@ class LittleBallHeroGame {
           ) {
             const shooter = this.getFighter(proj.ownerId);
             fighter.takeDamage(proj.damage, shooter);
+            proj.alive = false;
+            this.projectiles.splice(i, 1);
+            break;
+          }
+        }
+        continue;
+      }
+
+      if (proj instanceof IceRotProjectile) {
+        proj.update();
+
+        if (!proj.alive || proj.isOutOfBounds(this.arena)) {
+          this.projectiles.splice(i, 1);
+          continue;
+        }
+
+        for (const fighter of this.fighters) {
+          if (fighter.playerId === proj.ownerId || !fighter.isAlive()) {
+            continue;
+          }
+          if (
+            CollisionDetector.circleHitsCircle(
+              proj.x,
+              proj.y,
+              proj.radius,
+              fighter.x,
+              fighter.y,
+              fighter.radius
+            )
+          ) {
+            IceRotSkillSystem.handleProjectileHit(fighter, proj);
             proj.alive = false;
             this.projectiles.splice(i, 1);
             break;
@@ -2894,6 +2995,14 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
       return `${baseLabel}·无敌中`;
     }
   }
+  if (fighter.template.skillType === HeroSkillType.ICE_ROT) {
+    if (IceRotSkillSystem.isCrazyBurst(fighter)) {
+      return fighter.iceRotSwallowing
+        ? `${baseLabel}·吞噬狂暴`
+        : `${baseLabel}·狂暴`;
+    }
+    return `${baseLabel}·冰弹`;
+  }
   return baseLabel;
 };
 
@@ -2945,6 +3054,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.SWORD_BLADE) {
     return "范围内挥剑吸血/20秒无敌+元素";
+  }
+  if (skillType === HeroSkillType.ICE_ROT) {
+    return "冰弹减速/受伤狂暴/踩踏吞噬";
   }
   return "技能";
 };

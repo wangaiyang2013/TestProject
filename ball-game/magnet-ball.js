@@ -129,7 +129,8 @@ class MeleeHeroClassifier {
       skillType === HeroSkillType.BOXING ||
       skillType === HeroSkillType.SPIKE ||
       skillType === HeroSkillType.BROKEN_BLADE ||
-      skillType === HeroSkillType.SWORD_BLADE
+      skillType === HeroSkillType.SWORD_BLADE ||
+      skillType === HeroSkillType.ICE_ROT
     );
   }
 }

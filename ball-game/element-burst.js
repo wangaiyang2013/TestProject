@@ -117,6 +117,9 @@ class ElementStatusEffectSystem {
     fighter.elementStatusUntil = 0;
     fighter.elementOrbitBullets = [];
     fighter.elementBurstFlashUntil = 0;
+    fighter.iceRotHitCount = 0;
+    fighter.iceRotSlowUntil = 0;
+    fighter.iceRotSlowRatio = 1;
   }
 
   static isSkillBlocked(fighter) {

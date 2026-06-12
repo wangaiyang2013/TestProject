@@ -75,6 +75,14 @@ class CustomSkillTypeParser {
     ) {
       return HeroSkillType.SWORD_BLADE;
     }
+    if (
+      text.includes("寒冰") ||
+      text.includes("腐烂") ||
+      text.includes("ice rot") ||
+      text.includes("icerot")
+    ) {
+      return HeroSkillType.ICE_ROT;
+    }
     if (text.includes("尖刺") || text.includes("反伤") || text.includes("spike")) {
       return HeroSkillType.SPIKE;
     }
