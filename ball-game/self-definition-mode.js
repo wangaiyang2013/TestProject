@@ -50,6 +50,9 @@ class CustomSkillTypeParser {
     ) {
       return HeroSkillType.ELEMENT_BURST;
     }
+    if (text.includes("磁铁") || text.includes("磁吸") || text.includes("magnet")) {
+      return HeroSkillType.MAGNET;
+    }
     if (
       text.includes("斷刀") ||
       text.includes("断刀") ||

@@ -85,6 +85,9 @@ class HeroSkillType {
 
   /** 橙算球专属：每次攻击后，下次攻击伤害乘以上次攻击伤害 */
   static ORANGE_CALC = "orange_calc";
+
+  /** 磁铁球专属：吸附敌方投射物为盾，触碰反弹或超时环射 */
+  static MAGNET = "magnet";
 }
 
 /**
@@ -265,6 +268,18 @@ class HeroRoster {
         HeroSkillType.ORANGE_CALC,
         10,
         1500
+      ),
+      new HeroBallTemplate(
+        "magnet",
+        "磁铁球",
+        "#495057",
+        "#868e96",
+        BallHealthResolver.resolve(98),
+        8,
+        1.15,
+        HeroSkillType.MAGNET,
+        14,
+        2800
       ),
     ];
   }
@@ -673,6 +688,20 @@ class HeroPickPreviewRenderer {
       ctx.fillText("刀", cx, cy);
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.MAGNET) {
+      const headY = cy - radius - 4;
+      ctx.fillStyle = "#8b0000";
+      ctx.fillRect(cx - 10, headY - 6, 5, 12);
+      ctx.fillRect(cx + 5, headY - 6, 5, 12);
+      ctx.beginPath();
+      ctx.arc(cx - 7, headY + 7, 5, 0, Math.PI, false);
+      ctx.arc(cx + 7, headY + 7, 5, Math.PI, 0, false);
+      ctx.closePath();
+      ctx.fill();
+      return;
     }
   }
 }
@@ -1174,6 +1203,10 @@ class HeroBallFighter {
       OrangeCalcSkillSystem.initFighter(this);
     }
 
+    if (MagnetSkillSystem.isMagnetFighter(this)) {
+      MagnetSkillSystem.initFighter(this);
+    }
+
     if (typeof ElementStatusEffectSystem !== "undefined") {
       ElementStatusEffectSystem.initFighter(this);
     }
@@ -1344,6 +1377,11 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.ORANGE_CALC) {
       OrangeCalcSkillSystem.drawEffect(ctx, this);
+    }
+
+    if (this.template.skillType === HeroSkillType.MAGNET) {
+      MagnetSkillSystem.drawHeadMagnet(ctx, this);
+      MagnetSkillSystem.drawShields(ctx, this);
     }
 
     if (typeof ElementStatusEffectSystem !== "undefined") {
@@ -1701,6 +1739,15 @@ class HeroAutoSkillSystem {
         projectileRadius,
         template.skillDamage
       );
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.MAGNET) {
+      if (!MagnetSkillSystem.canActivate(fighter, now)) {
+        return;
+      }
+      fighter.markSkillUsed(now);
+      MagnetSkillSystem.activate(fighter, now);
       return;
     }
 
@@ -2336,6 +2383,9 @@ class LittleBallHeroGame {
     if (index === 11) {
       return "Equal";
     }
+    if (index === 12) {
+      return "BracketLeft";
+    }
     return null;
   }
 
@@ -2349,7 +2399,10 @@ class LittleBallHeroGame {
     if (heroCount === 11) {
       return "1-9、0、-";
     }
-    return "1-9、0、-、=";
+    if (heroCount === 12) {
+      return "1-9、0、-、=";
+    }
+    return "1-9、0、-、=、[";
   }
 
   updateBattle() {
@@ -2370,6 +2423,25 @@ class LittleBallHeroGame {
     const now = Date.now();
     ElementStatusEffectSystem.tickFighter(f1, now);
     ElementStatusEffectSystem.tickFighter(f2, now);
+
+    MagnetSkillSystem.tick(
+      f1,
+      f2,
+      this.projectiles,
+      this.fighters,
+      this.arena,
+      now
+    );
+    MagnetSkillSystem.tick(
+      f2,
+      f1,
+      this.projectiles,
+      this.fighters,
+      this.arena,
+      now
+    );
+    MagnetSkillSystem.onBallContact(f1, f2, this.fighters, now);
+    MagnetSkillSystem.onBallContact(f2, f1, this.fighters, now);
 
     HeroAutoSkillSystem.tryUseSkill(f1, f2, this.projectiles, this.getProjectileRadius());
     HeroAutoSkillSystem.tryUseSkill(f2, f1, this.projectiles, this.getProjectileRadius());
@@ -2689,6 +2761,10 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
     );
     return `${baseLabel}·${nextDamage}`;
   }
+  if (fighter.template.skillType === HeroSkillType.MAGNET) {
+    const shieldCount = fighter.magnetShields ? fighter.magnetShields.length : 0;
+    return `${baseLabel}·盾${shieldCount}`;
+  }
   return baseLabel;
 };
 
@@ -2731,6 +2807,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.ORANGE_CALC) {
     return "橙算叠乘";
+  }
+  if (skillType === HeroSkillType.MAGNET) {
+    return "磁吸护盾";
   }
   return "技能";
 };
