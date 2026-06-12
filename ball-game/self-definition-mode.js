@@ -28,6 +28,14 @@ class CustomSkillTypeParser {
       return HeroSkillType.SHOT;
     }
     if (
+      text.includes("喷火") ||
+      text.includes("烈焰") ||
+      text.includes("flame") ||
+      text.includes("flamethrower")
+    ) {
+      return HeroSkillType.FLAMETHROWER;
+    }
+    if (
       text.includes("斷刀") ||
       text.includes("断刀") ||
       text.includes("blade")

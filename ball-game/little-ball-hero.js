@@ -28,6 +28,9 @@ const LittleBallHeroConstants = {
   BLADE_STACK_DAMAGE_PER_SEC: 10,
   BLADE_STACK_INTERVAL_MS: 1000,
   BLADE_SLASH_FLASH_MS: 320,
+  FLAMETHROWER_PROC_CHANCE: 0.8,
+  FLAMETHROWER_PROJECTILE_LIFETIME_MS: 750,
+  FLAMETHROWER_BURST_FLASH_MS: 260,
   AI_PICK_DELAY_MS: 500,
   PICK_GRID_COLUMNS: 4,
   PICK_TOP_PADDING: 72,
@@ -41,6 +44,9 @@ const LittleBallHeroConstants = {
  */
 class HeroSkillType {
   static SHOT = "shot";
+
+  /** 喷火球专属：每次攻击 80% 概率造成喷火伤害 */
+  static FLAMETHROWER = "flamethrower";
 
   static PULSE = "pulse";
 
@@ -105,14 +111,14 @@ class HeroRoster {
     return [
       new HeroBallTemplate(
         "flame",
-        "烈焰丸",
+        "喷火球",
         "#e94560",
         "#ff6b6b",
         100,
         9,
         1.0,
-        HeroSkillType.SHOT,
-        16
+        HeroSkillType.FLAMETHROWER,
+        22
       ),
       new HeroBallTemplate(
         "wind",
@@ -413,6 +419,17 @@ class HeroPickPreviewRenderer {
       return;
     }
 
+    if (hero.skillType === HeroSkillType.FLAMETHROWER) {
+      ctx.fillStyle = "#ff922b";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("火", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
+
     if (hero.skillType === HeroSkillType.REVOLVER) {
       ctx.fillStyle = "#3d2914";
       ctx.font = `bold ${Math.max(9, radius * 0.4)}px system-ui, sans-serif`;
@@ -544,6 +561,70 @@ class SpikeReflectSystem {
     const reflectDamage = SpikeReflectSystem.getReflectDamage(defender);
     attacker.takeDamage(reflectDamage, null, true);
     defender.spikeFlashUntil = Date.now() + LittleBallHeroConstants.SPIKE_REFLECT_FLASH_MS;
+  }
+}
+
+/**
+ * 喷火球火焰弹（80% 概率触发时发射）
+ */
+class FlamethrowerProjectile {
+  constructor(x, y, dirX, dirY, radius, ownerId, damage) {
+    this.x = x;
+    this.y = y;
+    this.dirX = dirX;
+    this.dirY = dirY;
+    this.radius = radius;
+    this.ownerId = ownerId;
+    this.damage = damage;
+    this.alive = true;
+    this.spawnTime = Date.now();
+  }
+
+  update() {
+    const speed = LittleBallHeroConstants.PROJECTILE_SPEED * 1.15;
+    this.x += this.dirX * speed;
+    this.y += this.dirY * speed;
+    if (
+      Date.now() - this.spawnTime >
+      LittleBallHeroConstants.FLAMETHROWER_PROJECTILE_LIFETIME_MS
+    ) {
+      this.alive = false;
+    }
+  }
+
+  isOutOfBounds(arena) {
+    return (
+      this.x - this.radius < arena.left ||
+      this.x + this.radius > arena.right ||
+      this.y - this.radius < arena.top ||
+      this.y + this.radius > arena.bottom
+    );
+  }
+
+  draw(ctx) {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 107, 53, 0.35)";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    const gradient = ctx.createRadialGradient(
+      this.x,
+      this.y,
+      this.radius * 0.2,
+      this.x,
+      this.y,
+      this.radius
+    );
+    gradient.addColorStop(0, "#fff3bf");
+    gradient.addColorStop(0.45, "#ff922b");
+    gradient.addColorStop(1, "#e03131");
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = "#ffd43b";
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 }
 
@@ -771,6 +852,8 @@ class HeroBallFighter {
     this.bladeSlashFlashUntil = 0;
     this.bladeSlashAngle = 0;
     this.lastBladeStackTime = Date.now();
+    this.flameBurstUntil = 0;
+    this.flameFizzleUntil = 0;
     this.bladeDamage =
       template.skillType === HeroSkillType.BROKEN_BLADE
         ? template.skillDamage
@@ -920,6 +1003,10 @@ class HeroBallFighter {
       this.drawBladeSlash(ctx);
     }
 
+    if (this.template.skillType === HeroSkillType.FLAMETHROWER) {
+      this.drawFlamethrowerEffect(ctx);
+    }
+
     if (Date.now() < this.spikeFlashUntil) {
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.radius + 10, 0, Math.PI * 2);
@@ -979,6 +1066,22 @@ class HeroBallFighter {
     ctx.fillText(text, this.x, badgeY);
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
+  }
+
+  drawFlamethrowerEffect(ctx) {
+    if (Date.now() < this.flameBurstUntil) {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius + 12, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255, 146, 43, 0.35)";
+      ctx.fill();
+    }
+    if (Date.now() < this.flameFizzleUntil) {
+      ctx.fillStyle = "rgba(173, 181, 189, 0.7)";
+      ctx.font = "9px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("未触发", this.x, this.y - this.radius - 8);
+      ctx.textAlign = "left";
+    }
   }
 
   drawBladeSlash(ctx) {
@@ -1197,6 +1300,18 @@ class HeroAutoSkillSystem {
       return;
     }
 
+    if (template.skillType === HeroSkillType.FLAMETHROWER) {
+      fighter.markSkillUsed(now);
+      HeroAutoSkillSystem.fireFlamethrower(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius,
+        template.skillDamage
+      );
+      return;
+    }
+
     fighter.markSkillUsed(now);
 
     if (template.skillType === HeroSkillType.SHOT) {
@@ -1235,6 +1350,39 @@ class HeroAutoSkillSystem {
         template.returnDamage
       );
     }
+  }
+
+  static fireFlamethrower(fighter, opponent, projectiles, radius, damage) {
+    const dx = opponent.x - fighter.x;
+    const dy = opponent.y - fighter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return;
+    }
+
+    if (Math.random() >= LittleBallHeroConstants.FLAMETHROWER_PROC_CHANCE) {
+      fighter.flameFizzleUntil =
+        Date.now() + LittleBallHeroConstants.FLAMETHROWER_BURST_FLASH_MS;
+      return;
+    }
+
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+    const offset = fighter.radius + radius + 4;
+    fighter.flameBurstUntil =
+      Date.now() + LittleBallHeroConstants.FLAMETHROWER_BURST_FLASH_MS;
+
+    projectiles.push(
+      new FlamethrowerProjectile(
+        fighter.x + dirX * offset,
+        fighter.y + dirY * offset,
+        dirX,
+        dirY,
+        radius * 1.15,
+        fighter.playerId,
+        damage
+      )
+    );
   }
 
   static fireTeacherNumber(fighter, opponent, projectiles) {
@@ -1762,6 +1910,38 @@ class LittleBallHeroGame {
         continue;
       }
 
+      if (proj instanceof FlamethrowerProjectile) {
+        proj.update();
+
+        if (!proj.alive || proj.isOutOfBounds(this.arena)) {
+          this.projectiles.splice(i, 1);
+          continue;
+        }
+
+        for (const fighter of this.fighters) {
+          if (fighter.playerId === proj.ownerId || !fighter.isAlive()) {
+            continue;
+          }
+          if (
+            CollisionDetector.circleHitsCircle(
+              proj.x,
+              proj.y,
+              proj.radius,
+              fighter.x,
+              fighter.y,
+              fighter.radius
+            )
+          ) {
+            const shooter = this.getFighter(proj.ownerId);
+            fighter.takeDamage(proj.damage, shooter);
+            proj.alive = false;
+            this.projectiles.splice(i, 1);
+            break;
+          }
+        }
+        continue;
+      }
+
       proj.update();
 
       if (!proj.alive || proj.isOutOfBounds(this.arena)) {
@@ -1964,6 +2144,9 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
 HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   if (skillType === HeroSkillType.SHOT) {
     return "弹射";
+  }
+  if (skillType === HeroSkillType.FLAMETHROWER) {
+    return "喷火(80%)";
   }
   if (skillType === HeroSkillType.PULSE) {
     return "震荡";
