@@ -20,6 +20,12 @@ const IceRotConstants = {
   SWALLOW_KILL_STEP_COUNT: 100,
   SWALLOW_PULL_STRENGTH: 0.18,
   CRAZY_BURST_FLASH_MS: 280,
+  /**
+   * 狂暴触发：生命须低于满血（< 100%）
+   * 且已损失生命达到最大生命的该比例，避免擦碰一下立刻狂暴
+   */
+  CRAZY_BURST_MAX_HP_RATIO: 1,
+  CRAZY_BURST_MIN_LOST_RATIO: 0.1,
 };
 
 /**
@@ -104,12 +110,35 @@ class IceRotSkillSystem {
     fighter.lastIceRotMeleeTime = 0;
   }
 
-  /** 生命低于满值即进入狂暴模式 */
+  /**
+   * 狂暴模式：生命低于 100% 且已损失至少 10% 最大生命
+   * （防止开局碰撞擦伤就立刻狂暴）
+   */
   static isCrazyBurst(fighter) {
+    if (!IceRotSkillSystem.isIceRotFighter(fighter)) {
+      return false;
+    }
+
+    const maxHp = fighter.maxHealth;
+    if (maxHp <= 0) {
+      return false;
+    }
+
+    const hpRatio = fighter.health / maxHp;
+    const lostRatio = 1 - hpRatio;
+
     return (
-      IceRotSkillSystem.isIceRotFighter(fighter) &&
-      fighter.health < fighter.maxHealth
+      hpRatio < IceRotConstants.CRAZY_BURST_MAX_HP_RATIO &&
+      lostRatio >= IceRotConstants.CRAZY_BURST_MIN_LOST_RATIO
     );
+  }
+
+  static getCrazyBurstHpPercent(fighter) {
+    const maxHp = fighter.maxHealth;
+    if (maxHp <= 0) {
+      return 100;
+    }
+    return Math.round((fighter.health / maxHp) * 100);
   }
 
   static getMoveSpeedRatio(fighter) {

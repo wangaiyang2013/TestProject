@@ -2996,12 +2996,13 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
     }
   }
   if (fighter.template.skillType === HeroSkillType.ICE_ROT) {
+    const hpPercent = IceRotSkillSystem.getCrazyBurstHpPercent(fighter);
     if (IceRotSkillSystem.isCrazyBurst(fighter)) {
       return fighter.iceRotSwallowing
         ? `${baseLabel}·吞噬狂暴`
-        : `${baseLabel}·狂暴`;
+        : `${baseLabel}·狂暴${hpPercent}%`;
     }
-    return `${baseLabel}·冰弹`;
+    return `${baseLabel}·冰弹${hpPercent}%`;
   }
   return baseLabel;
 };
@@ -3056,7 +3057,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "范围内挥剑吸血/20秒无敌+元素";
   }
   if (skillType === HeroSkillType.ICE_ROT) {
-    return "冰弹减速/受伤狂暴/踩踏吞噬";
+    return "冰弹减速/失10%血狂暴/踩踏吞噬";
   }
   return "技能";
 };
