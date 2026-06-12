@@ -188,9 +188,9 @@ class DefenseBallSkillSystem {
     return true;
   }
 
-  static applyBodyDamage(fighter, amount, attacker, skipReflect) {
+  static applyBodyDamage(fighter, amount, attacker, skipReflect, isTrueDamage) {
     let finalAmount = amount;
-    if (IronWallSkillSystem.isIronWallFighter(fighter)) {
+    if (!isTrueDamage && IronWallSkillSystem.isIronWallFighter(fighter)) {
       finalAmount = IronWallSkillSystem.applyDamageReduction(amount);
       IronWallSkillSystem.markShieldHit(fighter);
     }
@@ -200,12 +200,27 @@ class DefenseBallSkillSystem {
     }
   }
 
-  static takeDamage(fighter, amount, attacker, skipReflect) {
+  static takeDamage(fighter, amount, attacker, skipReflect, isTrueDamage) {
     const now = Date.now();
-    if (DefenseBallSkillSystem.applyShieldDamage(fighter, amount, attacker, skipReflect, now)) {
+    if (
+      !isTrueDamage &&
+      DefenseBallSkillSystem.applyShieldDamage(
+        fighter,
+        amount,
+        attacker,
+        skipReflect,
+        now
+      )
+    ) {
       return;
     }
-    DefenseBallSkillSystem.applyBodyDamage(fighter, amount, attacker, skipReflect);
+    DefenseBallSkillSystem.applyBodyDamage(
+      fighter,
+      amount,
+      attacker,
+      skipReflect,
+      isTrueDamage
+    );
   }
 
   static tickMovementRestriction(fighter, now) {

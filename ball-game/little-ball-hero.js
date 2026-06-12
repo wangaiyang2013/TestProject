@@ -1271,14 +1271,20 @@ class HeroBallFighter {
     return Math.atan2(this.vy, this.vx);
   }
 
-  takeDamage(amount, attacker, skipReflect) {
+  takeDamage(amount, attacker, skipReflect, isTrueDamage) {
     if (DefenseBallSkillSystem.isDefenseFighter(this)) {
-      DefenseBallSkillSystem.takeDamage(this, amount, attacker, skipReflect);
+      DefenseBallSkillSystem.takeDamage(
+        this,
+        amount,
+        attacker,
+        skipReflect,
+        isTrueDamage
+      );
       return;
     }
 
     let finalAmount = amount;
-    if (IronWallSkillSystem.isIronWallFighter(this)) {
+    if (!isTrueDamage && IronWallSkillSystem.isIronWallFighter(this)) {
       finalAmount = IronWallSkillSystem.applyDamageReduction(amount);
       IronWallSkillSystem.markShieldHit(this);
     }
@@ -2874,7 +2880,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "斷刀劈砍";
   }
   if (skillType === HeroSkillType.ELEMENT_BURST) {
-    return "元素爆破";
+    return "元素爆破(暴击真实伤)";
   }
   if (skillType === HeroSkillType.ORANGE_CALC) {
     return "橙算叠乘";

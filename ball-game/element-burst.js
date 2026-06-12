@@ -1,5 +1,6 @@
 /**
  * 元素球 - 元素爆破：周期召唤 4 颗随机元素子弹环绕自身
+ * 物理（暴击）弹造成真实伤害，无视防卫球防具与铁壁丸减伤
  */
 
 const ElementBurstConstants = {
@@ -74,7 +75,7 @@ class ElementBulletType {
   static getEffectLabel(elementType) {
     const labels = {
       [ElementBulletType.FIRE]: "灼烧",
-      [ElementBulletType.PHYSICAL]: "暴击",
+      [ElementBulletType.PHYSICAL]: "真实暴击",
       [ElementBulletType.ICE]: "冰冻",
       [ElementBulletType.POISON]: "中毒",
       [ElementBulletType.LIGHTNING]: "麻痹",
@@ -271,8 +272,8 @@ class ElementEffectApplier {
       const critDamage = Math.round(
         baseDamage * ElementBurstConstants.CRIT_MULTIPLIER
       );
-      target.takeDamage(critDamage, owner);
-      ElementStatusEffectSystem.setStatusText(target, "暴击");
+      target.takeDamage(critDamage, owner, false, true);
+      ElementStatusEffectSystem.setStatusText(target, "真实暴击");
       return;
     }
 
