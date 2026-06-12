@@ -16,6 +16,11 @@ const MagnetBallConstants = {
   BURST_FLASH_MS: 360,
   HEAD_MAGNET_WIDTH: 28,
   HEAD_MAGNET_HEIGHT: 22,
+  HEAD_THROW_SPEED: 12,
+  HEAD_THROW_RADIUS: 14,
+  HEAD_THROW_LIFETIME_MS: 1800,
+  HEAD_RETURN_SPEED: 14,
+  HEAD_THROW_HIT_FLASH_MS: 280,
 };
 
 /**
@@ -100,6 +105,150 @@ class MagnetBurstProjectile {
 }
 
 /**
+ * 近战英雄判定（不发射飞行投射物）
+ */
+class MeleeHeroClassifier {
+  static isMeleeFighter(fighter) {
+    if (!fighter || !fighter.template) {
+      return false;
+    }
+    return MeleeHeroClassifier.isMeleeSkillType(fighter.template.skillType);
+  }
+
+  static isMeleeSkillType(skillType) {
+    return (
+      skillType === HeroSkillType.BUMP ||
+      skillType === HeroSkillType.IRON_WALL ||
+      skillType === HeroSkillType.BOXING ||
+      skillType === HeroSkillType.SPIKE ||
+      skillType === HeroSkillType.BROKEN_BLADE
+    );
+  }
+}
+
+/**
+ * 头上磁铁投掷物（对战近战球时使用）
+ */
+class MagnetHeadThrowProjectile {
+  constructor(owner, opponent, damage) {
+    this.owner = owner;
+    this.ownerId = owner.playerId;
+    this.opponent = opponent;
+    this.damage = damage;
+    this.radius = MagnetBallConstants.HEAD_THROW_RADIUS;
+    this.x = owner.x;
+    this.y = owner.y - owner.radius - 10;
+    this.alive = true;
+    this.isReturning = false;
+    this.hasHit = false;
+    this.spawnTime = Date.now();
+    this.dirX = 1;
+    this.dirY = 0;
+    this.refreshDirection();
+  }
+
+  refreshDirection() {
+    const target = this.isReturning ? this.owner : this.opponent;
+    if (!target || !target.isAlive()) {
+      this.alive = false;
+      return;
+    }
+
+    const targetX = this.isReturning
+      ? target.x
+      : target.x;
+    const targetY = this.isReturning
+      ? target.y - target.radius - 10
+      : target.y;
+    const dx = targetX - this.x;
+    const dy = targetY - this.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return;
+    }
+    this.dirX = dx / dist;
+    this.dirY = dy / dist;
+  }
+
+  update() {
+    if (!this.alive) {
+      return;
+    }
+
+    if (Date.now() - this.spawnTime > MagnetBallConstants.HEAD_THROW_LIFETIME_MS) {
+      this.alive = false;
+      return;
+    }
+
+    this.refreshDirection();
+    const speed = this.isReturning
+      ? MagnetBallConstants.HEAD_RETURN_SPEED
+      : MagnetBallConstants.HEAD_THROW_SPEED;
+    this.x += this.dirX * speed;
+    this.y += this.dirY * speed;
+
+    if (!this.isReturning && this.opponent && this.opponent.isAlive()) {
+      if (
+        CollisionDetector.circleHitsCircle(
+          this.x,
+          this.y,
+          this.radius,
+          this.opponent.x,
+          this.opponent.y,
+          this.opponent.radius
+        )
+      ) {
+        this.opponent.takeDamage(this.damage, this.owner);
+        this.owner.magnetHeadHitFlashUntil =
+          Date.now() + MagnetBallConstants.HEAD_THROW_HIT_FLASH_MS;
+        this.hasHit = true;
+        this.isReturning = true;
+      }
+      return;
+    }
+
+    if (this.isReturning && this.owner && this.owner.isAlive()) {
+      const homeX = this.owner.x;
+      const homeY = this.owner.y - this.owner.radius - 10;
+      const distHome = Math.hypot(homeX - this.x, homeY - this.y);
+      if (distHome < this.radius + 8) {
+        this.alive = false;
+        this.owner.magnetHeadThrown = false;
+        this.owner.magnetHeadProjectile = null;
+      }
+    }
+  }
+
+  draw(ctx) {
+    const w = MagnetBallConstants.HEAD_MAGNET_WIDTH * 0.85;
+    const h = MagnetBallConstants.HEAD_MAGNET_HEIGHT * 0.85;
+    const poleW = w * 0.22;
+
+    ctx.save();
+    ctx.translate(this.x, this.y);
+
+    ctx.fillStyle = "#5c0a0a";
+    ctx.strokeStyle = "#2b0505";
+    ctx.lineWidth = 2;
+    ctx.fillRect(-w / 2, -h * 0.35, poleW, h * 0.7);
+    ctx.strokeRect(-w / 2, -h * 0.35, poleW, h * 0.7);
+    ctx.fillRect(w / 2 - poleW, -h * 0.35, poleW, h * 0.7);
+    ctx.strokeRect(w / 2 - poleW, -h * 0.35, poleW, h * 0.7);
+
+    ctx.beginPath();
+    ctx.arc(-w / 2 + poleW / 2, h * 0.38, poleW * 0.95, 0, Math.PI, false);
+    ctx.arc(w / 2 - poleW / 2, h * 0.38, poleW * 0.95, Math.PI, 0, false);
+    ctx.closePath();
+    ctx.fillStyle = "#8b0000";
+    ctx.fill();
+    ctx.strokeStyle = "#3b0000";
+    ctx.stroke();
+
+    ctx.restore();
+  }
+}
+
+/**
  * 磁铁盾效果结算
  */
 class MagnetShieldEffectApplier {
@@ -159,6 +308,10 @@ class MagnetSkillSystem {
     fighter.magnetBurstFlashUntil = 0;
     fighter.magnetEnemyTouchedDuringMode = false;
     fighter.magnetBurstProjectiles = [];
+    fighter.magnetHeadThrown = false;
+    fighter.magnetHeadProjectile = null;
+    fighter.magnetHeadHitFlashUntil = 0;
+    fighter.magnetVsMelee = false;
   }
 
   static isMagnetFighter(fighter) {
@@ -186,11 +339,45 @@ class MagnetSkillSystem {
     return fighter.canUseSkill(now);
   }
 
-  static activate(fighter, now) {
+  static activate(fighter, opponent, now) {
     fighter.magnetShields = [];
     fighter.magnetModeUntil = now + MagnetBallConstants.ABSORB_WINDOW_MS;
     fighter.magnetEnemyTouchedDuringMode = false;
     fighter.magnetContactFlashUntil = now + MagnetBallConstants.CONTACT_FLASH_MS;
+    fighter.magnetVsMelee = MeleeHeroClassifier.isMeleeFighter(opponent);
+
+    if (fighter.magnetVsMelee) {
+      MagnetSkillSystem.throwHeadMagnet(fighter, opponent);
+    }
+  }
+
+  static throwHeadMagnet(fighter, opponent) {
+    if (!opponent || !opponent.isAlive()) {
+      return;
+    }
+    if (fighter.magnetHeadThrown && fighter.magnetHeadProjectile) {
+      return;
+    }
+
+    const damage = fighter.template.skillDamage;
+    fighter.magnetHeadThrown = true;
+    fighter.magnetHeadProjectile = new MagnetHeadThrowProjectile(
+      fighter,
+      opponent,
+      damage
+    );
+  }
+
+  static updateHeadThrow(fighter) {
+    if (!fighter.magnetHeadProjectile) {
+      return;
+    }
+
+    fighter.magnetHeadProjectile.update();
+    if (!fighter.magnetHeadProjectile.alive) {
+      fighter.magnetHeadProjectile = null;
+      fighter.magnetHeadThrown = false;
+    }
   }
 
   static captureFromProjectile(proj, magnetOwner) {
@@ -413,10 +600,15 @@ class MagnetSkillSystem {
     ) {
       if (fighter.magnetShields.length > 0) {
         MagnetSkillSystem.releaseBurstRing(fighter, now);
+      } else if (fighter.magnetVsMelee) {
+        MagnetSkillSystem.throwHeadMagnet(fighter, opponent);
+        fighter.magnetModeUntil = 0;
       } else {
         fighter.magnetModeUntil = 0;
       }
     }
+
+    MagnetSkillSystem.updateHeadThrow(fighter);
 
     MagnetSkillSystem.updateBurstProjectiles(
       fighter,
@@ -432,6 +624,14 @@ class MagnetSkillSystem {
   }
 
   static drawHeadMagnet(ctx, fighter) {
+    if (fighter.magnetHeadProjectile && fighter.magnetHeadProjectile.alive) {
+      fighter.magnetHeadProjectile.draw(ctx);
+    }
+
+    if (fighter.magnetHeadThrown) {
+      return;
+    }
+
     const y = fighter.y - fighter.radius - 10;
     const w = MagnetBallConstants.HEAD_MAGNET_WIDTH;
     const h = MagnetBallConstants.HEAD_MAGNET_HEIGHT;
@@ -470,11 +670,41 @@ class MagnetSkillSystem {
   }
 
   static drawShields(ctx, fighter) {
+    const now = Date.now();
+
+    if (now < fighter.magnetHeadHitFlashUntil) {
+      ctx.fillStyle = "#ff6b6b";
+      ctx.font = "bold 10px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("磁铁命中!", fighter.x, fighter.y - fighter.radius - 28);
+      ctx.textAlign = "left";
+    }
+
     if (!fighter.magnetShields || fighter.magnetShields.length === 0) {
+      if (fighter.magnetBurstProjectiles) {
+        for (const burstProj of fighter.magnetBurstProjectiles) {
+          burstProj.draw(ctx);
+        }
+      }
+      if (now < fighter.magnetBurstFlashUntil) {
+        ctx.beginPath();
+        ctx.arc(fighter.x, fighter.y, fighter.radius + 20, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255, 146, 43, 0.65)";
+        ctx.lineWidth = 4;
+        ctx.setLineDash([6, 6]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      if (now < fighter.magnetSkillLockedUntil) {
+        ctx.fillStyle = "rgba(173, 181, 189, 0.85)";
+        ctx.font = "9px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("磁能冷却", fighter.x, fighter.y + fighter.radius + 28);
+        ctx.textAlign = "left";
+      }
       return;
     }
 
-    const now = Date.now();
     if (now < fighter.magnetContactFlashUntil) {
       ctx.beginPath();
       ctx.arc(fighter.x, fighter.y, fighter.radius + 14, 0, Math.PI * 2);

@@ -1747,7 +1747,7 @@ class HeroAutoSkillSystem {
         return;
       }
       fighter.markSkillUsed(now);
-      MagnetSkillSystem.activate(fighter, now);
+      MagnetSkillSystem.activate(fighter, opponent, now);
       return;
     }
 
@@ -2809,7 +2809,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "橙算叠乘";
   }
   if (skillType === HeroSkillType.MAGNET) {
-    return "磁吸护盾";
+    return "磁吸护盾/投磁铁";
   }
   return "技能";
 };
