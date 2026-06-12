@@ -27,6 +27,9 @@ class CustomSkillTypeParser {
     if (!text) {
       return HeroSkillType.SHOT;
     }
+    if (text.includes("尖刺") || text.includes("反伤") || text.includes("spike")) {
+      return HeroSkillType.SPIKE;
+    }
     if (text.includes("数字") || text.includes("老师") || text.includes("number")) {
       return HeroSkillType.NUMBER_TEACHER;
     }

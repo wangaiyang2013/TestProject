@@ -21,6 +21,7 @@ const LittleBallHeroConstants = {
   BOXING_MAX_RANGE_METERS: 2,
   BOXING_METERS_TO_RADIUS_FACTOR: 4.5,
   BOXING_PUNCH_FLASH_MS: 280,
+  SPIKE_REFLECT_FLASH_MS: 280,
   AI_PICK_DELAY_MS: 500,
   PICK_GRID_COLUMNS: 4,
   PICK_TOP_PADDING: 72,
@@ -50,6 +51,9 @@ class HeroSkillType {
 
   /** 数字老师球专属：头顶数字追踪敌人，命中后数字增长 */
   static NUMBER_TEACHER = "number_teacher";
+
+  /** 尖刺球专属：受到攻击时反伤攻击者 */
+  static SPIKE = "spike";
 }
 
 /**
@@ -182,6 +186,18 @@ class HeroRoster {
         HeroSkillType.NUMBER_TEACHER,
         LittleBallHeroConstants.TEACHER_START_NUMBER,
         1200
+      ),
+      new HeroBallTemplate(
+        "spike",
+        "尖刺球",
+        "#2f9e44",
+        "#69db7c",
+        110,
+        8,
+        1.2,
+        HeroSkillType.SPIKE,
+        15,
+        9999
       ),
     ];
   }
@@ -384,7 +400,49 @@ class HeroPickPreviewRenderer {
       ctx.fillText("牛仔", cx, cy);
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
+      return;
     }
+
+    if (hero.skillType === HeroSkillType.SPIKE) {
+      ctx.strokeStyle = "#d8f5a2";
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      for (let i = 0; i < 8; i += 1) {
+        const angle = (Math.PI * 2 * i) / 8;
+        const innerR = radius * 0.55;
+        const outerR = radius * 0.95;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(angle) * innerR, cy + Math.sin(angle) * innerR);
+        ctx.lineTo(cx + Math.cos(angle) * outerR, cy + Math.sin(angle) * outerR);
+        ctx.stroke();
+      }
+    }
+  }
+}
+
+/**
+ * 尖刺球反伤系统（受击时对攻击者造成伤害）
+ */
+class SpikeReflectSystem {
+  static isSpikeFighter(fighter) {
+    return fighter && fighter.template.skillType === HeroSkillType.SPIKE;
+  }
+
+  static getReflectDamage(fighter) {
+    return fighter.template.skillDamage;
+  }
+
+  static tryReflect(defender, attacker, skipReflect) {
+    if (skipReflect || !SpikeReflectSystem.isSpikeFighter(defender)) {
+      return;
+    }
+    if (!attacker || !attacker.isAlive() || attacker === defender) {
+      return;
+    }
+
+    const reflectDamage = SpikeReflectSystem.getReflectDamage(defender);
+    attacker.takeDamage(reflectDamage, null, true);
+    defender.spikeFlashUntil = Date.now() + LittleBallHeroConstants.SPIKE_REFLECT_FLASH_MS;
   }
 }
 
@@ -502,13 +560,13 @@ class SunglassesProjectile {
   /**
    * @returns {boolean} 是否应从场上移除
    */
-  handleEnemyHit(fighter) {
+  handleEnemyHit(fighter, ownerFighter) {
     if (fighter.playerId === this.ownerId || !fighter.isAlive()) {
       return false;
     }
 
     if (!this.hasHitEnemy) {
-      fighter.takeDamage(this.outboundDamage);
+      fighter.takeDamage(this.outboundDamage, ownerFighter);
       this.hasHitEnemy = true;
       this.hitEnemyId = fighter.playerId;
       this.beginReturn();
@@ -516,7 +574,7 @@ class SunglassesProjectile {
     }
 
     if (this.isReturning && fighter.playerId === this.hitEnemyId) {
-      fighter.takeDamage(this.returnDamage);
+      fighter.takeDamage(this.returnDamage, ownerFighter);
       this.alive = false;
       return true;
     }
@@ -608,6 +666,7 @@ class HeroBallFighter {
     this.pulseFlashUntil = 0;
     this.punchFlashUntil = 0;
     this.punchAngle = 0;
+    this.spikeFlashUntil = 0;
     this.attackNumber =
       template.skillType === HeroSkillType.NUMBER_TEACHER
         ? LittleBallHeroConstants.TEACHER_START_NUMBER
@@ -642,8 +701,9 @@ class HeroBallFighter {
     return Math.atan2(this.vy, this.vx);
   }
 
-  takeDamage(amount) {
+  takeDamage(amount, attacker, skipReflect) {
     this.health = Math.max(0, this.health - amount);
+    SpikeReflectSystem.tryReflect(this, attacker, skipReflect);
   }
 
   isAlive() {
@@ -742,7 +802,40 @@ class HeroBallFighter {
       this.drawBoxingPunch(ctx);
     }
 
+    if (this.template.skillType === HeroSkillType.SPIKE) {
+      this.drawSpikeRing(ctx);
+    }
+
+    if (Date.now() < this.spikeFlashUntil) {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius + 10, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(105, 219, 124, 0.75)";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
     ctx.textAlign = "left";
+  }
+
+  drawSpikeRing(ctx) {
+    ctx.strokeStyle = "#d8f5a2";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    for (let i = 0; i < 10; i += 1) {
+      const angle = (Math.PI * 2 * i) / 10;
+      const innerR = this.radius * 0.72;
+      const outerR = this.radius + 4;
+      ctx.beginPath();
+      ctx.moveTo(
+        this.x + Math.cos(angle) * innerR,
+        this.y + Math.sin(angle) * innerR
+      );
+      ctx.lineTo(
+        this.x + Math.cos(angle) * outerR,
+        this.y + Math.sin(angle) * outerR
+      );
+      ctx.stroke();
+    }
   }
 
   drawTeacherNumberBadge(ctx) {
@@ -886,8 +979,8 @@ class ContinuousBouncePhysics {
 
     if (applyBumpDamage) {
       const touchDamage = LittleBallHeroConstants.BUMP_DAMAGE;
-      a.takeDamage(touchDamage);
-      b.takeDamage(touchDamage);
+      a.takeDamage(touchDamage, b);
+      b.takeDamage(touchDamage, a);
     }
 
     ContinuousBouncePhysics.maintainSpeed(a);
@@ -906,6 +999,10 @@ class HeroAutoSkillSystem {
     }
 
     const template = fighter.template;
+
+    if (template.skillType === HeroSkillType.SPIKE) {
+      return;
+    }
 
     if (template.skillType === HeroSkillType.BOXING) {
       if (BoxingRangeHelper.isClosestEnemyInRange(fighter, opponent)) {
@@ -992,7 +1089,7 @@ class HeroAutoSkillSystem {
     fighter.punchAngle = Math.atan2(dy, dx);
     fighter.punchFlashUntil =
       Date.now() + LittleBallHeroConstants.BOXING_PUNCH_FLASH_MS;
-    opponent.takeDamage(damage);
+    opponent.takeDamage(damage, fighter);
 
     opponent.vx += nx * 2;
     opponent.vy += ny * 2;
@@ -1091,7 +1188,7 @@ class HeroAutoSkillSystem {
     fighter.pulseFlashUntil = Date.now() + 200;
     const dist = Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y);
     if (dist <= LittleBallHeroConstants.PULSE_RANGE + opponent.radius) {
-      opponent.takeDamage(damage);
+      opponent.takeDamage(damage, fighter);
     }
   }
 
@@ -1108,7 +1205,7 @@ class HeroAutoSkillSystem {
     opponent.vy += ny * 2.5;
     fighter.vx -= nx * 1.2;
     fighter.vy -= ny * 1.2;
-    opponent.takeDamage(damage);
+    opponent.takeDamage(damage, fighter);
     ContinuousBouncePhysics.maintainSpeed(fighter);
     ContinuousBouncePhysics.maintainSpeed(opponent);
   }
@@ -1424,7 +1521,7 @@ class LittleBallHeroGame {
             target.radius
           )
         ) {
-          target.takeDamage(proj.numberValue);
+          target.takeDamage(proj.numberValue, proj.ownerFighter);
           if (proj.ownerFighter) {
             proj.ownerFighter.attackNumber += 1;
           }
@@ -1453,7 +1550,7 @@ class LittleBallHeroGame {
               fighter.radius
             )
           ) {
-            const removed = proj.handleEnemyHit(fighter);
+            const removed = proj.handleEnemyHit(fighter, owner);
             if (removed || !proj.alive) {
               this.projectiles.splice(i, 1);
             }
@@ -1484,7 +1581,8 @@ class LittleBallHeroGame {
             fighter.radius
           )
         ) {
-          fighter.takeDamage(proj.damage);
+          const shooter = this.getFighter(proj.ownerId);
+          fighter.takeDamage(proj.damage, shooter);
           proj.alive = false;
           this.projectiles.splice(i, 1);
           break;
@@ -1679,6 +1777,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.NUMBER_TEACHER) {
     return "追踪数字";
+  }
+  if (skillType === HeroSkillType.SPIKE) {
+    return "受击反伤";
   }
   return "技能";
 };
