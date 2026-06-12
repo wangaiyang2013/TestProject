@@ -54,6 +54,14 @@ class CustomSkillTypeParser {
       return HeroSkillType.MAGNET;
     }
     if (
+      text.includes("防卫") ||
+      text.includes("防御") ||
+      text.includes("防具") ||
+      text.includes("defense")
+    ) {
+      return HeroSkillType.DEFENSE;
+    }
+    if (
       text.includes("斷刀") ||
       text.includes("断刀") ||
       text.includes("blade")

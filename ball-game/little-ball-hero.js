@@ -88,6 +88,9 @@ class HeroSkillType {
 
   /** 磁铁球专属：吸附敌方投射物为盾，触碰反弹或超时环射 */
   static MAGNET = "magnet";
+
+  /** 防卫球专属：每局随机防具头，须先击破防具 */
+  static DEFENSE = "defense";
 }
 
 /**
@@ -280,6 +283,18 @@ class HeroRoster {
         HeroSkillType.MAGNET,
         14,
         2800
+      ),
+      new HeroBallTemplate(
+        "defense",
+        "防卫球",
+        "#74b816",
+        "#a9e34b",
+        DefenseBallConstants.BODY_MAX_HEALTH,
+        8,
+        1.25,
+        HeroSkillType.DEFENSE,
+        DefenseBallConstants.STRIKE_DAMAGE,
+        DefenseBallConstants.STRIKE_INTERVAL_MS
       ),
     ];
   }
@@ -701,6 +716,15 @@ class HeroPickPreviewRenderer {
       ctx.arc(cx + 7, headY + 7, 5, Math.PI, 0, false);
       ctx.closePath();
       ctx.fill();
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.DEFENSE) {
+      ctx.fillStyle = "#e8590c";
+      ctx.fillRect(cx - 10, cy - radius - 8, 20, 10);
+      ctx.strokeStyle = "#933300";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(cx - 10, cy - radius - 8, 20, 10);
       return;
     }
   }
@@ -1207,6 +1231,13 @@ class HeroBallFighter {
       MagnetSkillSystem.initFighter(this);
     }
 
+    if (DefenseBallSkillSystem.isDefenseFighter(this)) {
+      DefenseBallSkillSystem.initFighter(this);
+    }
+
+    this.defenseRestrictUntil = 0;
+    this.defenseRestrictSpeedRatio = 1;
+
     if (typeof ElementStatusEffectSystem !== "undefined") {
       ElementStatusEffectSystem.initFighter(this);
     }
@@ -1241,6 +1272,11 @@ class HeroBallFighter {
   }
 
   takeDamage(amount, attacker, skipReflect) {
+    if (DefenseBallSkillSystem.isDefenseFighter(this)) {
+      DefenseBallSkillSystem.takeDamage(this, amount, attacker, skipReflect);
+      return;
+    }
+
     let finalAmount = amount;
     if (IronWallSkillSystem.isIronWallFighter(this)) {
       finalAmount = IronWallSkillSystem.applyDamageReduction(amount);
@@ -1382,6 +1418,10 @@ class HeroBallFighter {
     if (this.template.skillType === HeroSkillType.MAGNET) {
       MagnetSkillSystem.drawHeadMagnet(ctx, this);
       MagnetSkillSystem.drawShields(ctx, this);
+    }
+
+    if (this.template.skillType === HeroSkillType.DEFENSE) {
+      DefenseBallSkillSystem.drawDefenseHead(ctx, this);
     }
 
     if (typeof ElementStatusEffectSystem !== "undefined") {
@@ -1748,6 +1788,17 @@ class HeroAutoSkillSystem {
       }
       fighter.markSkillUsed(now);
       MagnetSkillSystem.activate(fighter, opponent, now);
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.DEFENSE) {
+      fighter.markSkillUsed(now);
+      DefenseBallSkillSystem.fireDefenseStrike(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius
+      );
       return;
     }
 
@@ -2283,6 +2334,12 @@ class LittleBallHeroGame {
       ),
     ];
 
+    for (const fighter of this.fighters) {
+      if (DefenseBallSkillSystem.isDefenseFighter(fighter)) {
+        DefenseBallSkillSystem.rollDefenseItemForBattle(fighter);
+      }
+    }
+
     this.phase = "battle";
     this.projectiles = [];
     this.notifyPhase();
@@ -2386,6 +2443,9 @@ class LittleBallHeroGame {
     if (index === 12) {
       return "BracketLeft";
     }
+    if (index === 13) {
+      return "BracketRight";
+    }
     return null;
   }
 
@@ -2402,7 +2462,10 @@ class LittleBallHeroGame {
     if (heroCount === 12) {
       return "1-9、0、-、=";
     }
-    return "1-9、0、-、=、[";
+    if (heroCount === 13) {
+      return "1-9、0、-、=、[";
+    }
+    return "1-9、0、-、=、[、]";
   }
 
   updateBattle() {
@@ -2423,6 +2486,8 @@ class LittleBallHeroGame {
     const now = Date.now();
     ElementStatusEffectSystem.tickFighter(f1, now);
     ElementStatusEffectSystem.tickFighter(f2, now);
+    DefenseBallSkillSystem.tickMovementRestriction(f1, now);
+    DefenseBallSkillSystem.tickMovementRestriction(f2, now);
 
     MagnetSkillSystem.tick(
       f1,
@@ -2765,6 +2830,12 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
     const shieldCount = fighter.magnetShields ? fighter.magnetShields.length : 0;
     return `${baseLabel}·盾${shieldCount}`;
   }
+  if (fighter.template.skillType === HeroSkillType.DEFENSE) {
+    if (fighter.defenseItem && !fighter.defenseItem.isBroken()) {
+      return `${baseLabel}·${DefenseHeadType.getLabel(fighter.defenseItem.headType)}`;
+    }
+    return `${baseLabel}·防具已破`;
+  }
   return baseLabel;
 };
 
@@ -2810,6 +2881,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.MAGNET) {
     return "磁吸护盾/投磁铁";
+  }
+  if (skillType === HeroSkillType.DEFENSE) {
+    return "随机防具头";
   }
   return "技能";
 };
