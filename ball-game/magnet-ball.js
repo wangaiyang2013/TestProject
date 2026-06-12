@@ -128,7 +128,8 @@ class MeleeHeroClassifier {
       skillType === HeroSkillType.IRON_WALL ||
       skillType === HeroSkillType.BOXING ||
       skillType === HeroSkillType.SPIKE ||
-      skillType === HeroSkillType.BROKEN_BLADE
+      skillType === HeroSkillType.BROKEN_BLADE ||
+      skillType === HeroSkillType.SWORD_BLADE
     );
   }
 }

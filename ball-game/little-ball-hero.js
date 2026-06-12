@@ -91,6 +91,9 @@ class HeroSkillType {
 
   /** 防卫球专属：每局随机防具头，须先击破防具 */
   static DEFENSE = "defense";
+
+  /** 劍刃球专属：敌人靠近挥剑吸血；周期无敌释放元素弹 */
+  static SWORD_BLADE = "sword_blade";
 }
 
 /**
@@ -295,6 +298,18 @@ class HeroRoster {
         HeroSkillType.DEFENSE,
         DefenseBallConstants.STRIKE_DAMAGE,
         DefenseBallConstants.STRIKE_INTERVAL_MS
+      ),
+      new HeroBallTemplate(
+        "sword_blade",
+        "劍刃球",
+        "#339af0",
+        "#74c0fc",
+        BallHealthResolver.resolve(100),
+        9,
+        1.0,
+        HeroSkillType.SWORD_BLADE,
+        26,
+        SwordBladeConstants.ULT_INTERVAL_MS
       ),
     ];
   }
@@ -725,6 +740,17 @@ class HeroPickPreviewRenderer {
       ctx.strokeStyle = "#933300";
       ctx.lineWidth = 1.5;
       ctx.strokeRect(cx - 10, cy - radius - 8, 20, 10);
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.SWORD_BLADE) {
+      ctx.fillStyle = "#fff";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("劍", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
       return;
     }
   }
@@ -1235,6 +1261,10 @@ class HeroBallFighter {
       DefenseBallSkillSystem.initFighter(this);
     }
 
+    if (SwordBladeSkillSystem.isSwordFighter(this)) {
+      SwordBladeSkillSystem.initFighter(this);
+    }
+
     this.defenseRestrictUntil = 0;
     this.defenseRestrictSpeedRatio = 1;
 
@@ -1272,6 +1302,10 @@ class HeroBallFighter {
   }
 
   takeDamage(amount, attacker, skipReflect, isTrueDamage) {
+    if (SwordBladeSkillSystem.isInvincible(this)) {
+      return;
+    }
+
     if (DefenseBallSkillSystem.isDefenseFighter(this)) {
       DefenseBallSkillSystem.takeDamage(
         this,
@@ -1428,6 +1462,10 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.DEFENSE) {
       DefenseBallSkillSystem.drawDefenseHead(ctx, this);
+    }
+
+    if (this.template.skillType === HeroSkillType.SWORD_BLADE) {
+      SwordBladeSkillSystem.draw(ctx, this);
     }
 
     if (typeof ElementStatusEffectSystem !== "undefined") {
@@ -1805,6 +1843,15 @@ class HeroAutoSkillSystem {
         projectiles,
         projectileRadius
       );
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.SWORD_BLADE) {
+      SwordBladeSkillSystem.tickApproachSlash(fighter, opponent, now);
+      if (fighter.canUseSkill(now) && !SwordBladeSkillSystem.isInvincible(fighter)) {
+        fighter.markSkillUsed(now);
+        SwordBladeSkillSystem.activateUltimate(fighter);
+      }
       return;
     }
 
@@ -2520,6 +2567,9 @@ class LittleBallHeroGame {
     ElementBurstSystem.updateOrbitBullets(f1, f2, this.fighters);
     ElementBurstSystem.updateOrbitBullets(f2, f1, this.fighters);
 
+    SwordBladeSkillSystem.tickInvincibility(f1, f2);
+    SwordBladeSkillSystem.tickInvincibility(f2, f1);
+
     this.updateProjectiles();
 
     for (const fighter of this.fighters) {
@@ -2842,6 +2892,11 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
     }
     return `${baseLabel}·防具已破`;
   }
+  if (fighter.template.skillType === HeroSkillType.SWORD_BLADE) {
+    if (SwordBladeSkillSystem.isInvincible(fighter)) {
+      return `${baseLabel}·无敌中`;
+    }
+  }
   return baseLabel;
 };
 
@@ -2890,6 +2945,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.DEFENSE) {
     return "随机防具头";
+  }
+  if (skillType === HeroSkillType.SWORD_BLADE) {
+    return "近距挥剑吸血/20秒无敌元素";
   }
   return "技能";
 };

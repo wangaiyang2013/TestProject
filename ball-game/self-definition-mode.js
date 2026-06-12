@@ -68,6 +68,13 @@ class CustomSkillTypeParser {
     ) {
       return HeroSkillType.BROKEN_BLADE;
     }
+    if (
+      text.includes("劍刃") ||
+      text.includes("剑刃") ||
+      text.includes("sword")
+    ) {
+      return HeroSkillType.SWORD_BLADE;
+    }
     if (text.includes("尖刺") || text.includes("反伤") || text.includes("spike")) {
       return HeroSkillType.SPIKE;
     }
