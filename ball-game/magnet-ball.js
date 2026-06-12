@@ -21,6 +21,10 @@ const MagnetBallConstants = {
   HEAD_THROW_LIFETIME_MS: 1800,
   HEAD_RETURN_SPEED: 14,
   HEAD_THROW_HIT_FLASH_MS: 280,
+  METAL_ABSORB_RANGE: 78,
+  METAL_ABSORB_INTERVAL_MS: 380,
+  METAL_ABSORB_DRAIN_PER_TICK: 40,
+  METAL_ABSORB_FLASH_MS: 300,
 };
 
 /**
@@ -36,6 +40,9 @@ class MagnetProjectileEffectKind {
   static SUNGLASSES = "sunglasses";
 
   static CRIT = "crit";
+
+  /** 由敌方金属防具转化 */
+  static METAL = "metal";
 }
 
 /**
@@ -281,6 +288,14 @@ class MagnetShieldEffectApplier {
       return;
     }
 
+    if (charge.effectKind === MagnetProjectileEffectKind.METAL) {
+      target.takeDamage(charge.damage, attacker);
+      if (typeof ElementStatusEffectSystem !== "undefined") {
+        ElementStatusEffectSystem.setStatusText(target, "金属盾击");
+      }
+      return;
+    }
+
     target.takeDamage(charge.damage, attacker);
   }
 
@@ -312,6 +327,8 @@ class MagnetSkillSystem {
     fighter.magnetHeadProjectile = null;
     fighter.magnetHeadHitFlashUntil = 0;
     fighter.magnetVsMelee = false;
+    fighter.magnetLastMetalAbsorbTime = 0;
+    fighter.magnetMetalAbsorbFlashUntil = 0;
   }
 
   static isMagnetFighter(fighter) {
@@ -481,6 +498,69 @@ class MagnetSkillSystem {
     }
   }
 
+  static tryAbsorbMetalDefense(fighter, opponent, now) {
+    if (!MagnetSkillSystem.isMagnetModeActive(fighter, now)) {
+      return;
+    }
+    if (fighter.magnetShields.length >= MagnetBallConstants.MAX_SHIELD_COUNT) {
+      return;
+    }
+    if (
+      typeof DefenseBallSkillSystem === "undefined" ||
+      !DefenseBallSkillSystem.hasMetalDefense(opponent)
+    ) {
+      return;
+    }
+
+    const absorbRange =
+      fighter.radius + opponent.radius + MagnetBallConstants.METAL_ABSORB_RANGE;
+    const dist = Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y);
+    if (dist > absorbRange) {
+      return;
+    }
+
+    if (
+      now - fighter.magnetLastMetalAbsorbTime <
+      MagnetBallConstants.METAL_ABSORB_INTERVAL_MS
+    ) {
+      return;
+    }
+    fighter.magnetLastMetalAbsorbTime = now;
+
+    const defenseItem = opponent.defenseItem;
+    const drainAmount = Math.min(
+      MagnetBallConstants.METAL_ABSORB_DRAIN_PER_TICK,
+      defenseItem.health
+    );
+    if (drainAmount <= 0) {
+      return;
+    }
+
+    defenseItem.health = Math.max(0, defenseItem.health - drainAmount);
+    opponent.defenseShieldFlashUntil =
+      now + DefenseBallConstants.SHIELD_HIT_FLASH_MS;
+
+    fighter.magnetShields.push(
+      new MagnetShieldCharge(
+        MagnetProjectileEffectKind.METAL,
+        drainAmount,
+        DefenseHeadType.getColor(DefenseHeadType.IRON),
+        opponent.playerId,
+        Math.random() * Math.PI * 2
+      )
+    );
+    fighter.magnetMetalAbsorbFlashUntil =
+      now + MagnetBallConstants.METAL_ABSORB_FLASH_MS;
+
+    if (defenseItem.isBroken()) {
+      opponent.defenseBreakFlashUntil =
+        now + DefenseBallConstants.SHIELD_BREAK_FLASH_MS;
+      if (typeof ElementStatusEffectSystem !== "undefined") {
+        ElementStatusEffectSystem.setStatusText(opponent, "铁防具被吸走");
+      }
+    }
+  }
+
   static areBallsTouching(a, b) {
     const dist = Math.hypot(b.x - a.x, b.y - a.y);
     return dist < a.radius + b.radius;
@@ -592,6 +672,7 @@ class MagnetSkillSystem {
     }
 
     MagnetSkillSystem.tryAbsorbProjectiles(fighter, projectiles, now);
+    MagnetSkillSystem.tryAbsorbMetalDefense(fighter, opponent, now);
 
     if (
       fighter.magnetModeUntil > 0 &&
@@ -677,6 +758,19 @@ class MagnetSkillSystem {
       ctx.font = "bold 10px system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("磁铁命中!", fighter.x, fighter.y - fighter.radius - 28);
+      ctx.textAlign = "left";
+    }
+
+    if (now < fighter.magnetMetalAbsorbFlashUntil) {
+      ctx.beginPath();
+      ctx.arc(fighter.x, fighter.y, fighter.radius + 18, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(134, 142, 150, 0.85)";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#ced4da";
+      ctx.font = "9px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("吸取金属防具", fighter.x, fighter.y - fighter.radius - 30);
       ctx.textAlign = "left";
     }
 

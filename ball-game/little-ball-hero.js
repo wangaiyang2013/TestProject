@@ -2880,7 +2880,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "橙算叠乘";
   }
   if (skillType === HeroSkillType.MAGNET) {
-    return "磁吸护盾/投磁铁";
+    return "磁吸护盾/吸金属防具";
   }
   if (skillType === HeroSkillType.DEFENSE) {
     return "随机防具头";

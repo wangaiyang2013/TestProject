@@ -72,6 +72,11 @@ class DefenseHeadType {
     };
     return colors[headType] || "#adb5bd";
   }
+
+  /** 金属防具（可被磁铁球吸取） */
+  static isMetalHead(headType) {
+    return headType === DefenseHeadType.IRON;
+  }
 }
 
 /**
@@ -115,6 +120,13 @@ class DefenseBallSkillSystem {
       DefenseBallSkillSystem.isDefenseFighter(fighter) &&
       fighter.defenseItem &&
       !fighter.defenseItem.isBroken()
+    );
+  }
+
+  static hasMetalDefense(fighter) {
+    return (
+      DefenseBallSkillSystem.hasActiveShield(fighter) &&
+      DefenseHeadType.isMetalHead(fighter.defenseItem.headType)
     );
   }
 
