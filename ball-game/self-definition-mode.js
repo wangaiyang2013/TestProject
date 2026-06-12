@@ -4,8 +4,8 @@
 
 const SelfDefinitionConstants = {
   BALL_SLOT_COUNT: 8,
-  MIN_HEALTH: 50,
-  MAX_HEALTH: 200,
+  MIN_HEALTH: BallHealthResolver.resolve(50),
+  MAX_HEALTH: BallHealthResolver.resolve(200),
   MIN_SPEED: 5,
   MAX_SPEED: 14,
   MIN_MASS: 0.5,
@@ -42,6 +42,13 @@ class CustomSkillTypeParser {
       text.includes("wall")
     ) {
       return HeroSkillType.IRON_WALL;
+    }
+    if (
+      text.includes("元素") ||
+      text.includes("爆破") ||
+      text.includes("element")
+    ) {
+      return HeroSkillType.ELEMENT_BURST;
     }
     if (
       text.includes("斷刀") ||
@@ -97,7 +104,7 @@ class CustomBallBlueprint {
     this.color = "#e94560";
     this.glow = "#ff6b6b";
     this.decoration = "";
-    this.maxHealth = 100;
+    this.maxHealth = BallHealthResolver.getDefaultMaxHealth();
     this.moveSpeed = 9;
     this.mass = 1.0;
     this.skillTypeName = "弹射";
@@ -134,7 +141,7 @@ class CustomBallBlueprint {
         decoration: "★",
         skillTypeName: "弹射",
         skillDamage: 16,
-        maxHealth: 100,
+        maxHealth: BallHealthResolver.resolve(100),
         moveSpeed: 9,
         mass: 1.0,
         skillIntervalSec: 1.4,
@@ -146,7 +153,7 @@ class CustomBallBlueprint {
         decoration: "风",
         skillTypeName: "冲击波",
         skillDamage: 12,
-        maxHealth: 85,
+        maxHealth: BallHealthResolver.resolve(85),
         moveSpeed: 10,
         mass: 0.85,
         skillIntervalSec: 1.2,
@@ -158,7 +165,7 @@ class CustomBallBlueprint {
         decoration: "盾",
         skillTypeName: "震荡",
         skillDamage: 18,
-        maxHealth: 130,
+        maxHealth: BallHealthResolver.resolve(130),
         moveSpeed: 8,
         mass: 1.4,
         skillIntervalSec: 1.6,
@@ -170,7 +177,7 @@ class CustomBallBlueprint {
         decoration: "⚡",
         skillTypeName: "闪电弹",
         skillDamage: 14,
-        maxHealth: 95,
+        maxHealth: BallHealthResolver.resolve(95),
         moveSpeed: 9,
         mass: 1.0,
         skillIntervalSec: 1.3,
@@ -182,7 +189,7 @@ class CustomBallBlueprint {
         decoration: "牛仔帽",
         skillTypeName: "左轮双射",
         skillDamage: 12,
-        maxHealth: 92,
+        maxHealth: BallHealthResolver.resolve(92),
         moveSpeed: 10,
         mass: 0.95,
         skillIntervalSec: 1.0,
@@ -194,7 +201,7 @@ class CustomBallBlueprint {
         decoration: "墨镜",
         skillTypeName: "回旋墨镜",
         skillDamage: 14,
-        maxHealth: 88,
+        maxHealth: BallHealthResolver.resolve(88),
         moveSpeed: 9,
         mass: 0.9,
         skillIntervalSec: 1.3,
@@ -206,7 +213,7 @@ class CustomBallBlueprint {
         decoration: "拳套",
         skillTypeName: "近距重拳",
         skillDamage: 20,
-        maxHealth: 96,
+        maxHealth: BallHealthResolver.resolve(96),
         moveSpeed: 9,
         mass: 1.1,
         skillIntervalSec: 1.1,
@@ -218,7 +225,7 @@ class CustomBallBlueprint {
         decoration: "123",
         skillTypeName: "追踪数字",
         skillDamage: 1,
-        maxHealth: 94,
+        maxHealth: BallHealthResolver.resolve(94),
         moveSpeed: 9,
         mass: 1.0,
         skillIntervalSec: 1.2,

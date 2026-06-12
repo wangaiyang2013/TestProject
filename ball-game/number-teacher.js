@@ -3,7 +3,7 @@
  */
 
 const NumberTeacherConstants = {
-  MAX_HEALTH: 300,
+  MAX_HEALTH: BallHealthResolver.resolve(300),
   START_NUMBER: 1,
   BALL_MASS: 1.0,
   BALL_RADIUS_RATIO: 0.038,

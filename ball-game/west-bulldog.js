@@ -3,8 +3,8 @@
  */
 
 const WestBulldogConstants = {
-  MAX_HEALTH: 100,
-  ENEMY_HEALTH: 100,
+  MAX_HEALTH: BallHealthResolver.getDefaultMaxHealth(),
+  ENEMY_HEALTH: BallHealthResolver.getDefaultMaxHealth(),
   BALL_RADIUS_RATIO: 0.04,
   MOVE_SPEED: 5.5,
   BULLET_SPEED: 16,

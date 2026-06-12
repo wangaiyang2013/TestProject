@@ -2,8 +2,32 @@
  * 双球对战 - 两名玩家各控制一个球，用不同按键移动与攻击
  */
 
+/**
+ * 球生命值换算：基础 100000，全体再 +500，并保留相对旧基准(100)的差值
+ */
+class BallHealthResolver {
+  static LEGACY_BASE_HEALTH = 100;
+
+  static BASE_BALL_HEALTH = 100000;
+
+  static BALL_HEALTH_BONUS = 500;
+
+  static resolve(legacyMaxHealth) {
+    const offset = legacyMaxHealth - BallHealthResolver.LEGACY_BASE_HEALTH;
+    return (
+      BallHealthResolver.BASE_BALL_HEALTH +
+      BallHealthResolver.BALL_HEALTH_BONUS +
+      offset
+    );
+  }
+
+  static getDefaultMaxHealth() {
+    return BallHealthResolver.resolve(BallHealthResolver.LEGACY_BASE_HEALTH);
+  }
+}
+
 const GameConstants = {
-  MAX_HEALTH: 100,
+  MAX_HEALTH: BallHealthResolver.getDefaultMaxHealth(),
   BALL_RADIUS_RATIO: 0.035,
   MOVE_SPEED: 5,
   ATTACK_COOLDOWN_MS: 400,
