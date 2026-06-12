@@ -3,26 +3,17 @@
  */
 
 /**
- * 球生命值换算：基础 100000，全体再 +500，并保留相对旧基准(100)的差值
+ * 球生命值换算：在原始生命值基础上统一 +500
  */
 class BallHealthResolver {
-  static LEGACY_BASE_HEALTH = 100;
-
-  static BASE_BALL_HEALTH = 100000;
-
   static BALL_HEALTH_BONUS = 500;
 
-  static resolve(legacyMaxHealth) {
-    const offset = legacyMaxHealth - BallHealthResolver.LEGACY_BASE_HEALTH;
-    return (
-      BallHealthResolver.BASE_BALL_HEALTH +
-      BallHealthResolver.BALL_HEALTH_BONUS +
-      offset
-    );
+  static resolve(baseMaxHealth) {
+    return baseMaxHealth + BallHealthResolver.BALL_HEALTH_BONUS;
   }
 
   static getDefaultMaxHealth() {
-    return BallHealthResolver.resolve(BallHealthResolver.LEGACY_BASE_HEALTH);
+    return BallHealthResolver.resolve(100);
   }
 }
 
