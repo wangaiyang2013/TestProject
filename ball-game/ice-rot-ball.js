@@ -21,10 +21,9 @@ const IceRotConstants = {
   SWALLOW_PULL_STRENGTH: 0.18,
   CRAZY_BURST_FLASH_MS: 280,
   /**
-   * 狂暴触发：须先损失 100 点生命（例：596 满血 → 496 及以下才狂暴）
-   * 算法：狂暴线 = 最大生命 - CRAZY_BURST_MIN_HP_LOST
+   * 狂暴触发：当前生命严格低于 100 点（不是损失 100 血，也不是掉一点就狂暴）
    */
-  CRAZY_BURST_MIN_HP_LOST: 100,
+  CRAZY_BURST_HP_THRESHOLD: 100,
 };
 
 /**

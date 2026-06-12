@@ -2996,13 +2996,13 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
     }
   }
   if (fighter.template.skillType === HeroSkillType.ICE_ROT) {
-    const hpPercent = IceRotSkillSystem.getCrazyBurstHpPercent(fighter);
+    const hp = IceRotSkillSystem.getCurrentHpDisplay(fighter);
     if (IceRotSkillSystem.isCrazyBurst(fighter)) {
       return fighter.iceRotSwallowing
-        ? `${baseLabel}·吞噬狂暴`
-        : `${baseLabel}·狂暴${hpPercent}%`;
+        ? `${baseLabel}·吞噬狂暴${hp}`
+        : `${baseLabel}·狂暴${hp}`;
     }
-    return `${baseLabel}·冰弹${hpPercent}%`;
+    return `${baseLabel}·冰弹${hp}`;
   }
   return baseLabel;
 };
