@@ -1008,6 +1008,10 @@ class GameUI {
     this.heroPhaseText = document.getElementById("hero-phase-text");
     this.heroP1Info = document.getElementById("hero-p1-info");
     this.heroP2Info = document.getElementById("hero-p2-info");
+    this.heroPickPanel = document.getElementById("hero-pick-panel");
+    this.heroPickInput = document.getElementById("hero-pick-input");
+    this.heroPickConfirm = document.getElementById("hero-pick-confirm");
+    this.heroPickMatch = document.getElementById("hero-pick-match");
     this.heroModeBtn = document.getElementById("hero-mode-btn");
     this.heroTrainingBtn = document.getElementById("hero-training-btn");
     this.heroVersusBtn = document.getElementById("hero-versus-btn");
@@ -1019,6 +1023,7 @@ class GameUI {
     this.bindWestBulldogGame();
     this.bindNumberTeacherGame();
     this.bindSelfDefinitionGame();
+    this.bindHeroPickPanel();
     this.bindMenuButtons();
 
     window.addEventListener("keydown", (e) => {
@@ -1098,6 +1103,97 @@ class GameUI {
         playerWon
       );
     };
+  }
+
+  bindHeroPickPanel() {
+    this.heroPickConfirm.addEventListener("click", () => {
+      this.submitHeroPick();
+    });
+
+    this.heroPickInput.addEventListener("input", () => {
+      this.updateHeroPickPreview();
+    });
+
+    this.heroPickInput.addEventListener("keydown", (event) => {
+      event.stopPropagation();
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this.submitHeroPick();
+      }
+    });
+  }
+
+  getActiveHeroPickGame() {
+    if (this.currentMode === GameMode.LITTLE_BALL_HERO) {
+      return this.littleBallHero;
+    }
+    if (this.currentMode === GameMode.SELF_DEFINITION) {
+      return this.selfDefinition;
+    }
+    return null;
+  }
+
+  showHeroPickPanel(snap) {
+    const game = this.getActiveHeroPickGame();
+    if (!game) {
+      return;
+    }
+
+    this.heroPickPanel.classList.remove("hidden");
+    const heroCount = game.getHeroes().length;
+    const teamLabel = snap.pickStep === 1 ? "红队" : "蓝队";
+    this.heroPickInput.placeholder = `${teamLabel}：输入角色名或编号（1-${heroCount}）`;
+    this.updateHeroPickPreview();
+
+    if (document.activeElement !== this.heroPickInput) {
+      this.heroPickInput.focus();
+    }
+  }
+
+  hideHeroPickPanel() {
+    this.heroPickPanel.classList.add("hidden");
+    this.heroPickInput.value = "";
+    this.heroPickMatch.textContent = "输入角色名或编号，下方显示对弈编号";
+  }
+
+  updateHeroPickPreview() {
+    const game = this.getActiveHeroPickGame();
+    if (!game || game.phase !== "pick") {
+      return;
+    }
+    this.heroPickMatch.textContent = game.getPickPreviewText(
+      this.heroPickInput.value
+    );
+  }
+
+  submitHeroPick() {
+    const game = this.getActiveHeroPickGame();
+    if (!game || !game.canPlayerPickNow()) {
+      return;
+    }
+
+    const result = game.tryPickByInput(this.heroPickInput.value);
+    this.heroPickMatch.textContent = result.message;
+    if (result.ok) {
+      this.heroPickInput.value = "";
+    }
+  }
+
+  syncHeroPickPanel(snap) {
+    if (snap.phase !== "pick") {
+      this.hideHeroPickPanel();
+      return;
+    }
+
+    const canPick =
+      snap.pickStep === 1 ||
+      (snap.pickStep === 2 && snap.subMode === "versus");
+    if (!canPick) {
+      this.hideHeroPickPanel();
+      return;
+    }
+
+    this.showHeroPickPanel(snap);
   }
 
   bindSelfDefinitionGame() {
@@ -1262,17 +1358,15 @@ class GameUI {
   }
 
   updateSelfDefHud(snap) {
-    const heroCount = this.selfDefinition.getHeroes().length;
-
     if (snap.phase === "pick") {
       const sec = Math.ceil(snap.pickRemainingMs / 1000);
       if (snap.pickStep === 1) {
-        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒（1-${heroCount}）`;
+        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒 · 在下方输入栏选球`;
       } else {
         this.heroPhaseText.textContent =
           snap.subMode === "training"
             ? "AI 选球中…"
-            : `蓝队选球 · 剩余 ${sec} 秒（1-${heroCount}）`;
+            : `蓝队选球 · 剩余 ${sec} 秒 · 在下方输入栏选球`;
       }
       this.heroP1Info.textContent = snap.p1HeroId
         ? `红队 · ${this.selfDefinition.getHeroById(snap.p1HeroId).name}`
@@ -1280,8 +1374,11 @@ class GameUI {
       this.heroP2Info.textContent = snap.p2HeroId
         ? `蓝队 · ${this.selfDefinition.getHeroById(snap.p2HeroId).name}`
         : "蓝队 · 待选";
+      this.syncHeroPickPanel(snap);
       return;
     }
+
+    this.hideHeroPickPanel();
 
     const p1 = snap.fighters.find((f) => f.playerId === 1);
     const p2 = snap.fighters.find((f) => f.playerId === 2);
@@ -1401,12 +1498,12 @@ class GameUI {
     if (snap.phase === "pick") {
       const sec = Math.ceil(snap.pickRemainingMs / 1000);
       if (snap.pickStep === 1) {
-        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒（${LittleBallHeroGame.getPickKeyHint(HeroRoster.getAll().length)}）`;
+        this.heroPhaseText.textContent = `红队选球 · 剩余 ${sec} 秒 · 在下方输入栏选球`;
       } else {
         this.heroPhaseText.textContent =
           snap.subMode === "training"
             ? "AI 选球中…"
-            : `蓝队选球 · 剩余 ${sec} 秒（${LittleBallHeroGame.getPickKeyHint(HeroRoster.getAll().length)}）`;
+            : `蓝队选球 · 剩余 ${sec} 秒 · 在下方输入栏选球`;
       }
       this.heroP1Info.textContent = snap.p1HeroId
         ? `红队 · ${HeroRoster.getById(snap.p1HeroId).name}`
@@ -1414,8 +1511,11 @@ class GameUI {
       this.heroP2Info.textContent = snap.p2HeroId
         ? `蓝队 · ${HeroRoster.getById(snap.p2HeroId).name}`
         : "蓝队 · 待选";
+      this.syncHeroPickPanel(snap);
       return;
     }
+
+    this.hideHeroPickPanel();
 
     const p1 = snap.fighters.find((f) => f.playerId === 1);
     const p2 = snap.fighters.find((f) => f.playerId === 2);
@@ -1443,6 +1543,7 @@ class GameUI {
   }
 
   showMainMenu() {
+    this.hideHeroPickPanel();
     this.hideAllOverlays();
     this.matchCoinReward.classList.add("hidden");
     this.overlay.classList.remove("hidden");
@@ -1478,6 +1579,7 @@ class GameUI {
     const isTraining = mode === GameMode.TRAINING;
 
     this.stopInactiveGameLoops(this.game);
+    this.hideHeroPickPanel();
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
     this.groupHud.classList.add("hidden");
@@ -1498,6 +1600,7 @@ class GameUI {
   beginGroupBattle(playerCount) {
     this.currentMode = GameMode.GROUP_BATTLE;
     this.stopInactiveGameLoops(this.groupBattle);
+    this.hideHeroPickPanel();
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
     this.heroHud.classList.add("hidden");
@@ -1574,6 +1677,7 @@ class GameUI {
   }
 
   showMainOverlay(message, coinReward) {
+    this.hideHeroPickPanel();
     this.hideAllOverlays();
     this.overlay.classList.remove("hidden");
     this.updateCoinHud();

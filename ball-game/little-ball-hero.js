@@ -392,6 +392,93 @@ class HeroPickScreenLayout {
 }
 
 /**
+ * 选球输入解析：支持角色名称或列表编号
+ */
+class HeroPickInputResolver {
+  static resolve(fullHeroes, availableHeroes, rawInput) {
+    const text = String(rawInput || "").trim();
+    if (!text) {
+      return {
+        hero: null,
+        pickNumber: 0,
+        message: "请输入角色名称或编号",
+      };
+    }
+
+    if (/^\d+$/.test(text)) {
+      return HeroPickInputResolver.resolveByNumber(
+        fullHeroes,
+        availableHeroes,
+        parseInt(text, 10)
+      );
+    }
+
+    return HeroPickInputResolver.resolveByName(fullHeroes, availableHeroes, text);
+  }
+
+  static resolveByNumber(fullHeroes, availableHeroes, pickNumber) {
+    const index = pickNumber - 1;
+    if (index < 0 || index >= fullHeroes.length) {
+      return {
+        hero: null,
+        pickNumber: 0,
+        message: `编号需在 1-${fullHeroes.length} 之间`,
+      };
+    }
+
+    const hero = fullHeroes[index];
+    const isAvailable = availableHeroes.some((item) => item.id === hero.id);
+    if (!isAvailable) {
+      return {
+        hero: null,
+        pickNumber,
+        message: `${hero.name} 已被选择`,
+      };
+    }
+
+    return { hero, pickNumber, message: "" };
+  }
+
+  static resolveByName(fullHeroes, availableHeroes, text) {
+    const lowerText = text.toLowerCase();
+    const matches = availableHeroes.filter((hero) => {
+      const heroName = hero.name.toLowerCase();
+      return heroName.includes(lowerText) || lowerText.includes(heroName);
+    });
+
+    if (matches.length === 0) {
+      return { hero: null, pickNumber: 0, message: "未找到匹配角色" };
+    }
+    if (matches.length > 1) {
+      return {
+        hero: null,
+        pickNumber: 0,
+        message: "匹配到多个角色，请输入更完整的名称",
+      };
+    }
+
+    const hero = matches[0];
+    const pickNumber = fullHeroes.findIndex((item) => item.id === hero.id) + 1;
+    return { hero, pickNumber, message: "" };
+  }
+
+  static preview(fullHeroes, availableHeroes, rawInput) {
+    const result = HeroPickInputResolver.resolve(
+      fullHeroes,
+      availableHeroes,
+      rawInput
+    );
+    if (result.hero) {
+      return `对弈编号：${result.pickNumber} · ${result.hero.name}`;
+    }
+    if (!String(rawInput || "").trim()) {
+      return "输入角色名或编号，下方显示对弈编号";
+    }
+    return result.message;
+  }
+}
+
+/**
  * 选球界面英雄预览绘制（拳击球、老师球等一眼可辨）
  */
 class HeroPickPreviewRenderer {
@@ -2098,26 +2185,52 @@ class LittleBallHeroGame {
   updatePickPhase() {
     if (this.pickTimer && this.pickTimer.isExpired()) {
       this.autoPickForCurrentStep();
-      return;
+    }
+  }
+
+  canPlayerPickNow() {
+    if (this.phase !== "pick") {
+      return false;
+    }
+    if (this.pickStep === 1) {
+      return true;
+    }
+    return this.pickStep === 2 && this.isTwoPlayer();
+  }
+
+  tryPickByInput(rawInput) {
+    if (!this.canPlayerPickNow()) {
+      return { ok: false, message: "当前不可选球" };
     }
 
-    const heroes = this.getHeroes();
-    for (let i = 0; i < heroes.length; i += 1) {
-      const keyCode = LittleBallHeroGame.getPickKeyCode(i);
-      if (!keyCode) {
-        continue;
-      }
-      if (this.input.wasPressed(keyCode)) {
-        const hero = heroes[i];
-        if (hero && !this.takenHeroIds.has(hero.id)) {
-          const isP1Turn = this.pickStep === 1;
-          const isP2Turn = this.pickStep === 2 && this.isTwoPlayer();
-          if (isP1Turn || isP2Turn) {
-            this.tryPickHero(hero.id);
-          }
-        }
-      }
+    const resolved = HeroPickInputResolver.resolve(
+      this.getHeroes(),
+      this.getAvailableHeroes(),
+      rawInput
+    );
+    if (!resolved.hero) {
+      return { ok: false, message: resolved.message };
     }
+
+    const picked = this.tryPickHero(resolved.hero.id);
+    if (!picked) {
+      return { ok: false, message: "选球失败，请重试" };
+    }
+
+    return {
+      ok: true,
+      message: `已选 ${resolved.hero.name}（对弈编号 ${resolved.pickNumber}）`,
+      pickNumber: resolved.pickNumber,
+      heroName: resolved.hero.name,
+    };
+  }
+
+  getPickPreviewText(rawInput) {
+    return HeroPickInputResolver.preview(
+      this.getHeroes(),
+      this.getAvailableHeroes(),
+      rawInput
+    );
   }
 
   getFighter(playerId) {
@@ -2368,7 +2481,7 @@ class LittleBallHeroGame {
     this.ctx.fillStyle = remainingSec <= 3 ? "#ff6b6b" : "#ccc";
     this.ctx.font = "14px system-ui, sans-serif";
     this.ctx.fillText(
-      `剩余 ${remainingSec} 秒 · 按 ${LittleBallHeroGame.getPickKeyHint(heroes.length)} 选球，超时随机`,
+      `剩余 ${remainingSec} 秒 · 在下方输入栏输入角色名或编号，超时随机`,
       this.width / 2,
       this.arena.top + 56
     );

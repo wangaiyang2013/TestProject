@@ -129,8 +129,8 @@
       <h1>小球英雄</h1>
       <div class="rules" id="rules-hero">
         <p>你<strong>只需选球</strong>（限时 8 秒，超时随机）</p>
+        <p>在下方<strong>输入栏</strong>输入角色名或编号选球，会显示<strong>对弈编号</strong></p>
         <p>两球<strong>自动持续反弹</strong>对打，技能<strong>自动释放</strong></p>
-        <p>红队先选球 · …斷刀球（10）· <strong>元素球</strong>（11，四元素弹环绕）</p>
       </div>
       <div class="menu-buttons">
         <button id="hero-training-btn" type="button" class="btn-primary">训练场</button>
@@ -143,6 +143,23 @@
       <div id="hero-phase-text" class="hero-phase-text">选球阶段</div>
       <div id="hero-p1-info" class="hero-info p1">红队 · —</div>
       <div id="hero-p2-info" class="hero-info p2">蓝队 · —</div>
+    </div>
+
+    <div id="hero-pick-panel" class="hero-pick-panel hidden">
+      <label class="hero-pick-label" for="hero-pick-input">选择角色</label>
+      <div class="hero-pick-row">
+        <input
+          id="hero-pick-input"
+          class="hero-pick-input"
+          type="text"
+          autocomplete="off"
+          placeholder="输入角色名或编号，如：喷火球 或 1"
+        />
+        <button id="hero-pick-confirm" type="button" class="btn-primary hero-pick-confirm">
+          确认选球
+        </button>
+      </div>
+      <p id="hero-pick-match" class="hero-pick-match">输入角色名或编号，下方显示对弈编号</p>
     </div>
 
     <div id="group-setup-overlay" class="overlay hidden">
