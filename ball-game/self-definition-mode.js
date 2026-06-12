@@ -36,6 +36,14 @@ class CustomSkillTypeParser {
       return HeroSkillType.FLAMETHROWER;
     }
     if (
+      text.includes("铁壁") ||
+      text.includes("减伤") ||
+      text.includes("iron") ||
+      text.includes("wall")
+    ) {
+      return HeroSkillType.IRON_WALL;
+    }
+    if (
       text.includes("斷刀") ||
       text.includes("断刀") ||
       text.includes("blade")

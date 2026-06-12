@@ -31,6 +31,10 @@ const LittleBallHeroConstants = {
   FLAMETHROWER_PROC_CHANCE: 0.8,
   FLAMETHROWER_PROJECTILE_LIFETIME_MS: 750,
   FLAMETHROWER_BURST_FLASH_MS: 260,
+  IRON_WALL_DAMAGE_REDUCTION: 0.9,
+  IRON_WALL_CRIT_MULTIPLIER: 2.0,
+  IRON_WALL_SHIELD_FLASH_MS: 300,
+  IRON_WALL_CRIT_FLASH_MS: 320,
   AI_PICK_DELAY_MS: 500,
   PICK_GRID_COLUMNS: 4,
   PICK_TOP_PADDING: 72,
@@ -49,6 +53,9 @@ class HeroSkillType {
   static FLAMETHROWER = "flamethrower";
 
   static PULSE = "pulse";
+
+  /** 铁壁丸专属：受击减伤 90%，攻击必定暴击 */
+  static IRON_WALL = "iron_wall";
 
   static BUMP = "bump";
 
@@ -139,7 +146,7 @@ class HeroRoster {
         130,
         8,
         1.4,
-        HeroSkillType.PULSE,
+        HeroSkillType.IRON_WALL,
         18
       ),
       new HeroBallTemplate(
@@ -430,6 +437,17 @@ class HeroPickPreviewRenderer {
       return;
     }
 
+    if (hero.skillType === HeroSkillType.IRON_WALL) {
+      ctx.fillStyle = "#dee2e6";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("壁", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
+
     if (hero.skillType === HeroSkillType.REVOLVER) {
       ctx.fillStyle = "#3d2914";
       ctx.font = `bold ${Math.max(9, radius * 0.4)}px system-ui, sans-serif`;
@@ -535,6 +553,40 @@ class BrokenBladeSkillSystem {
 
     fighter.bladeDamage += LittleBallHeroConstants.BLADE_STACK_DAMAGE_PER_SEC;
     fighter.lastBladeStackTime = now;
+  }
+}
+
+/**
+ * 铁壁丸技能：受击减免 90% 伤害，出击必定暴击
+ */
+class IronWallSkillSystem {
+  static isIronWallFighter(fighter) {
+    return fighter && fighter.template.skillType === HeroSkillType.IRON_WALL;
+  }
+
+  static applyDamageReduction(amount) {
+    const ratio = 1 - LittleBallHeroConstants.IRON_WALL_DAMAGE_REDUCTION;
+    return Math.max(1, Math.ceil(amount * ratio));
+  }
+
+  static applyCriticalDamage(baseDamage) {
+    return Math.round(
+      baseDamage * LittleBallHeroConstants.IRON_WALL_CRIT_MULTIPLIER
+    );
+  }
+
+  static markShieldHit(fighter) {
+    fighter.ironShieldFlashUntil =
+      Date.now() + LittleBallHeroConstants.IRON_WALL_SHIELD_FLASH_MS;
+  }
+
+  static markCriticalStrike(fighter, opponent) {
+    fighter.ironCritFlashUntil =
+      Date.now() + LittleBallHeroConstants.IRON_WALL_CRIT_FLASH_MS;
+    if (opponent) {
+      opponent.ironCritHitFlashUntil =
+        Date.now() + LittleBallHeroConstants.IRON_WALL_CRIT_FLASH_MS;
+    }
   }
 }
 
@@ -854,6 +906,9 @@ class HeroBallFighter {
     this.lastBladeStackTime = Date.now();
     this.flameBurstUntil = 0;
     this.flameFizzleUntil = 0;
+    this.ironShieldFlashUntil = 0;
+    this.ironCritFlashUntil = 0;
+    this.ironCritHitFlashUntil = 0;
     this.bladeDamage =
       template.skillType === HeroSkillType.BROKEN_BLADE
         ? template.skillDamage
@@ -893,7 +948,12 @@ class HeroBallFighter {
   }
 
   takeDamage(amount, attacker, skipReflect) {
-    this.health = Math.max(0, this.health - amount);
+    let finalAmount = amount;
+    if (IronWallSkillSystem.isIronWallFighter(this)) {
+      finalAmount = IronWallSkillSystem.applyDamageReduction(amount);
+      IronWallSkillSystem.markShieldHit(this);
+    }
+    this.health = Math.max(0, this.health - finalAmount);
     SpikeReflectSystem.tryReflect(this, attacker, skipReflect);
   }
 
@@ -1007,6 +1067,18 @@ class HeroBallFighter {
       this.drawFlamethrowerEffect(ctx);
     }
 
+    if (this.template.skillType === HeroSkillType.IRON_WALL) {
+      this.drawIronWallEffect(ctx);
+    }
+
+    if (Date.now() < this.ironCritHitFlashUntil) {
+      ctx.fillStyle = "#ffd43b";
+      ctx.font = "bold 11px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("暴击!", this.x, this.y - this.radius - 20);
+      ctx.textAlign = "left";
+    }
+
     if (Date.now() < this.spikeFlashUntil) {
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.radius + 10, 0, Math.PI * 2);
@@ -1066,6 +1138,23 @@ class HeroBallFighter {
     ctx.fillText(text, this.x, badgeY);
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
+  }
+
+  drawIronWallEffect(ctx) {
+    if (Date.now() < this.ironShieldFlashUntil) {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius + 10, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(206, 212, 218, 0.85)";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+    }
+    if (Date.now() < this.ironCritFlashUntil) {
+      ctx.fillStyle = "#ffd43b";
+      ctx.font = "bold 10px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("暴击", this.x, this.y + this.radius + 26);
+      ctx.textAlign = "left";
+    }
   }
 
   drawFlamethrowerEffect(ctx) {
@@ -1312,6 +1401,12 @@ class HeroAutoSkillSystem {
       return;
     }
 
+    if (template.skillType === HeroSkillType.IRON_WALL) {
+      fighter.markSkillUsed(now);
+      HeroAutoSkillSystem.fireIronWallStrike(fighter, opponent, template.skillDamage);
+      return;
+    }
+
     fighter.markSkillUsed(now);
 
     if (template.skillType === HeroSkillType.SHOT) {
@@ -1349,6 +1444,30 @@ class HeroAutoSkillSystem {
         template.skillDamage,
         template.returnDamage
       );
+    }
+  }
+
+  static fireIronWallStrike(fighter, opponent, damage) {
+    const dx = opponent.x - fighter.x;
+    const dy = opponent.y - fighter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return;
+    }
+
+    const critDamage = IronWallSkillSystem.applyCriticalDamage(damage);
+    if (dist <= LittleBallHeroConstants.PULSE_RANGE + opponent.radius) {
+      opponent.takeDamage(critDamage, fighter);
+      IronWallSkillSystem.markCriticalStrike(fighter, opponent);
+
+      const nx = dx / dist;
+      const ny = dy / dist;
+      opponent.vx += nx * 2;
+      opponent.vy += ny * 2;
+      fighter.vx -= nx * 1;
+      fighter.vy -= ny * 1;
+      ContinuousBouncePhysics.maintainSpeed(fighter);
+      ContinuousBouncePhysics.maintainSpeed(opponent);
     }
   }
 
@@ -2150,6 +2269,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.PULSE) {
     return "震荡";
+  }
+  if (skillType === HeroSkillType.IRON_WALL) {
+    return "减伤90%+暴击";
   }
   if (skillType === HeroSkillType.BUMP) {
     return "冲击";
