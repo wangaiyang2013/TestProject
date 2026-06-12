@@ -1,21 +1,21 @@
 /**
- * 劍刃球 - 敌人靠近时挥剑劈砍并吸血；每 20 秒无敌并释放元素弹，元素弹结束后无敌消失
+ * 劍刃球 - 敌人进入挥剑范围时劈砍吸血；每 20 秒无敌 20 秒并释放元素弹
  */
 
 const SwordBladeConstants = {
   /** 挥剑冷却（毫秒） */
   SLASH_INTERVAL_MS: 900,
-  /** 近距判定：米 */
-  APPROACH_RANGE_METERS: 2.4,
+  /** 挥剑有效距离：米（敌人进入此范围即挥剑） */
+  SLASH_RANGE_METERS: 2.4,
   METERS_TO_RADIUS_FACTOR: 4.5,
-  /** 敌人朝劍刃球移动的最小速度分量 */
-  APPROACH_MIN_SPEED: 0.35,
   /** 劈砍伤害倍率（基于 skillDamage） */
   SLASH_DAMAGE_MULTIPLIER: 1.35,
   /** 吸血比例：按造成伤害回复生命 */
   LIFESTEAL_RATIO: 0.4,
-  /** 大招间隔：无敌 + 元素弹 */
+  /** 大招冷却：每 20 秒触发一次 */
   ULT_INTERVAL_MS: 20000,
+  /** 无敌持续时间：固定 20 秒（与元素弹释放同时进行，互不绑定） */
+  INVINCIBLE_DURATION_MS: 20000,
   SLASH_FLASH_MS: 320,
   INVINCIBLE_RING_PULSE_MS: 600,
   ULT_FLASH_MS: 400,
@@ -31,9 +31,9 @@ class SwordBladeRangeHelper {
     );
   }
 
-  static getApproachRangePixels(ballRadius) {
+  static getSlashRangePixels(ballRadius) {
     return SwordBladeRangeHelper.metersToPixels(
-      SwordBladeConstants.APPROACH_RANGE_METERS,
+      SwordBladeConstants.SLASH_RANGE_METERS,
       ballRadius
     );
   }
@@ -50,7 +50,7 @@ class SwordBladeSkillSystem {
   static initFighter(fighter) {
     fighter.swordBladeSlashFlashUntil = 0;
     fighter.swordBladeSlashAngle = 0;
-    fighter.swordBladeInvincible = false;
+    fighter.swordBladeInvincibleUntil = 0;
     fighter.lastSwordSlashTime = 0;
     fighter.swordBladeUltFlashUntil = 0;
     fighter.swordBladeLifestealTextUntil = 0;
@@ -59,37 +59,21 @@ class SwordBladeSkillSystem {
   static isInvincible(fighter) {
     return (
       SwordBladeSkillSystem.isSwordFighter(fighter) &&
-      fighter.swordBladeInvincible === true
+      Date.now() < fighter.swordBladeInvincibleUntil
     );
   }
 
   /**
-   * 敌人是否在靠近劍刃球（近距 + 朝本体移动）
+   * 敌人是否在挥剑范围内（进入范围即攻击，不要求朝本体移动）
    */
-  static isEnemyApproaching(fighter, opponent) {
+  static isEnemyInSlashRange(fighter, opponent) {
     if (!opponent || !opponent.isAlive()) {
       return false;
     }
 
-    const dx = fighter.x - opponent.x;
-    const dy = fighter.y - opponent.y;
-    const dist = Math.hypot(dx, dy);
-    const maxRange = SwordBladeRangeHelper.getApproachRangePixels(fighter.radius);
-
-    if (dist > maxRange) {
-      return false;
-    }
-
-    if (dist < fighter.radius + opponent.radius + 4) {
-      return true;
-    }
-
-    if (dist < 0.001) {
-      return true;
-    }
-
-    const towardSpeed = (opponent.vx * dx + opponent.vy * dy) / dist;
-    return towardSpeed >= SwordBladeConstants.APPROACH_MIN_SPEED;
+    const dist = Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y);
+    const slashRange = SwordBladeRangeHelper.getSlashRangePixels(fighter.radius);
+    return dist <= slashRange + opponent.radius;
   }
 
   static computeSlashDamage(fighter) {
@@ -101,14 +85,14 @@ class SwordBladeSkillSystem {
     return now - fighter.lastSwordSlashTime >= SwordBladeConstants.SLASH_INTERVAL_MS;
   }
 
-  static tickApproachSlash(fighter, opponent, now) {
+  static tickSlash(fighter, opponent, now) {
     if (!SwordBladeSkillSystem.isSwordFighter(fighter)) {
       return;
     }
     if (!opponent || !opponent.isAlive()) {
       return;
     }
-    if (!SwordBladeSkillSystem.isEnemyApproaching(fighter, opponent)) {
+    if (!SwordBladeSkillSystem.isEnemyInSlashRange(fighter, opponent)) {
       return;
     }
     if (!SwordBladeSkillSystem.canSlash(fighter, now)) {
@@ -151,9 +135,10 @@ class SwordBladeSkillSystem {
   }
 
   static activateUltimate(fighter) {
-    fighter.swordBladeInvincible = true;
-    fighter.swordBladeUltFlashUntil =
-      Date.now() + SwordBladeConstants.ULT_FLASH_MS;
+    const now = Date.now();
+    fighter.swordBladeInvincibleUntil =
+      now + SwordBladeConstants.INVINCIBLE_DURATION_MS;
+    fighter.swordBladeUltFlashUntil = now + SwordBladeConstants.ULT_FLASH_MS;
     ElementBurstSystem.summonOrbitBullets(
       fighter,
       fighter.template.skillDamage
@@ -163,33 +148,8 @@ class SwordBladeSkillSystem {
     }
   }
 
-  /**
-   * 元素弹全部消失后结束无敌；对手阵亡时立即清除环绕弹
-   */
-  static tickInvincibility(fighter, opponent) {
-    if (!SwordBladeSkillSystem.isInvincible(fighter)) {
-      return;
-    }
-
-    const bullets = fighter.elementOrbitBullets || [];
-
-    if (opponent && !opponent.isAlive()) {
-      for (const bullet of bullets) {
-        bullet.alive = false;
-      }
-      fighter.elementOrbitBullets = [];
-      fighter.swordBladeInvincible = false;
-      return;
-    }
-
-    const hasAliveBullets = bullets.some((bullet) => bullet.alive);
-    if (!hasAliveBullets) {
-      fighter.swordBladeInvincible = false;
-    }
-  }
-
-  static drawApproachRange(ctx, fighter) {
-    const range = SwordBladeRangeHelper.getApproachRangePixels(fighter.radius);
+  static drawSlashRange(ctx, fighter) {
+    const range = SwordBladeRangeHelper.getSlashRangePixels(fighter.radius);
     ctx.beginPath();
     ctx.arc(fighter.x, fighter.y, range, 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(51, 154, 240, 0.22)";
@@ -273,7 +233,7 @@ class SwordBladeSkillSystem {
       return;
     }
 
-    SwordBladeSkillSystem.drawApproachRange(ctx, fighter);
+    SwordBladeSkillSystem.drawSlashRange(ctx, fighter);
     SwordBladeSkillSystem.drawInvincibleRing(ctx, fighter);
     SwordBladeSkillSystem.drawSlash(ctx, fighter);
     SwordBladeSkillSystem.drawLifestealText(ctx, fighter);

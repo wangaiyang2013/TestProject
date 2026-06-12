@@ -1847,8 +1847,8 @@ class HeroAutoSkillSystem {
     }
 
     if (template.skillType === HeroSkillType.SWORD_BLADE) {
-      SwordBladeSkillSystem.tickApproachSlash(fighter, opponent, now);
-      if (fighter.canUseSkill(now) && !SwordBladeSkillSystem.isInvincible(fighter)) {
+      SwordBladeSkillSystem.tickSlash(fighter, opponent, now);
+      if (fighter.canUseSkill(now)) {
         fighter.markSkillUsed(now);
         SwordBladeSkillSystem.activateUltimate(fighter);
       }
@@ -2567,9 +2567,6 @@ class LittleBallHeroGame {
     ElementBurstSystem.updateOrbitBullets(f1, f2, this.fighters);
     ElementBurstSystem.updateOrbitBullets(f2, f1, this.fighters);
 
-    SwordBladeSkillSystem.tickInvincibility(f1, f2);
-    SwordBladeSkillSystem.tickInvincibility(f2, f1);
-
     this.updateProjectiles();
 
     for (const fighter of this.fighters) {
@@ -2947,7 +2944,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "随机防具头";
   }
   if (skillType === HeroSkillType.SWORD_BLADE) {
-    return "近距挥剑吸血/20秒无敌元素";
+    return "范围内挥剑吸血/20秒无敌+元素";
   }
   return "技能";
 };
