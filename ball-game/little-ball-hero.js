@@ -1348,8 +1348,15 @@ class HeroBallFighter {
     }
 
     let finalAmount = amount;
+    if (typeof IceRotSkillSystem !== "undefined") {
+      finalAmount = IceRotSkillSystem.applyVulnerabilityDamage(
+        this,
+        finalAmount,
+        attacker
+      );
+    }
     if (!isTrueDamage && IronWallSkillSystem.isIronWallFighter(this)) {
-      finalAmount = IronWallSkillSystem.applyDamageReduction(amount);
+      finalAmount = IronWallSkillSystem.applyDamageReduction(finalAmount);
       IronWallSkillSystem.markShieldHit(this);
     }
     this.health = Math.max(0, this.health - finalAmount);
@@ -3000,7 +3007,7 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
     if (IceRotSkillSystem.isCrazyBurst(fighter)) {
       return fighter.iceRotSwallowing
         ? `${baseLabel}·吞噬狂暴${hp}`
-        : `${baseLabel}·狂暴${hp}`;
+        : `${baseLabel}·狂暴${hp}·惧防卫近战`;
     }
     return `${baseLabel}·冰弹${hp}`;
   }
@@ -3057,7 +3064,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "范围内挥剑吸血/20秒无敌+元素";
   }
   if (skillType === HeroSkillType.ICE_ROT) {
-    return "冰弹减速/失100血狂暴/踩踏吞噬";
+    return "冰弹/血量<100狂暴/狂暴受防卫近战最高伤";
   }
   return "技能";
 };

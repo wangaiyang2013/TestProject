@@ -21,9 +21,11 @@ const IceRotConstants = {
   SWALLOW_PULL_STRENGTH: 0.18,
   CRAZY_BURST_FLASH_MS: 280,
   /**
-   * 狂暴触发：当前生命严格低于 100 点（不是损失 100 血，也不是掉一点就狂暴）
+   * 狂暴触发：当前生命严格低于 100 点（不是减 100 血，也不是低于满血）
    */
   CRAZY_BURST_HP_THRESHOLD: 100,
+  /** 狂暴时受防卫球/近战攻击，至少按攻击者最高技能伤害结算 */
+  CRAZY_BURST_COUNTER_MIN_DAMAGE: true,
 };
 
 /**
@@ -108,36 +110,96 @@ class IceRotSkillSystem {
     fighter.lastIceRotMeleeTime = 0;
   }
 
-  /** 狂暴触发血量线 = 最大生命 - 100 */
-  static getCrazyBurstThresholdHp(fighter) {
-    return Math.max(
-      1,
-      fighter.maxHealth - IceRotConstants.CRAZY_BURST_MIN_HP_LOST
-    );
-  }
-
   /**
-   * 狂暴模式：当前生命 ≤ 狂暴线（596 满血时即为 496）
+   * 狂暴模式：当前生命 < 100（例：596 满血时须被打到 99 以下才狂暴）
    */
   static isCrazyBurst(fighter) {
     if (!IceRotSkillSystem.isIceRotFighter(fighter)) {
       return false;
     }
 
-    const maxHp = fighter.maxHealth;
-    if (maxHp <= 0) {
-      return false;
-    }
-
-    return fighter.health <= IceRotSkillSystem.getCrazyBurstThresholdHp(fighter);
+    return fighter.health < IceRotConstants.CRAZY_BURST_HP_THRESHOLD;
   }
 
-  static getCrazyBurstHpPercent(fighter) {
-    const maxHp = fighter.maxHealth;
-    if (maxHp <= 0) {
-      return 100;
+  static getCurrentHpDisplay(fighter) {
+    return Math.max(0, Math.round(fighter.health));
+  }
+
+  /** 防卫球，或处于近战模式的英雄（寒冰腐烂球须已狂暴才算近战） */
+  static isCounterAttacker(attacker) {
+    if (!attacker || !attacker.template) {
+      return false;
     }
-    return Math.round((fighter.health / maxHp) * 100);
+    if (DefenseBallSkillSystem.isDefenseFighter(attacker)) {
+      return true;
+    }
+    if (attacker.template.skillType === HeroSkillType.ICE_ROT) {
+      return IceRotSkillSystem.isCrazyBurst(attacker);
+    }
+    if (typeof MeleeHeroClassifier !== "undefined") {
+      return MeleeHeroClassifier.isMeleeFighter(attacker);
+    }
+    return false;
+  }
+
+  /** 攻击者在单次技能中可造成的最高伤害 */
+  static getAttackerMaxDamage(attacker) {
+    if (!attacker || !attacker.template) {
+      return 0;
+    }
+
+    const template = attacker.template;
+
+    if (template.skillType === HeroSkillType.BROKEN_BLADE) {
+      return attacker.bladeDamage || template.skillDamage;
+    }
+    if (template.skillType === HeroSkillType.IRON_WALL) {
+      return IronWallSkillSystem.applyCriticalDamage(template.skillDamage);
+    }
+    if (template.skillType === HeroSkillType.DEFENSE) {
+      return DefenseBallConstants.STRIKE_DAMAGE;
+    }
+    if (template.skillType === HeroSkillType.SWORD_BLADE) {
+      return SwordBladeSkillSystem.computeSlashDamage(attacker);
+    }
+    if (template.skillType === HeroSkillType.ORANGE_CALC) {
+      return OrangeCalcSkillSystem.getNextDamagePreview(attacker, template.skillDamage);
+    }
+    if (template.skillType === HeroSkillType.ICE_ROT) {
+      if (IceRotSkillSystem.isCrazyBurst(attacker)) {
+        return IceRotSkillSystem.computeMeleeDamage(attacker, true);
+      }
+      return template.skillDamage;
+    }
+
+    return template.skillDamage;
+  }
+
+  /**
+   * 狂暴寒冰腐烂球被防卫球/近战命中时，按攻击者最高技能伤害结算
+   */
+  static applyVulnerabilityDamage(target, amount, attacker) {
+    if (!IceRotConstants.CRAZY_BURST_COUNTER_MIN_DAMAGE) {
+      return amount;
+    }
+    if (!IceRotSkillSystem.isCrazyBurst(target)) {
+      return amount;
+    }
+    if (!IceRotSkillSystem.isCounterAttacker(attacker)) {
+      return amount;
+    }
+
+    const maxDamage = IceRotSkillSystem.getAttackerMaxDamage(attacker);
+    const finalAmount = Math.max(amount, maxDamage);
+
+    if (
+      finalAmount > amount &&
+      typeof ElementStatusEffectSystem !== "undefined"
+    ) {
+      ElementStatusEffectSystem.setStatusText(target, "狂暴受制");
+    }
+
+    return finalAmount;
   }
 
   static getMoveSpeedRatio(fighter) {
