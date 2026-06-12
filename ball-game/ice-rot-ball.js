@@ -21,11 +21,10 @@ const IceRotConstants = {
   SWALLOW_PULL_STRENGTH: 0.18,
   CRAZY_BURST_FLASH_MS: 280,
   /**
-   * 狂暴触发：生命须低于满血（< 100%）
-   * 且已损失生命达到最大生命的该比例，避免擦碰一下立刻狂暴
+   * 狂暴触发：须先损失 100 点生命（例：596 满血 → 496 及以下才狂暴）
+   * 算法：狂暴线 = 最大生命 - CRAZY_BURST_MIN_HP_LOST
    */
-  CRAZY_BURST_MAX_HP_RATIO: 1,
-  CRAZY_BURST_MIN_LOST_RATIO: 0.1,
+  CRAZY_BURST_MIN_HP_LOST: 100,
 };
 
 /**
@@ -110,9 +109,16 @@ class IceRotSkillSystem {
     fighter.lastIceRotMeleeTime = 0;
   }
 
+  /** 狂暴触发血量线 = 最大生命 - 100 */
+  static getCrazyBurstThresholdHp(fighter) {
+    return Math.max(
+      1,
+      fighter.maxHealth - IceRotConstants.CRAZY_BURST_MIN_HP_LOST
+    );
+  }
+
   /**
-   * 狂暴模式：生命低于 100% 且已损失至少 10% 最大生命
-   * （防止开局碰撞擦伤就立刻狂暴）
+   * 狂暴模式：当前生命 ≤ 狂暴线（596 满血时即为 496）
    */
   static isCrazyBurst(fighter) {
     if (!IceRotSkillSystem.isIceRotFighter(fighter)) {
@@ -124,13 +130,7 @@ class IceRotSkillSystem {
       return false;
     }
 
-    const hpRatio = fighter.health / maxHp;
-    const lostRatio = 1 - hpRatio;
-
-    return (
-      hpRatio < IceRotConstants.CRAZY_BURST_MAX_HP_RATIO &&
-      lostRatio >= IceRotConstants.CRAZY_BURST_MIN_LOST_RATIO
-    );
+    return fighter.health <= IceRotSkillSystem.getCrazyBurstThresholdHp(fighter);
   }
 
   static getCrazyBurstHpPercent(fighter) {

@@ -3057,7 +3057,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "范围内挥剑吸血/20秒无敌+元素";
   }
   if (skillType === HeroSkillType.ICE_ROT) {
-    return "冰弹减速/失10%血狂暴/踩踏吞噬";
+    return "冰弹减速/失100血狂暴/踩踏吞噬";
   }
   return "技能";
 };
