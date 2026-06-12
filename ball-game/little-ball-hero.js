@@ -22,6 +22,12 @@ const LittleBallHeroConstants = {
   BOXING_METERS_TO_RADIUS_FACTOR: 4.5,
   BOXING_PUNCH_FLASH_MS: 280,
   SPIKE_REFLECT_FLASH_MS: 280,
+  BLADE_MIN_RANGE_METERS: 0.8,
+  BLADE_MAX_RANGE_METERS: 2.2,
+  BLADE_METERS_TO_RADIUS_FACTOR: 4.5,
+  BLADE_STACK_DAMAGE_PER_SEC: 10,
+  BLADE_STACK_INTERVAL_MS: 1000,
+  BLADE_SLASH_FLASH_MS: 320,
   AI_PICK_DELAY_MS: 500,
   PICK_GRID_COLUMNS: 4,
   PICK_TOP_PADDING: 72,
@@ -54,6 +60,9 @@ class HeroSkillType {
 
   /** 尖刺球专属：受到攻击时反伤攻击者 */
   static SPIKE = "spike";
+
+  /** 斷刀球专属：近距挥刀劈砍，远离敌人时每秒叠伤 */
+  static BROKEN_BLADE = "broken_blade";
 }
 
 /**
@@ -198,6 +207,18 @@ class HeroRoster {
         HeroSkillType.SPIKE,
         15,
         9999
+      ),
+      new HeroBallTemplate(
+        "broken_blade",
+        "斷刀球",
+        "#9c36b5",
+        "#cc5de8",
+        102,
+        9,
+        1.0,
+        HeroSkillType.BROKEN_BLADE,
+        20,
+        800
       ),
     ];
   }
@@ -416,7 +437,87 @@ class HeroPickPreviewRenderer {
         ctx.lineTo(cx + Math.cos(angle) * outerR, cy + Math.sin(angle) * outerR);
         ctx.stroke();
       }
+      return;
     }
+
+    if (hero.skillType === HeroSkillType.BROKEN_BLADE) {
+      ctx.fillStyle = "#f3f0ff";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("刀", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+    }
+  }
+}
+
+/**
+ * 斷刀球劈砍距离判定
+ */
+class BrokenBladeRangeHelper {
+  static metersToPixels(meters, ballRadius) {
+    return (
+      meters * ballRadius * LittleBallHeroConstants.BLADE_METERS_TO_RADIUS_FACTOR
+    );
+  }
+
+  static getSlashRangePixels(ballRadius) {
+    return {
+      min: BrokenBladeRangeHelper.metersToPixels(
+        LittleBallHeroConstants.BLADE_MIN_RANGE_METERS,
+        ballRadius
+      ),
+      max: BrokenBladeRangeHelper.metersToPixels(
+        LittleBallHeroConstants.BLADE_MAX_RANGE_METERS,
+        ballRadius
+      ),
+    };
+  }
+
+  /**
+   * 最近敌人是否在斷刀劈砍范围内
+   */
+  static isEnemyInSlashRange(fighter, opponent) {
+    if (!opponent || !opponent.isAlive()) {
+      return false;
+    }
+    const dist = Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y);
+    const range = BrokenBladeRangeHelper.getSlashRangePixels(fighter.radius);
+    return dist >= range.min && dist <= range.max;
+  }
+}
+
+/**
+ * 斷刀球技能：范围内劈砍，范围外每秒叠伤
+ */
+class BrokenBladeSkillSystem {
+  static isBladeFighter(fighter) {
+    return fighter && fighter.template.skillType === HeroSkillType.BROKEN_BLADE;
+  }
+
+  static tick(fighter, opponent, now) {
+    if (!BrokenBladeSkillSystem.isBladeFighter(fighter)) {
+      return;
+    }
+    if (!opponent || !opponent.isAlive()) {
+      return;
+    }
+
+    if (BrokenBladeRangeHelper.isEnemyInSlashRange(fighter, opponent)) {
+      if (fighter.canUseSkill(now)) {
+        fighter.markSkillUsed(now);
+        HeroAutoSkillSystem.fireBladeSlash(fighter, opponent, fighter.bladeDamage);
+      }
+      return;
+    }
+
+    if (now - fighter.lastBladeStackTime < LittleBallHeroConstants.BLADE_STACK_INTERVAL_MS) {
+      return;
+    }
+
+    fighter.bladeDamage += LittleBallHeroConstants.BLADE_STACK_DAMAGE_PER_SEC;
+    fighter.lastBladeStackTime = now;
   }
 }
 
@@ -667,6 +768,13 @@ class HeroBallFighter {
     this.punchFlashUntil = 0;
     this.punchAngle = 0;
     this.spikeFlashUntil = 0;
+    this.bladeSlashFlashUntil = 0;
+    this.bladeSlashAngle = 0;
+    this.lastBladeStackTime = Date.now();
+    this.bladeDamage =
+      template.skillType === HeroSkillType.BROKEN_BLADE
+        ? template.skillDamage
+        : 0;
     this.attackNumber =
       template.skillType === HeroSkillType.NUMBER_TEACHER
         ? LittleBallHeroConstants.TEACHER_START_NUMBER
@@ -806,6 +914,12 @@ class HeroBallFighter {
       this.drawSpikeRing(ctx);
     }
 
+    if (this.template.skillType === HeroSkillType.BROKEN_BLADE) {
+      this.drawBladeRange(ctx);
+      this.drawBladeDamageBadge(ctx);
+      this.drawBladeSlash(ctx);
+    }
+
     if (Date.now() < this.spikeFlashUntil) {
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.radius + 10, 0, Math.PI * 2);
@@ -836,6 +950,66 @@ class HeroBallFighter {
       );
       ctx.stroke();
     }
+  }
+
+  drawBladeRange(ctx) {
+    const range = BrokenBladeRangeHelper.getSlashRangePixels(this.radius);
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, range.min, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(204, 93, 232, 0.2)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, range.max, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(204, 93, 232, 0.4)";
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  drawBladeDamageBadge(ctx) {
+    const text = String(this.bladeDamage);
+    const badgeY = this.y - this.radius - 16;
+    ctx.fillStyle = "rgba(26, 26, 46, 0.85)";
+    ctx.fillRect(this.x - 18, badgeY - 10, 36, 20);
+    ctx.fillStyle = "#e599f7";
+    ctx.font = "bold 12px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, this.x, badgeY);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+  }
+
+  drawBladeSlash(ctx) {
+    if (Date.now() >= this.bladeSlashFlashUntil) {
+      return;
+    }
+
+    const reach = this.radius + 36;
+    const arcSpan = Math.PI * 0.55;
+    const startAngle = this.bladeSlashAngle - arcSpan / 2;
+    const endAngle = this.bladeSlashAngle + arcSpan / 2;
+
+    ctx.strokeStyle = "#f3f0ff";
+    ctx.lineWidth = 5;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, reach, startAngle, endAngle);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#cc5de8";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(
+      this.x + Math.cos(this.bladeSlashAngle) * this.radius,
+      this.y + Math.sin(this.bladeSlashAngle) * this.radius
+    );
+    ctx.lineTo(
+      this.x + Math.cos(this.bladeSlashAngle) * reach,
+      this.y + Math.sin(this.bladeSlashAngle) * reach
+    );
+    ctx.stroke();
   }
 
   drawTeacherNumberBadge(ctx) {
@@ -1012,6 +1186,11 @@ class HeroAutoSkillSystem {
       return;
     }
 
+    if (template.skillType === HeroSkillType.BROKEN_BLADE) {
+      BrokenBladeSkillSystem.tick(fighter, opponent, now);
+      return;
+    }
+
     if (template.skillType === HeroSkillType.NUMBER_TEACHER) {
       fighter.markSkillUsed(now);
       HeroAutoSkillSystem.fireTeacherNumber(fighter, opponent, projectiles);
@@ -1074,6 +1253,29 @@ class HeroAutoSkillSystem {
         fighter
       )
     );
+  }
+
+  static fireBladeSlash(fighter, opponent, damage) {
+    const dx = opponent.x - fighter.x;
+    const dy = opponent.y - fighter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return;
+    }
+    const nx = dx / dist;
+    const ny = dy / dist;
+
+    fighter.bladeSlashAngle = Math.atan2(dy, dx);
+    fighter.bladeSlashFlashUntil =
+      Date.now() + LittleBallHeroConstants.BLADE_SLASH_FLASH_MS;
+    opponent.takeDamage(damage, fighter);
+
+    opponent.vx += nx * 2.5;
+    opponent.vy += ny * 2.5;
+    fighter.vx -= nx * 1.0;
+    fighter.vy -= ny * 1.0;
+    ContinuousBouncePhysics.maintainSpeed(fighter);
+    ContinuousBouncePhysics.maintainSpeed(opponent);
   }
 
   static fireBoxingPunch(fighter, opponent, damage) {
@@ -1753,6 +1955,9 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
   if (fighter.template.skillType === HeroSkillType.NUMBER_TEACHER) {
     return `${baseLabel}·${fighter.attackNumber}`;
   }
+  if (fighter.template.skillType === HeroSkillType.BROKEN_BLADE) {
+    return `${baseLabel}·${fighter.bladeDamage}`;
+  }
   return baseLabel;
 };
 
@@ -1780,6 +1985,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.SPIKE) {
     return "受击反伤";
+  }
+  if (skillType === HeroSkillType.BROKEN_BLADE) {
+    return "斷刀劈砍";
   }
   return "技能";
 };

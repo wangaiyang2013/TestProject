@@ -27,6 +27,13 @@ class CustomSkillTypeParser {
     if (!text) {
       return HeroSkillType.SHOT;
     }
+    if (
+      text.includes("斷刀") ||
+      text.includes("断刀") ||
+      text.includes("blade")
+    ) {
+      return HeroSkillType.BROKEN_BLADE;
+    }
     if (text.includes("尖刺") || text.includes("反伤") || text.includes("spike")) {
       return HeroSkillType.SPIKE;
     }
