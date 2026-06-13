@@ -22,6 +22,10 @@ const LittleBallHeroConstants = {
   BOXING_METERS_TO_RADIUS_FACTOR: 4.5,
   BOXING_PUNCH_FLASH_MS: 280,
   SPIKE_REFLECT_FLASH_MS: 280,
+  /** 尖刺球：每场最多反伤次数 */
+  SPIKE_MAX_REFLECT_COUNT: 2,
+  /** 尖刺球：反伤伤害比例（削弱） */
+  SPIKE_REFLECT_DAMAGE_RATIO: 0.6,
   BLADE_MIN_RANGE_METERS: 0.8,
   BLADE_MAX_RANGE_METERS: 2.2,
   BLADE_METERS_TO_RADIUS_FACTOR: 4.5,
@@ -955,8 +959,16 @@ class SpikeReflectSystem {
     return fighter && fighter.template.skillType === HeroSkillType.SPIKE;
   }
 
+  static initFighter(fighter) {
+    fighter.spikeReflectsRemaining = LittleBallHeroConstants.SPIKE_MAX_REFLECT_COUNT;
+  }
+
   static getReflectDamage(fighter) {
-    return fighter.template.skillDamage;
+    const base = fighter.template.skillDamage;
+    return Math.max(
+      1,
+      Math.round(base * LittleBallHeroConstants.SPIKE_REFLECT_DAMAGE_RATIO)
+    );
   }
 
   static tryReflect(defender, attacker, skipReflect) {
@@ -966,10 +978,22 @@ class SpikeReflectSystem {
     if (!attacker || !attacker.isAlive() || attacker === defender) {
       return;
     }
+    if (defender.spikeReflectsRemaining <= 0) {
+      return;
+    }
 
+    defender.spikeReflectsRemaining -= 1;
     const reflectDamage = SpikeReflectSystem.getReflectDamage(defender);
     attacker.takeDamage(reflectDamage, null, true);
     defender.spikeFlashUntil = Date.now() + LittleBallHeroConstants.SPIKE_REFLECT_FLASH_MS;
+
+    if (typeof ElementStatusEffectSystem !== "undefined") {
+      const left = defender.spikeReflectsRemaining;
+      ElementStatusEffectSystem.setStatusText(
+        defender,
+        left > 0 ? `反伤剩${left}次` : "尖刺已钝"
+      );
+    }
   }
 }
 
@@ -1295,6 +1319,10 @@ class HeroBallFighter {
       IceRotSkillSystem.initFighter(this);
     }
 
+    if (SpikeReflectSystem.isSpikeFighter(this)) {
+      SpikeReflectSystem.initFighter(this);
+    }
+
     this.defenseRestrictUntil = 0;
     this.defenseRestrictSpeedRatio = 1;
 
@@ -1561,6 +1589,21 @@ class HeroBallFighter {
         this.y + Math.sin(angle) * outerR
       );
       ctx.stroke();
+    }
+
+    if (this.spikeReflectsRemaining !== undefined) {
+      ctx.fillStyle =
+        this.spikeReflectsRemaining > 0 ? "#d8f5a2" : "#868e96";
+      ctx.font = "bold 9px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(
+        this.spikeReflectsRemaining > 0
+          ? `反伤${this.spikeReflectsRemaining}`
+          : "已钝",
+        this.x,
+        this.y + this.radius + 22
+      );
+      ctx.textAlign = "left";
     }
   }
 
@@ -3024,7 +3067,7 @@ class LittleBallHeroGame {
     this.ctx.font = "13px system-ui, sans-serif";
     this.ctx.textAlign = "center";
     this.ctx.fillText(
-      "双球自动反弹对打 · 武器箱：斯登/加特林/霰弹/巨鹰/火箭/C4/地雷",
+      "双球自动反弹对打 · 武器箱含匕首(3击共3伤)",
       this.width / 2,
       this.arena.bottom + 28
     );
@@ -3080,6 +3123,13 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
     }
     return `${baseLabel}·防具已破`;
   }
+  if (fighter.template.skillType === HeroSkillType.SPIKE) {
+    const left =
+      fighter.spikeReflectsRemaining !== undefined
+        ? fighter.spikeReflectsRemaining
+        : LittleBallHeroConstants.SPIKE_MAX_REFLECT_COUNT;
+    return left > 0 ? `${baseLabel}·反伤${left}` : `${baseLabel}·已钝`;
+  }
   if (fighter.template.skillType === HeroSkillType.SWORD_BLADE) {
     if (SwordBladeSkillSystem.isInvincible(fighter)) {
       return `${baseLabel}·无敌中`;
@@ -3126,7 +3176,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "追踪数字";
   }
   if (skillType === HeroSkillType.SPIKE) {
-    return "受击反伤";
+    return "受击反伤×2(削弱)";
   }
   if (skillType === HeroSkillType.BROKEN_BLADE) {
     return "斷刀劈砍";
