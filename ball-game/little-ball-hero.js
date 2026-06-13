@@ -44,7 +44,9 @@ const LittleBallHeroConstants = {
   PICK_TOP_PADDING: 72,
   TEACHER_START_NUMBER: 1,
   TEACHER_NUMBER_SPEED: 6.5,
-  TEACHER_NUMBER_HOMING: 0.12,
+  /** 已削弱：不再追踪，仅直线飞行 */
+  TEACHER_NUMBER_HOMING: 0,
+  TEACHER_NUMBER_LIFETIME_MS: 1400,
   /** 橙算球：叠乘伤害上限，防止数值溢出 */
   ORANGE_CALC_MAX_DAMAGE: 99999,
   ORANGE_CALC_FLASH_MS: 280,
@@ -355,7 +357,7 @@ class HeroRoster {
 }
 
 /**
- * 数字老师球追踪数字弹（伤害=数字值，命中后发射者数字+1）
+ * 数字老师球数字弹（伤害=数字值，命中后数字+1；已削弱为直线弹，不追踪）
  */
 class TeacherNumberProjectile {
   constructor(x, y, numberValue, ownerId, target, ownerFighter) {
@@ -368,31 +370,40 @@ class TeacherNumberProjectile {
     this.alive = true;
     this.radius = 16;
     this.damage = numberValue;
+    this.spawnTime = Date.now();
+
+    const dx = target.x - x;
+    const dy = target.y - y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      this.dirX = 1;
+      this.dirY = 0;
+    } else {
+      this.dirX = dx / dist;
+      this.dirY = dy / dist;
+    }
   }
 
   update() {
-    if (!this.target || !this.target.isAlive()) {
-      this.alive = false;
-      return;
-    }
-
-    const dx = this.target.x - this.x;
-    const dy = this.target.y - this.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 0.001) {
-      return;
-    }
-
     const speed = LittleBallHeroConstants.TEACHER_NUMBER_SPEED;
-    const homing = LittleBallHeroConstants.TEACHER_NUMBER_HOMING;
-    const dirX = dx / dist;
-    const dirY = dy / dist;
-    this.x += dirX * speed + dirX * homing * dist * 0.05;
-    this.y += dirY * speed + dirY * homing * dist * 0.05;
+    this.x += this.dirX * speed;
+    this.y += this.dirY * speed;
+
+    if (
+      Date.now() - this.spawnTime >
+      LittleBallHeroConstants.TEACHER_NUMBER_LIFETIME_MS
+    ) {
+      this.alive = false;
+    }
   }
 
-  isOutOfBounds() {
-    return false;
+  isOutOfBounds(arena) {
+    return (
+      this.x - this.radius < arena.left ||
+      this.x + this.radius > arena.right ||
+      this.y - this.radius < arena.top ||
+      this.y + this.radius > arena.bottom
+    );
   }
 
   draw(ctx) {
@@ -2752,7 +2763,7 @@ class LittleBallHeroGame {
       if (proj instanceof TeacherNumberProjectile) {
         proj.update();
 
-        if (!proj.alive) {
+        if (!proj.alive || proj.isOutOfBounds(this.arena)) {
           this.projectiles.splice(i, 1);
           continue;
         }
