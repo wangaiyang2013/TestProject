@@ -27,6 +27,11 @@ const WeaponBoxConstants = {
   MINE_RADIUS: 14,
   MINE_TRIGGER_RADIUS: 24,
   TRAP_MAX_LIFETIME_MS: 30000,
+  /** 匕首：共 3 次攻击，总伤害 3 点（每次 1 点真实伤害） */
+  DAGGER_HIT_COUNT: 3,
+  DAGGER_HIT_DAMAGE: 1,
+  DAGGER_HIT_INTERVAL_MS: 380,
+  DAGGER_MELEE_EXTRA_REACH: 30,
 };
 
 /**

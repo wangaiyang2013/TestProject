@@ -1306,6 +1306,7 @@ class HeroBallFighter {
     this.weaponPickupFlashUntil = 0;
     this.weaponUseFlashUntil = 0;
     this.weaponGrenadeFlashUntil = 0;
+    this.weaponDaggerSlashUntil = 0;
     this.lastWeaponUseTime = 0;
   }
 
@@ -2666,8 +2667,20 @@ class LittleBallHeroGame {
     MagnetSkillSystem.onBallContact(f1, f2, this.fighters, now);
     MagnetSkillSystem.onBallContact(f2, f1, this.fighters, now);
 
-    HeroAutoSkillSystem.tryUseSkill(f1, f2, this.projectiles, this.getProjectileRadius());
-    HeroAutoSkillSystem.tryUseSkill(f2, f1, this.projectiles, this.getProjectileRadius());
+    HeroAutoSkillSystem.tryUseSkill(
+      f1,
+      f2,
+      this.projectiles,
+      this.getProjectileRadius(),
+      this
+    );
+    HeroAutoSkillSystem.tryUseSkill(
+      f2,
+      f1,
+      this.projectiles,
+      this.getProjectileRadius(),
+      this
+    );
 
     ElementBurstSystem.updateOrbitBullets(f1, f2, this.fighters);
     ElementBurstSystem.updateOrbitBullets(f2, f1, this.fighters);
@@ -2838,7 +2851,7 @@ class LittleBallHeroGame {
               fighter.radius
             )
           ) {
-            fighter.takeDamage(proj.damage, proj.ownerFighter);
+            proj.onHitTarget(fighter, this.fighters);
             proj.alive = false;
             this.projectiles.splice(i, 1);
             break;
@@ -3011,7 +3024,7 @@ class LittleBallHeroGame {
     this.ctx.font = "13px system-ui, sans-serif";
     this.ctx.textAlign = "center";
     this.ctx.fillText(
-      "双球自动反弹对打 · 技能自动释放 · 武器箱每15秒刷新",
+      "双球自动反弹对打 · 武器箱：斯登/加特林/霰弹/巨鹰/火箭/C4/地雷",
       this.width / 2,
       this.arena.bottom + 28
     );
