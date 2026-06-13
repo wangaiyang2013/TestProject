@@ -986,6 +986,12 @@ class SpikeReflectSystem {
     if (skipReflect || !SpikeReflectSystem.isSpikeFighter(defender)) {
       return;
     }
+    if (
+      typeof ElementStatusEffectSystem !== "undefined" &&
+      ElementStatusEffectSystem.isAttackBlocked(defender)
+    ) {
+      return;
+    }
     if (!attacker || !attacker.isAlive() || attacker === defender) {
       return;
     }
@@ -1416,7 +1422,7 @@ class HeroBallFighter {
   canUseSkill(now) {
     if (
       typeof ElementStatusEffectSystem !== "undefined" &&
-      ElementStatusEffectSystem.isSkillBlocked(this)
+      ElementStatusEffectSystem.isAttackBlocked(this)
     ) {
       return false;
     }
@@ -1876,6 +1882,12 @@ class HeroAutoSkillSystem {
   static tryUseSkill(fighter, opponent, projectiles, projectileRadius, game) {
     const now = Date.now();
     if (!opponent || !opponent.isAlive()) {
+      return;
+    }
+    if (
+      typeof ElementStatusEffectSystem !== "undefined" &&
+      ElementStatusEffectSystem.isAttackBlocked(fighter)
+    ) {
       return;
     }
 
@@ -2721,26 +2733,56 @@ class LittleBallHeroGame {
     MagnetSkillSystem.onBallContact(f1, f2, this.fighters, now);
     MagnetSkillSystem.onBallContact(f2, f1, this.fighters, now);
 
-    HeroAutoSkillSystem.tryUseSkill(
-      f1,
-      f2,
-      this.projectiles,
-      this.getProjectileRadius(),
-      this
-    );
-    HeroAutoSkillSystem.tryUseSkill(
-      f2,
-      f1,
-      this.projectiles,
-      this.getProjectileRadius(),
-      this
-    );
+    if (
+      typeof ElementStatusEffectSystem === "undefined" ||
+      !ElementStatusEffectSystem.isAttackBlocked(f1)
+    ) {
+      HeroAutoSkillSystem.tryUseSkill(
+        f1,
+        f2,
+        this.projectiles,
+        this.getProjectileRadius(),
+        this
+      );
+    }
+    if (
+      typeof ElementStatusEffectSystem === "undefined" ||
+      !ElementStatusEffectSystem.isAttackBlocked(f2)
+    ) {
+      HeroAutoSkillSystem.tryUseSkill(
+        f2,
+        f1,
+        this.projectiles,
+        this.getProjectileRadius(),
+        this
+      );
+    }
 
-    ElementBurstSystem.updateOrbitBullets(f1, f2, this.fighters);
-    ElementBurstSystem.updateOrbitBullets(f2, f1, this.fighters);
+    if (
+      typeof ElementStatusEffectSystem === "undefined" ||
+      !ElementStatusEffectSystem.isAttackBlocked(f1)
+    ) {
+      ElementBurstSystem.updateOrbitBullets(f1, f2, this.fighters);
+    }
+    if (
+      typeof ElementStatusEffectSystem === "undefined" ||
+      !ElementStatusEffectSystem.isAttackBlocked(f2)
+    ) {
+      ElementBurstSystem.updateOrbitBullets(f2, f1, this.fighters);
+    }
 
-    IceRotSkillSystem.tick(f1, f2, now);
-    IceRotSkillSystem.tick(f2, f1, now);
+    if (
+      typeof ElementStatusEffectSystem === "undefined" ||
+      !ElementStatusEffectSystem.isAttackBlocked(f1)
+    ) {
+      IceRotSkillSystem.tick(f1, f2, now);
+    }
+    if (
+      typeof ElementStatusEffectSystem === "undefined" ||
+      !ElementStatusEffectSystem.isAttackBlocked(f2)
+    ) {
+      IceRotSkillSystem.tick(f2, f1, now);
+    }
 
     if (typeof WeaponBoxSpawnSystem !== "undefined") {
       WeaponBoxSpawnSystem.tick(this, now);
@@ -3184,7 +3226,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "近距重拳";
   }
   if (skillType === HeroSkillType.NUMBER_TEACHER) {
-    return "追踪数字";
+    return "直线数字(无追踪)";
   }
   if (skillType === HeroSkillType.SPIKE) {
     return "受击反伤×2(削弱)";

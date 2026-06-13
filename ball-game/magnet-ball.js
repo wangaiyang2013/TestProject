@@ -672,6 +672,12 @@ class MagnetSkillSystem {
     if (!MagnetSkillSystem.isMagnetFighter(fighter)) {
       return;
     }
+    if (
+      typeof ElementStatusEffectSystem !== "undefined" &&
+      ElementStatusEffectSystem.isAttackBlocked(fighter)
+    ) {
+      return;
+    }
 
     MagnetSkillSystem.tryAbsorbProjectiles(fighter, projectiles, now);
     MagnetSkillSystem.tryAbsorbMetalDefense(fighter, opponent, now);

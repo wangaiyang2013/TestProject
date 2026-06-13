@@ -127,6 +127,17 @@ class ElementStatusEffectSystem {
     return now < fighter.paralyzedUntil || now < fighter.silencedUntil;
   }
 
+  /** 冰冻或麻痹/沉默时无法发动攻击 */
+  static isAttackBlocked(fighter) {
+    if (!fighter) {
+      return true;
+    }
+    if (ElementStatusEffectSystem.isFrozen(fighter)) {
+      return true;
+    }
+    return ElementStatusEffectSystem.isSkillBlocked(fighter);
+  }
+
   static isFrozen(fighter) {
     return Date.now() < fighter.frozenUntil;
   }
@@ -152,7 +163,7 @@ class ElementStatusEffectSystem {
     fighter.frozenUntil = Date.now() + ElementBurstConstants.FREEZE_DURATION_MS;
     fighter.vx = 0;
     fighter.vy = 0;
-    ElementStatusEffectSystem.setStatusText(fighter, "冰冻");
+    ElementStatusEffectSystem.setStatusText(fighter, "冰冻·无法攻击");
   }
 
   static applyParalyze(fighter) {
@@ -359,6 +370,12 @@ class ElementBurstSystem {
   }
 
   static updateOrbitBullets(owner, opponent, allFighters) {
+    if (
+      typeof ElementStatusEffectSystem !== "undefined" &&
+      ElementStatusEffectSystem.isAttackBlocked(owner)
+    ) {
+      return;
+    }
     if (!owner.elementOrbitBullets || owner.elementOrbitBullets.length === 0) {
       return;
     }
