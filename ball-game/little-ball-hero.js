@@ -1301,6 +1301,12 @@ class HeroBallFighter {
     if (typeof ElementStatusEffectSystem !== "undefined") {
       ElementStatusEffectSystem.initFighter(this);
     }
+
+    this.weaponCharge = null;
+    this.weaponPickupFlashUntil = 0;
+    this.weaponUseFlashUntil = 0;
+    this.weaponGrenadeFlashUntil = 0;
+    this.lastWeaponUseTime = 0;
   }
 
   get maxHealth() {
@@ -1511,6 +1517,10 @@ class HeroBallFighter {
 
     if (typeof ElementStatusEffectSystem !== "undefined") {
       ElementStatusEffectSystem.drawStatus(ctx, this);
+    }
+
+    if (typeof WeaponBoxCombatSystem !== "undefined") {
+      WeaponBoxCombatSystem.drawFighterWeaponBadge(ctx, this);
     }
 
     if (Date.now() < this.ironCritHitFlashUntil) {
@@ -1810,11 +1820,55 @@ class ContinuousBouncePhysics {
 class HeroAutoSkillSystem {
   static tryUseSkill(fighter, opponent, projectiles, projectileRadius) {
     const now = Date.now();
-    if (!fighter.canUseSkill(now) || !opponent || !opponent.isAlive()) {
+    if (!opponent || !opponent.isAlive()) {
+      return;
+    }
+
+    if (
+      typeof WeaponBoxCombatSystem !== "undefined" &&
+      WeaponBoxCombatSystem.tryUseWeapon(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius,
+        now
+      )
+    ) {
       return;
     }
 
     const template = fighter.template;
+
+    if (template.skillType === HeroSkillType.SWORD_BLADE) {
+      SwordBladeSkillSystem.tickSlash(fighter, opponent, now);
+      if (fighter.canUseSkill(now)) {
+        fighter.markSkillUsed(now);
+        SwordBladeSkillSystem.activateUltimate(fighter);
+      }
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.ICE_ROT) {
+      if (!IceRotSkillSystem.isCrazyBurst(fighter) && fighter.canUseSkill(now)) {
+        fighter.markSkillUsed(now);
+        IceRotSkillSystem.fireIceBall(
+          fighter,
+          opponent,
+          projectiles,
+          projectileRadius
+        );
+      }
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.BROKEN_BLADE) {
+      BrokenBladeSkillSystem.tick(fighter, opponent, now);
+      return;
+    }
+
+    if (!fighter.canUseSkill(now)) {
+      return;
+    }
 
     if (template.skillType === HeroSkillType.SPIKE) {
       return;
@@ -1825,11 +1879,6 @@ class HeroAutoSkillSystem {
         fighter.markSkillUsed(now);
         HeroAutoSkillSystem.fireBoxingPunch(fighter, opponent, template.skillDamage);
       }
-      return;
-    }
-
-    if (template.skillType === HeroSkillType.BROKEN_BLADE) {
-      BrokenBladeSkillSystem.tick(fighter, opponent, now);
       return;
     }
 
@@ -2457,6 +2506,9 @@ class LittleBallHeroGame {
 
     this.phase = "battle";
     this.projectiles = [];
+    if (typeof WeaponBoxSpawnSystem !== "undefined") {
+      WeaponBoxSpawnSystem.initBattle(this);
+    }
     this.notifyPhase();
   }
 
@@ -2644,6 +2696,10 @@ class LittleBallHeroGame {
     IceRotSkillSystem.tick(f1, f2, now);
     IceRotSkillSystem.tick(f2, f1, now);
 
+    if (typeof WeaponBoxSpawnSystem !== "undefined") {
+      WeaponBoxSpawnSystem.tick(this, now);
+    }
+
     this.updateProjectiles();
 
     for (const fighter of this.fighters) {
@@ -2773,6 +2829,37 @@ class LittleBallHeroGame {
             )
           ) {
             IceRotSkillSystem.handleProjectileHit(fighter, proj);
+            proj.alive = false;
+            this.projectiles.splice(i, 1);
+            break;
+          }
+        }
+        continue;
+      }
+
+      if (proj instanceof WeaponBoxProjectile) {
+        proj.update();
+
+        if (!proj.alive || proj.isOutOfBounds(this.arena)) {
+          this.projectiles.splice(i, 1);
+          continue;
+        }
+
+        for (const fighter of this.fighters) {
+          if (fighter.playerId === proj.ownerId || !fighter.isAlive()) {
+            continue;
+          }
+          if (
+            CollisionDetector.circleHitsCircle(
+              proj.x,
+              proj.y,
+              proj.radius,
+              fighter.x,
+              fighter.y,
+              fighter.radius
+            )
+          ) {
+            fighter.takeDamage(proj.damage, proj.ownerFighter);
             proj.alive = false;
             this.projectiles.splice(i, 1);
             break;
@@ -2933,6 +3020,10 @@ class LittleBallHeroGame {
       }
     }
 
+    if (typeof WeaponBoxSpawnSystem !== "undefined") {
+      WeaponBoxSpawnSystem.draw(this.ctx, this);
+    }
+
     for (const proj of this.projectiles) {
       proj.draw(this.ctx);
     }
@@ -2941,7 +3032,7 @@ class LittleBallHeroGame {
     this.ctx.font = "13px system-ui, sans-serif";
     this.ctx.textAlign = "center";
     this.ctx.fillText(
-      "双球自动反弹对打 · 技能自动释放 · 你只需选球",
+      "双球自动反弹对打 · 技能自动释放 · 武器箱每15秒刷新",
       this.width / 2,
       this.arena.bottom + 28
     );
