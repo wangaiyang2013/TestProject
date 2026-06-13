@@ -1,5 +1,5 @@
 /**
- * 小球英雄战场武器箱：每 15 秒在随机位置刷新，球捡到后可发动武器攻击
+ * 小球英雄战场武器箱：每 15 秒刷新，可开出多种枪械与爆炸物
  */
 
 const WeaponBoxConstants = {
@@ -8,26 +8,55 @@ const WeaponBoxConstants = {
   SPAWN_EDGE_PADDING: 52,
   PICKUP_FLASH_MS: 700,
   WEAPON_USE_INTERVAL_MS: 900,
-  LASER_DAMAGE: 28,
-  HAMMER_DAMAGE: 32,
-  GRENADE_DAMAGE: 24,
-  GRENADE_BLAST_RADIUS: 64,
   PROJECTILE_SPEED: 12,
   PROJECTILE_LIFETIME_MS: 1100,
+  STEN_BURST_COUNT: 4,
+  STEN_DAMAGE: 7,
+  GATLING_BURST_COUNT: 8,
+  GATLING_DAMAGE: 5,
+  SHOTGUN_PELLET_COUNT: 5,
+  SHOTGUN_SPREAD_ANGLE: 0.38,
+  SHOTGUN_DAMAGE: 8,
+  DESERT_EAGLE_DAMAGE: 38,
+  ROCKET_DAMAGE: 42,
+  ROCKET_BLAST_RADIUS: 72,
+  C4_DAMAGE: 45,
+  C4_BLAST_RADIUS: 70,
+  C4_DELAY_MS: 1500,
+  MINE_DAMAGE: 36,
+  MINE_RADIUS: 14,
+  MINE_TRIGGER_RADIUS: 24,
+  TRAP_MAX_LIFETIME_MS: 30000,
 };
 
 /**
- * 武器箱可开出的武器类型
+ * 武器箱武器类型
  */
 class WeaponType {
-  static LASER = "laser";
+  static STEN = "sten";
 
-  static HAMMER = "hammer";
+  static GATLING = "gatling";
 
-  static GRENADE = "grenade";
+  static SHOTGUN = "shotgun";
+
+  static DESERT_EAGLE = "desert_eagle";
+
+  static ROCKET = "rocket";
+
+  static C4 = "c4";
+
+  static MINE = "mine";
 
   static getAll() {
-    return [WeaponType.LASER, WeaponType.HAMMER, WeaponType.GRENADE];
+    return [
+      WeaponType.STEN,
+      WeaponType.GATLING,
+      WeaponType.SHOTGUN,
+      WeaponType.DESERT_EAGLE,
+      WeaponType.ROCKET,
+      WeaponType.C4,
+      WeaponType.MINE,
+    ];
   }
 
   static rollRandom() {
@@ -37,31 +66,52 @@ class WeaponType {
 
   static getLabel(weaponType) {
     const labels = {
-      [WeaponType.LASER]: "激光炮",
-      [WeaponType.HAMMER]: "巨锤",
-      [WeaponType.GRENADE]: "榴弹",
+      [WeaponType.STEN]: "斯登",
+      [WeaponType.GATLING]: "加特林",
+      [WeaponType.SHOTGUN]: "霰弹枪",
+      [WeaponType.DESERT_EAGLE]: "沙漠巨鹰",
+      [WeaponType.ROCKET]: "火箭筒",
+      [WeaponType.C4]: "C4炸弹",
+      [WeaponType.MINE]: "地雷",
     };
     return labels[weaponType] || "武器";
   }
 
+  static getShortLabel(weaponType) {
+    const labels = {
+      [WeaponType.STEN]: "斯",
+      [WeaponType.GATLING]: "林",
+      [WeaponType.SHOTGUN]: "霰",
+      [WeaponType.DESERT_EAGLE]: "鹰",
+      [WeaponType.ROCKET]: "筒",
+      [WeaponType.C4]: "C4",
+      [WeaponType.MINE]: "雷",
+    };
+    return labels[weaponType] || "武";
+  }
+
   static getDamage(weaponType) {
-    if (weaponType === WeaponType.LASER) {
-      return WeaponBoxConstants.LASER_DAMAGE;
-    }
-    if (weaponType === WeaponType.HAMMER) {
-      return WeaponBoxConstants.HAMMER_DAMAGE;
-    }
-    if (weaponType === WeaponType.GRENADE) {
-      return WeaponBoxConstants.GRENADE_DAMAGE;
-    }
-    return 20;
+    const damageMap = {
+      [WeaponType.STEN]: WeaponBoxConstants.STEN_DAMAGE,
+      [WeaponType.GATLING]: WeaponBoxConstants.GATLING_DAMAGE,
+      [WeaponType.SHOTGUN]: WeaponBoxConstants.SHOTGUN_DAMAGE,
+      [WeaponType.DESERT_EAGLE]: WeaponBoxConstants.DESERT_EAGLE_DAMAGE,
+      [WeaponType.ROCKET]: WeaponBoxConstants.ROCKET_DAMAGE,
+      [WeaponType.C4]: WeaponBoxConstants.C4_DAMAGE,
+      [WeaponType.MINE]: WeaponBoxConstants.MINE_DAMAGE,
+    };
+    return damageMap[weaponType] || 20;
   }
 
   static getColor(weaponType) {
     const colors = {
-      [WeaponType.LASER]: "#ff6b6b",
-      [WeaponType.HAMMER]: "#fcc419",
-      [WeaponType.GRENADE]: "#51cf66",
+      [WeaponType.STEN]: "#868e96",
+      [WeaponType.GATLING]: "#e03131",
+      [WeaponType.SHOTGUN]: "#f08c00",
+      [WeaponType.DESERT_EAGLE]: "#fcc419",
+      [WeaponType.ROCKET]: "#ff6b6b",
+      [WeaponType.C4]: "#51cf66",
+      [WeaponType.MINE]: "#845ef7",
     };
     return colors[weaponType] || "#dee2e6";
   }
@@ -135,11 +185,11 @@ class WeaponBox {
     ctx.font = "bold 9px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("箱", this.x, this.y - 3);
+    ctx.fillText("箱", this.x, this.y - 4);
     ctx.fillStyle = color;
-    ctx.font = "8px system-ui, sans-serif";
+    ctx.font = "bold 8px system-ui, sans-serif";
     ctx.fillText(
-      WeaponType.getLabel(this.weaponType).charAt(0),
+      WeaponType.getShortLabel(this.weaponType),
       this.x,
       this.y + 7
     );
@@ -149,26 +199,30 @@ class WeaponBox {
 }
 
 /**
- * 武器箱投射物（激光炮）
+ * 武器箱子弹/火箭投射物
  */
 class WeaponBoxProjectile {
-  constructor(x, y, dirX, dirY, ownerId, damage, color, ownerFighter) {
+  constructor(x, y, dirX, dirY, ownerId, damage, color, ownerFighter, options) {
+    const config = options || {};
     this.x = x;
     this.y = y;
     this.dirX = dirX;
     this.dirY = dirY;
-    this.radius = 9;
+    this.radius = config.radius || 8;
+    this.speed = config.speed || WeaponBoxConstants.PROJECTILE_SPEED;
     this.ownerId = ownerId;
     this.ownerFighter = ownerFighter;
     this.damage = damage;
     this.color = color;
     this.alive = true;
     this.spawnTime = Date.now();
+    this.isRocket = config.isRocket === true;
+    this.blastRadius = config.blastRadius || 0;
   }
 
   update() {
-    this.x += this.dirX * WeaponBoxConstants.PROJECTILE_SPEED;
-    this.y += this.dirY * WeaponBoxConstants.PROJECTILE_SPEED;
+    this.x += this.dirX * this.speed;
+    this.y += this.dirY * this.speed;
     if (
       Date.now() - this.spawnTime >
       WeaponBoxConstants.PROJECTILE_LIFETIME_MS
@@ -184,6 +238,21 @@ class WeaponBoxProjectile {
       this.y - this.radius < arena.top ||
       this.y + this.radius > arena.bottom
     );
+  }
+
+  onHitTarget(target, fighters) {
+    if (this.isRocket) {
+      WeaponBoxCombatSystem.applyBlastDamage(
+        this.x,
+        this.y,
+        this.blastRadius,
+        this.damage,
+        this.ownerFighter,
+        fighters
+      );
+      return;
+    }
+    target.takeDamage(this.damage, this.ownerFighter);
   }
 
   draw(ctx) {
@@ -202,6 +271,72 @@ class WeaponBoxProjectile {
 }
 
 /**
+ * 场上陷阱：C4 / 地雷
+ */
+class WeaponFieldTrap {
+  constructor(trapType, x, y, ownerId, ownerFighter) {
+    this.trapType = trapType;
+    this.x = x;
+    this.y = y;
+    this.ownerId = ownerId;
+    this.ownerFighter = ownerFighter;
+    this.alive = true;
+    this.spawnTime = Date.now();
+    this.detonateAt =
+      trapType === WeaponType.C4
+        ? Date.now() + WeaponBoxConstants.C4_DELAY_MS
+        : 0;
+    this.radius =
+      trapType === WeaponType.MINE
+        ? WeaponBoxConstants.MINE_RADIUS
+        : 12;
+    this.triggerRadius =
+      trapType === WeaponType.MINE
+        ? WeaponBoxConstants.MINE_TRIGGER_RADIUS
+        : WeaponBoxConstants.C4_BLAST_RADIUS;
+  }
+
+  isExpired(now) {
+    return now - this.spawnTime > WeaponBoxConstants.TRAP_MAX_LIFETIME_MS;
+  }
+
+  draw(ctx) {
+    if (!this.alive) {
+      return;
+    }
+
+    const color = WeaponType.getColor(this.trapType);
+    if (this.trapType === WeaponType.C4) {
+      ctx.fillStyle = "#2b8a3e";
+      ctx.fillRect(this.x - 10, this.y - 8, 20, 16);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(this.x - 10, this.y - 8, 20, 16);
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 9px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("C4", this.x, this.y);
+    } else {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.fillStyle = "#343a40";
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.font = "bold 8px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("雷", this.x, this.y);
+    }
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+  }
+}
+
+/**
  * 武器攻击结算
  */
 class WeaponBoxCombatSystem {
@@ -209,14 +344,17 @@ class WeaponBoxCombatSystem {
     return !!(fighter && fighter.weaponCharge);
   }
 
-  static tryUseWeapon(fighter, opponent, projectiles, projectileRadius, now) {
+  static tryUseWeapon(fighter, opponent, projectiles, projectileRadius, now, game) {
     if (!WeaponBoxCombatSystem.hasWeapon(fighter)) {
       return false;
     }
     if (!opponent || !opponent.isAlive()) {
       return false;
     }
-    if (fighter.lastWeaponUseTime && now - fighter.lastWeaponUseTime < WeaponBoxConstants.WEAPON_USE_INTERVAL_MS) {
+    if (
+      fighter.lastWeaponUseTime &&
+      now - fighter.lastWeaponUseTime < WeaponBoxConstants.WEAPON_USE_INTERVAL_MS
+    ) {
       return false;
     }
 
@@ -225,19 +363,14 @@ class WeaponBoxCombatSystem {
     fighter.weaponCharge = null;
     fighter.weaponUseFlashUntil = now + WeaponBoxConstants.PICKUP_FLASH_MS;
 
-    if (charge.weaponType === WeaponType.LASER) {
-      WeaponBoxCombatSystem.fireLaser(
-        fighter,
-        opponent,
-        projectiles,
-        projectileRadius,
-        charge.damage
-      );
-    } else if (charge.weaponType === WeaponType.HAMMER) {
-      WeaponBoxCombatSystem.fireHammer(fighter, opponent, charge.damage);
-    } else if (charge.weaponType === WeaponType.GRENADE) {
-      WeaponBoxCombatSystem.fireGrenade(fighter, opponent, charge.damage);
-    }
+    WeaponBoxCombatSystem.fireWeapon(
+      fighter,
+      opponent,
+      projectiles,
+      projectileRadius,
+      charge,
+      game
+    );
 
     if (typeof ElementStatusEffectSystem !== "undefined") {
       ElementStatusEffectSystem.setStatusText(fighter, charge.label);
@@ -245,58 +378,213 @@ class WeaponBoxCombatSystem {
     return true;
   }
 
-  static fireLaser(fighter, opponent, projectiles, projectileRadius, damage) {
+  static fireWeapon(fighter, opponent, projectiles, projectileRadius, charge, game) {
+    const type = charge.weaponType;
+
+    if (type === WeaponType.STEN) {
+      WeaponBoxCombatSystem.fireBurst(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius,
+        WeaponBoxConstants.STEN_BURST_COUNT,
+        WeaponBoxConstants.STEN_DAMAGE,
+        WeaponType.getColor(type),
+        0.06
+      );
+      return;
+    }
+    if (type === WeaponType.GATLING) {
+      WeaponBoxCombatSystem.fireBurst(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius,
+        WeaponBoxConstants.GATLING_BURST_COUNT,
+        WeaponBoxConstants.GATLING_DAMAGE,
+        WeaponType.getColor(type),
+        0.12
+      );
+      return;
+    }
+    if (type === WeaponType.SHOTGUN) {
+      WeaponBoxCombatSystem.fireShotgun(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius,
+        charge.damage
+      );
+      return;
+    }
+    if (type === WeaponType.DESERT_EAGLE) {
+      WeaponBoxCombatSystem.fireProjectile(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius,
+        charge.damage,
+        WeaponType.getColor(type),
+        { radius: 10, speed: 14 }
+      );
+      return;
+    }
+    if (type === WeaponType.ROCKET) {
+      WeaponBoxCombatSystem.fireProjectile(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius,
+        charge.damage,
+        WeaponType.getColor(type),
+        {
+          radius: 11,
+          speed: 10,
+          isRocket: true,
+          blastRadius: WeaponBoxConstants.ROCKET_BLAST_RADIUS,
+        }
+      );
+      return;
+    }
+    if (type === WeaponType.C4) {
+      WeaponBoxTrapSystem.placeTrap(
+        game,
+        WeaponType.C4,
+        opponent.x,
+        opponent.y,
+        fighter
+      );
+      return;
+    }
+    if (type === WeaponType.MINE) {
+      WeaponBoxTrapSystem.placeTrap(
+        game,
+        WeaponType.MINE,
+        fighter.x,
+        fighter.y,
+        fighter
+      );
+    }
+  }
+
+  static getAimDirection(fighter, opponent) {
     const dx = opponent.x - fighter.x;
     const dy = opponent.y - fighter.y;
     const dist = Math.hypot(dx, dy);
     if (dist < 0.001) {
-      return;
+      return { dirX: 1, dirY: 0 };
     }
-    const dirX = dx / dist;
-    const dirY = dy / dist;
+    return { dirX: dx / dist, dirY: dy / dist };
+  }
+
+  static fireProjectile(
+    fighter,
+    opponent,
+    projectiles,
+    projectileRadius,
+    damage,
+    color,
+    options
+  ) {
+    const aim = WeaponBoxCombatSystem.getAimDirection(fighter, opponent);
     const offset = fighter.radius + projectileRadius + 4;
     projectiles.push(
       new WeaponBoxProjectile(
-        fighter.x + dirX * offset,
-        fighter.y + dirY * offset,
-        dirX,
-        dirY,
+        fighter.x + aim.dirX * offset,
+        fighter.y + aim.dirY * offset,
+        aim.dirX,
+        aim.dirY,
         fighter.playerId,
         damage,
-        WeaponType.getColor(WeaponType.LASER),
-        fighter
+        color,
+        fighter,
+        options
       )
     );
   }
 
-  static fireHammer(fighter, opponent, damage) {
-    const dx = opponent.x - fighter.x;
-    const dy = opponent.y - fighter.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 0.001) {
-      return;
-    }
-    const nx = dx / dist;
-    const ny = dy / dist;
-    const reach = fighter.radius + opponent.radius + 36;
-    if (dist <= reach) {
-      opponent.takeDamage(damage, fighter);
-      opponent.vx += nx * 4;
-      opponent.vy += ny * 4;
-      fighter.vx -= nx * 1.2;
-      fighter.vy -= ny * 1.2;
-      ContinuousBouncePhysics.maintainSpeed(fighter);
-      ContinuousBouncePhysics.maintainSpeed(opponent);
+  static fireBurst(
+    fighter,
+    opponent,
+    projectiles,
+    projectileRadius,
+    count,
+    damage,
+    color,
+    spread
+  ) {
+    const aim = WeaponBoxCombatSystem.getAimDirection(fighter, opponent);
+    const baseAngle = Math.atan2(aim.dirY, aim.dirX);
+    const offset = fighter.radius + projectileRadius + 4;
+
+    for (let i = 0; i < count; i += 1) {
+      const angleOffset = (i - (count - 1) / 2) * spread;
+      const angle = baseAngle + angleOffset;
+      const dirX = Math.cos(angle);
+      const dirY = Math.sin(angle);
+      projectiles.push(
+        new WeaponBoxProjectile(
+          fighter.x + dirX * offset,
+          fighter.y + dirY * offset,
+          dirX,
+          dirY,
+          fighter.playerId,
+          damage,
+          color,
+          fighter,
+          { radius: 6, speed: 13 }
+        )
+      );
     }
   }
 
-  static fireGrenade(fighter, opponent, damage) {
-    const blastRadius = WeaponBoxConstants.GRENADE_BLAST_RADIUS;
-    const dist = Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y);
-    if (dist <= blastRadius + opponent.radius) {
-      opponent.takeDamage(damage, fighter);
+  static fireShotgun(
+    fighter,
+    opponent,
+    projectiles,
+    projectileRadius,
+    damage
+  ) {
+    const aim = WeaponBoxCombatSystem.getAimDirection(fighter, opponent);
+    const baseAngle = Math.atan2(aim.dirY, aim.dirX);
+    const offset = fighter.radius + projectileRadius + 4;
+    const spread = WeaponBoxConstants.SHOTGUN_SPREAD_ANGLE;
+    const count = WeaponBoxConstants.SHOTGUN_PELLET_COUNT;
+
+    for (let i = 0; i < count; i += 1) {
+      const angleOffset = (i - (count - 1) / 2) * spread;
+      const angle = baseAngle + angleOffset;
+      const dirX = Math.cos(angle);
+      const dirY = Math.sin(angle);
+      projectiles.push(
+        new WeaponBoxProjectile(
+          fighter.x + dirX * offset,
+          fighter.y + dirY * offset,
+          dirX,
+          dirY,
+          fighter.playerId,
+          damage,
+          WeaponType.getColor(WeaponType.SHOTGUN),
+          fighter,
+          { radius: 5, speed: 11 }
+        )
+      );
     }
-    fighter.weaponGrenadeFlashUntil = Date.now() + 320;
+  }
+
+  static applyBlastDamage(centerX, centerY, blastRadius, damage, attacker, fighters) {
+    for (const fighter of fighters) {
+      if (!fighter.isAlive()) {
+        continue;
+      }
+      if (attacker && fighter.playerId === attacker.playerId) {
+        continue;
+      }
+      const dist = Math.hypot(fighter.x - centerX, fighter.y - centerY);
+      if (dist <= blastRadius + fighter.radius) {
+        fighter.takeDamage(damage, attacker);
+      }
+    }
   }
 
   static drawFighterWeaponBadge(ctx, fighter) {
@@ -327,13 +615,110 @@ class WeaponBoxCombatSystem {
       ctx.lineWidth = 3;
       ctx.stroke();
     }
+  }
+}
 
-    if (Date.now() < fighter.weaponGrenadeFlashUntil) {
-      ctx.beginPath();
-      ctx.arc(fighter.x, fighter.y, WeaponBoxConstants.GRENADE_BLAST_RADIUS, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(81, 207, 102, 0.45)";
-      ctx.lineWidth = 3;
-      ctx.stroke();
+/**
+ * C4 / 地雷陷阱系统
+ */
+class WeaponBoxTrapSystem {
+  static initBattle(game) {
+    game.weaponTraps = [];
+  }
+
+  static placeTrap(game, trapType, x, y, ownerFighter) {
+    if (!game.weaponTraps) {
+      game.weaponTraps = [];
+    }
+    game.weaponTraps.push(
+      new WeaponFieldTrap(trapType, x, y, ownerFighter.playerId, ownerFighter)
+    );
+  }
+
+  static tick(game, now) {
+    if (!game || !game.weaponTraps || game.phase !== "battle") {
+      return;
+    }
+
+    for (let i = game.weaponTraps.length - 1; i >= 0; i -= 1) {
+      const trap = game.weaponTraps[i];
+      if (!trap.alive || trap.isExpired(now)) {
+        game.weaponTraps.splice(i, 1);
+        continue;
+      }
+
+      if (trap.trapType === WeaponType.C4 && now >= trap.detonateAt) {
+        WeaponBoxTrapSystem.detonateTrap(game, trap);
+        game.weaponTraps.splice(i, 1);
+        continue;
+      }
+
+      if (trap.trapType === WeaponType.MINE) {
+        WeaponBoxTrapSystem.tryTriggerMine(game, trap);
+        if (!trap.alive) {
+          game.weaponTraps.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  static detonateTrap(game, trap) {
+    const damage =
+      trap.trapType === WeaponType.C4
+        ? WeaponBoxConstants.C4_DAMAGE
+        : WeaponBoxConstants.MINE_DAMAGE;
+    const radius =
+      trap.trapType === WeaponType.C4
+        ? WeaponBoxConstants.C4_BLAST_RADIUS
+        : WeaponBoxConstants.MINE_TRIGGER_RADIUS;
+
+    WeaponBoxCombatSystem.applyBlastDamage(
+      trap.x,
+      trap.y,
+      radius,
+      damage,
+      trap.ownerFighter,
+      game.fighters
+    );
+    trap.alive = false;
+
+    if (typeof ElementStatusEffectSystem !== "undefined") {
+      for (const fighter of game.fighters) {
+        const dist = Math.hypot(fighter.x - trap.x, fighter.y - trap.y);
+        if (dist <= radius + fighter.radius) {
+          ElementStatusEffectSystem.setStatusText(fighter, "爆炸");
+        }
+      }
+    }
+  }
+
+  static tryTriggerMine(game, trap) {
+    for (const fighter of game.fighters) {
+      if (!fighter.isAlive() || fighter.playerId === trap.ownerId) {
+        continue;
+      }
+      if (
+        CollisionDetector.circleHitsCircle(
+          fighter.x,
+          fighter.y,
+          fighter.radius,
+          trap.x,
+          trap.y,
+          trap.triggerRadius
+        )
+      ) {
+        WeaponBoxTrapSystem.detonateTrap(game, trap);
+        return;
+      }
+    }
+  }
+
+  static draw(ctx, game) {
+    if (!game.weaponTraps) {
+      return;
+    }
+    for (const trap of game.weaponTraps) {
+      trap.draw(ctx);
     }
   }
 }
@@ -345,6 +730,7 @@ class WeaponBoxSpawnSystem {
   static initBattle(game) {
     game.weaponBox = null;
     game.lastWeaponBoxSpawnAt = Date.now();
+    WeaponBoxTrapSystem.initBattle(game);
     WeaponBoxSpawnSystem.spawnBox(game);
   }
 
@@ -359,6 +745,7 @@ class WeaponBoxSpawnSystem {
     }
 
     WeaponBoxSpawnSystem.tryPickup(game);
+    WeaponBoxTrapSystem.tick(game, now);
   }
 
   static spawnBox(game) {
@@ -420,5 +807,6 @@ class WeaponBoxSpawnSystem {
     if (game.weaponBox && game.weaponBox.alive) {
       game.weaponBox.draw(ctx);
     }
+    WeaponBoxTrapSystem.draw(ctx, game);
   }
 }

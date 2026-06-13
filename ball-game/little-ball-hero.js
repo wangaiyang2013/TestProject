@@ -1818,7 +1818,7 @@ class ContinuousBouncePhysics {
  * 自动技能系统
  */
 class HeroAutoSkillSystem {
-  static tryUseSkill(fighter, opponent, projectiles, projectileRadius) {
+  static tryUseSkill(fighter, opponent, projectiles, projectileRadius, game) {
     const now = Date.now();
     if (!opponent || !opponent.isAlive()) {
       return;
@@ -1831,7 +1831,8 @@ class HeroAutoSkillSystem {
         opponent,
         projectiles,
         projectileRadius,
-        now
+        now,
+        game
       )
     ) {
       return;
@@ -1941,28 +1942,6 @@ class HeroAutoSkillSystem {
         projectiles,
         projectileRadius
       );
-      return;
-    }
-
-    if (template.skillType === HeroSkillType.SWORD_BLADE) {
-      SwordBladeSkillSystem.tickSlash(fighter, opponent, now);
-      if (fighter.canUseSkill(now)) {
-        fighter.markSkillUsed(now);
-        SwordBladeSkillSystem.activateUltimate(fighter);
-      }
-      return;
-    }
-
-    if (template.skillType === HeroSkillType.ICE_ROT) {
-      if (!IceRotSkillSystem.isCrazyBurst(fighter) && fighter.canUseSkill(now)) {
-        fighter.markSkillUsed(now);
-        IceRotSkillSystem.fireIceBall(
-          fighter,
-          opponent,
-          projectiles,
-          projectileRadius
-        );
-      }
       return;
     }
 
