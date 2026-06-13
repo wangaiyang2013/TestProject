@@ -52,6 +52,8 @@ class WeaponType {
 
   static MINE = "mine";
 
+  static DAGGER = "dagger";
+
   static getAll() {
     return [
       WeaponType.STEN,
@@ -61,6 +63,7 @@ class WeaponType {
       WeaponType.ROCKET,
       WeaponType.C4,
       WeaponType.MINE,
+      WeaponType.DAGGER,
     ];
   }
 
@@ -78,6 +81,7 @@ class WeaponType {
       [WeaponType.ROCKET]: "火箭筒",
       [WeaponType.C4]: "C4炸弹",
       [WeaponType.MINE]: "地雷",
+      [WeaponType.DAGGER]: "匕首",
     };
     return labels[weaponType] || "武器";
   }
@@ -91,6 +95,7 @@ class WeaponType {
       [WeaponType.ROCKET]: "筒",
       [WeaponType.C4]: "C4",
       [WeaponType.MINE]: "雷",
+      [WeaponType.DAGGER]: "匕",
     };
     return labels[weaponType] || "武";
   }
@@ -104,6 +109,7 @@ class WeaponType {
       [WeaponType.ROCKET]: WeaponBoxConstants.ROCKET_DAMAGE,
       [WeaponType.C4]: WeaponBoxConstants.C4_DAMAGE,
       [WeaponType.MINE]: WeaponBoxConstants.MINE_DAMAGE,
+      [WeaponType.DAGGER]: WeaponBoxConstants.DAGGER_HIT_DAMAGE,
     };
     return damageMap[weaponType] || 20;
   }
@@ -117,6 +123,7 @@ class WeaponType {
       [WeaponType.ROCKET]: "#ff6b6b",
       [WeaponType.C4]: "#51cf66",
       [WeaponType.MINE]: "#845ef7",
+      [WeaponType.DAGGER]: "#ced4da",
     };
     return colors[weaponType] || "#dee2e6";
   }
@@ -131,6 +138,10 @@ class FighterWeaponCharge {
     this.damage = WeaponType.getDamage(weaponType);
     this.label = WeaponType.getLabel(weaponType);
     this.acquiredAt = Date.now();
+    if (weaponType === WeaponType.DAGGER) {
+      this.hitsRemaining = WeaponBoxConstants.DAGGER_HIT_COUNT;
+      this.totalDamage = WeaponBoxConstants.DAGGER_HIT_COUNT * WeaponBoxConstants.DAGGER_HIT_DAMAGE;
+    }
   }
 }
 
@@ -356,6 +367,37 @@ class WeaponBoxCombatSystem {
     if (!opponent || !opponent.isAlive()) {
       return false;
     }
+
+    const charge = fighter.weaponCharge;
+
+    if (charge.weaponType === WeaponType.DAGGER) {
+      if (
+        fighter.lastWeaponUseTime &&
+        now - fighter.lastWeaponUseTime < WeaponBoxConstants.DAGGER_HIT_INTERVAL_MS
+      ) {
+        return false;
+      }
+      const struck = WeaponBoxCombatSystem.fireDaggerStrike(fighter, opponent);
+      if (!struck) {
+        return false;
+      }
+      fighter.lastWeaponUseTime = now;
+      charge.hitsRemaining -= 1;
+      fighter.weaponUseFlashUntil = now + WeaponBoxConstants.PICKUP_FLASH_MS;
+      fighter.weaponDaggerSlashUntil = now + 220;
+      if (charge.hitsRemaining <= 0) {
+        fighter.weaponCharge = null;
+      }
+      if (typeof ElementStatusEffectSystem !== "undefined") {
+        const left = charge.hitsRemaining;
+        ElementStatusEffectSystem.setStatusText(
+          fighter,
+          left > 0 ? `匕首剩${left}击` : "匕首3伤打完"
+        );
+      }
+      return true;
+    }
+
     if (
       fighter.lastWeaponUseTime &&
       now - fighter.lastWeaponUseTime < WeaponBoxConstants.WEAPON_USE_INTERVAL_MS
@@ -363,7 +405,6 @@ class WeaponBoxCombatSystem {
       return false;
     }
 
-    const charge = fighter.weaponCharge;
     fighter.lastWeaponUseTime = now;
     fighter.weaponCharge = null;
     fighter.weaponUseFlashUntil = now + WeaponBoxConstants.PICKUP_FLASH_MS;
@@ -469,7 +510,48 @@ class WeaponBoxCombatSystem {
         fighter.y,
         fighter
       );
+      return;
     }
+    if (type === WeaponType.DAGGER) {
+      WeaponBoxCombatSystem.fireDaggerStrike(fighter, opponent);
+    }
+  }
+
+  /**
+   * 匕首突刺：真实伤害（无视减伤/防具），不触发尖刺反伤
+   * 弱点：总伤害仅 3 点；优势：尽可能全额结算不被抵消
+   */
+  static fireDaggerStrike(fighter, opponent) {
+    const dx = opponent.x - fighter.x;
+    const dy = opponent.y - fighter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return false;
+    }
+
+    const reach =
+      fighter.radius +
+      opponent.radius +
+      WeaponBoxConstants.DAGGER_MELEE_EXTRA_REACH;
+    if (dist > reach) {
+      return false;
+    }
+
+    const nx = dx / dist;
+    const ny = dy / dist;
+    opponent.takeDamage(
+      WeaponBoxConstants.DAGGER_HIT_DAMAGE,
+      fighter,
+      true,
+      true
+    );
+    opponent.vx += nx * 1.2;
+    opponent.vy += ny * 1.2;
+    fighter.vx -= nx * 0.4;
+    fighter.vy -= ny * 0.4;
+    ContinuousBouncePhysics.maintainSpeed(fighter);
+    ContinuousBouncePhysics.maintainSpeed(opponent);
+    return true;
   }
 
   static getAimDirection(fighter, opponent) {
@@ -597,12 +679,32 @@ class WeaponBoxCombatSystem {
       ctx.fillStyle = WeaponType.getColor(fighter.weaponCharge.weaponType);
       ctx.font = "bold 9px system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(
-        fighter.weaponCharge.label,
-        fighter.x,
-        fighter.y - fighter.radius - 34
-      );
+      let badgeText = fighter.weaponCharge.label;
+      if (
+        fighter.weaponCharge.weaponType === WeaponType.DAGGER &&
+        fighter.weaponCharge.hitsRemaining
+      ) {
+        badgeText = `匕首×${fighter.weaponCharge.hitsRemaining}`;
+      }
+      ctx.fillText(badgeText, fighter.x, fighter.y - fighter.radius - 34);
       ctx.textAlign = "left";
+    }
+
+    if (Date.now() < fighter.weaponDaggerSlashUntil) {
+      const angle = Math.atan2(
+        fighter.vy || 0.001,
+        fighter.vx || 1
+      );
+      const reach = fighter.radius + 22;
+      ctx.strokeStyle = "#f8f9fa";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(fighter.x, fighter.y);
+      ctx.lineTo(
+        fighter.x + Math.cos(angle) * reach,
+        fighter.y + Math.sin(angle) * reach
+      );
+      ctx.stroke();
     }
 
     if (Date.now() < fighter.weaponPickupFlashUntil) {
