@@ -903,21 +903,37 @@ class IronWallSkillSystem {
 }
 
 /**
- * 橙算球技能：每次攻击后，下次攻击伤害 = 基础伤害 × 上次攻击伤害
+ * 橙算球技能：每次攻击后，下次攻击伤害 = 基础伤害 × 上次攻击伤害（每局最多叠乘2次）
  */
 class OrangeCalcSkillSystem {
   static initFighter(fighter) {
     fighter.orangeCalcLastDamage = 0;
     fighter.orangeCalcFlashUntil = 0;
+    fighter.orangeCalcMultiplyUsed = 0;
   }
 
   static isOrangeCalcFighter(fighter) {
     return fighter && fighter.template.skillType === HeroSkillType.ORANGE_CALC;
   }
 
+  static canMultiply(fighter) {
+    return (
+      fighter.orangeCalcMultiplyUsed <
+      LittleBallHeroConstants.ORANGE_CALC_MAX_MULTIPLY_COUNT
+    );
+  }
+
+  static getMultiplyRemaining(fighter) {
+    return Math.max(
+      0,
+      LittleBallHeroConstants.ORANGE_CALC_MAX_MULTIPLY_COUNT -
+        fighter.orangeCalcMultiplyUsed
+    );
+  }
+
   static computeAttackDamage(fighter, baseDamage) {
     const lastDamage = fighter.orangeCalcLastDamage || 0;
-    if (lastDamage <= 0) {
+    if (lastDamage <= 0 || !OrangeCalcSkillSystem.canMultiply(fighter)) {
       return baseDamage;
     }
 
@@ -928,7 +944,16 @@ class OrangeCalcSkillSystem {
     );
   }
 
-  static recordAttackDamage(fighter, attackDamage) {
+  static recordAttackDamage(fighter, attackDamage, baseDamage) {
+    const didMultiply =
+      OrangeCalcSkillSystem.canMultiply(fighter) &&
+      (fighter.orangeCalcLastDamage || 0) > 0 &&
+      attackDamage > baseDamage;
+
+    if (didMultiply) {
+      fighter.orangeCalcMultiplyUsed += 1;
+    }
+
     fighter.orangeCalcLastDamage = attackDamage;
     fighter.orangeCalcFlashUntil =
       Date.now() + LittleBallHeroConstants.ORANGE_CALC_FLASH_MS;
@@ -943,14 +968,19 @@ class OrangeCalcSkillSystem {
       fighter,
       fighter.template.skillDamage
     );
+    const multiplyLeft = OrangeCalcSkillSystem.getMultiplyRemaining(fighter);
     const badgeY = fighter.y - fighter.radius - 16;
     ctx.fillStyle = "rgba(26, 26, 46, 0.85)";
-    ctx.fillRect(fighter.x - 22, badgeY - 10, 44, 20);
-    ctx.fillStyle = "#ffc078";
+    ctx.fillRect(fighter.x - 26, badgeY - 10, 52, 20);
+    ctx.fillStyle = multiplyLeft > 0 ? "#ffc078" : "#868e96";
     ctx.font = "bold 11px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`×${preview}`, fighter.x, badgeY);
+    ctx.fillText(
+      multiplyLeft > 0 ? `×${preview}·${multiplyLeft}` : `×${preview}`,
+      fighter.x,
+      badgeY
+    );
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
 
@@ -2241,7 +2271,7 @@ class HeroAutoSkillSystem {
       fighter,
       baseDamage
     );
-    OrangeCalcSkillSystem.recordAttackDamage(fighter, attackDamage);
+    OrangeCalcSkillSystem.recordAttackDamage(fighter, attackDamage, baseDamage);
 
     const dx = opponent.x - fighter.x;
     const dy = opponent.y - fighter.y;
@@ -3166,7 +3196,10 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
       fighter,
       fighter.template.skillDamage
     );
-    return `${baseLabel}·${nextDamage}`;
+    const left = OrangeCalcSkillSystem.getMultiplyRemaining(fighter);
+    return left > 0
+      ? `${baseLabel}·${nextDamage}·叠乘${left}`
+      : `${baseLabel}·${nextDamage}·叠乘尽`;
   }
   if (fighter.template.skillType === HeroSkillType.MAGNET) {
     const shieldCount = fighter.magnetShields ? fighter.magnetShields.length : 0;
@@ -3240,7 +3273,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "元素爆破(暴击真实伤)";
   }
   if (skillType === HeroSkillType.ORANGE_CALC) {
-    return "橙算叠乘";
+    return "叠乘伤害(每局限2次)";
   }
   if (skillType === HeroSkillType.MAGNET) {
     return "磁吸护盾/吸金属防具";

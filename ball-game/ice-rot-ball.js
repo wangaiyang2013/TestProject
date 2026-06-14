@@ -403,7 +403,9 @@ class IceRotSkillSystem {
       ctx.fillStyle = "#ff6b6b";
       ctx.font = "bold 9px system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("狂暴", fighter.x, fighter.y - fighter.radius - 20);
+      ctx.fillText("狂暴<100", fighter.x, fighter.y - fighter.radius - 28);
+      ctx.fillStyle = "#ffd43b";
+      ctx.fillText("惧防卫近战", fighter.x, fighter.y - fighter.radius - 16);
       ctx.textAlign = "left";
     }
 
