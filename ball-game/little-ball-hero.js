@@ -50,6 +50,8 @@ const LittleBallHeroConstants = {
   /** 橙算球：叠乘伤害上限，防止数值溢出 */
   ORANGE_CALC_MAX_DAMAGE: 99999,
   ORANGE_CALC_FLASH_MS: 280,
+  /** 橙算球：每局最多叠乘次数 */
+  ORANGE_CALC_MAX_MULTIPLY_COUNT: 2,
 };
 
 /**
