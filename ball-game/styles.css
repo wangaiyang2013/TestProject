@@ -193,6 +193,16 @@ body {
   font-weight: 600;
 }
 
+.p3-tag {
+  color: #69db7c;
+  font-weight: 600;
+}
+
+.p4-tag {
+  color: #da77f2;
+  font-weight: 600;
+}
+
 kbd {
   display: inline-block;
   padding: 0.15rem 0.45rem;
@@ -283,6 +293,34 @@ kbd {
   display: none;
 }
 
+.hud.hud-4p {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 0.35rem 1rem;
+  align-items: start;
+}
+
+.hud.hud-4p .health-bar.p1 {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.hud.hud-4p .health-bar.p2 {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.hud.hud-4p .health-bar.p3 {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.hud.hud-4p .health-bar.p4 {
+  grid-column: 2;
+  grid-row: 2;
+}
+
 .health-bar {
   display: flex;
   flex-direction: column;
@@ -308,6 +346,19 @@ kbd {
   align-items: flex-end;
 }
 
+.health-bar.p3 span {
+  color: #69db7c;
+}
+
+.health-bar.p4 span {
+  color: #da77f2;
+  text-align: right;
+}
+
+.health-bar.p4 {
+  align-items: flex-end;
+}
+
 .bar {
   width: 100%;
   height: 12px;
@@ -329,6 +380,14 @@ kbd {
 
 .health-bar.p2 .fill {
   background: linear-gradient(90deg, #4dabf7, #74c0fc);
+}
+
+.health-bar.p3 .fill {
+  background: linear-gradient(90deg, #40c057, #8ce99a);
+}
+
+.health-bar.p4 .fill {
+  background: linear-gradient(90deg, #be4bdb, #e599f7);
 }
 
 .btn-accent {
@@ -455,6 +514,28 @@ kbd {
 
 .health-bar.p2.hidden-bar {
   display: none;
+}
+
+.health-bar.p3.hidden-bar,
+.health-bar.p4.hidden-bar {
+  display: none;
+}
+
+.btn-four {
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #be4bdb, #9c36b5);
+  color: #fff;
+  font-weight: 600;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.btn-four:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(190, 75, 219, 0.4);
 }
 
 .btn-hero {

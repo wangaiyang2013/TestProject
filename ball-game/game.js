@@ -57,6 +57,14 @@ const GameConstants = {
   PLAYER2_GLOW: "#74c0fc",
   PROJECTILE1_COLOR: "#ff8787",
   PROJECTILE2_COLOR: "#91d5ff",
+  PLAYER3_COLOR: "#51cf66",
+  PLAYER3_GLOW: "#8ce99a",
+  PLAYER4_COLOR: "#be4bdb",
+  PLAYER4_GLOW: "#e599f7",
+  PROJECTILE3_COLOR: "#b2f2bb",
+  PROJECTILE4_COLOR: "#eebefa",
+  DUAL_PLAYER_COUNT: 2,
+  FOUR_PLAYER_COUNT: 4,
   AI_ATTACK_RANGE: 300,
   AI_IDEAL_RANGE_MIN: 100,
   AI_IDEAL_RANGE_MAX: 240,
@@ -71,6 +79,8 @@ const GameConstants = {
  */
 class GameMode {
   static VERSUS = "versus";
+
+  static FOUR_PLAYER = "four_player";
 
   static TRAINING = "training";
 
@@ -240,7 +250,16 @@ class CollisionDetector {
  * 玩家小球
  */
 class BallPlayer {
-  constructor(id, x, y, radius, color, glowColor, controlScheme) {
+  constructor(
+    id,
+    x,
+    y,
+    radius,
+    color,
+    glowColor,
+    controlScheme,
+    projectileColor
+  ) {
     this.id = id;
     this.x = x;
     this.y = y;
@@ -248,6 +267,7 @@ class BallPlayer {
     this.color = color;
     this.glowColor = glowColor;
     this.controlScheme = controlScheme;
+    this.projectileColor = projectileColor || color;
     this.health = GameConstants.MAX_HEALTH;
     this.lastMoveDir = new DirectionVector(1, 0);
     this.lastAttackTime = 0;
@@ -328,17 +348,14 @@ class BallPlayer {
     let dirX = dir.x;
     let dirY = dir.y;
     if (dirX === 0 && dirY === 0) {
-      dirX = this.id === 1 ? 1 : -1;
+      dirX = this.id % 2 === 1 ? 1 : -1;
     }
 
     const offset = this.radius + projectileRadius + 4;
     const spawnX = this.x + dirX * offset;
     const spawnY = this.y + dirY * offset;
 
-    const color =
-      this.id === 1
-        ? GameConstants.PROJECTILE1_COLOR
-        : GameConstants.PROJECTILE2_COLOR;
+    const color = this.projectileColor;
 
     return new Projectile(
       spawnX,
@@ -415,6 +432,169 @@ class ControlScheme {
 
   static player2() {
     return new ControlScheme("KeyW", "KeyS", "KeyA", "KeyZ", "KeyY");
+  }
+
+  static player3() {
+    return new ControlScheme("KeyI", "KeyK", "KeyJ", "KeyL", "KeyU");
+  }
+
+  static player4() {
+    return new ControlScheme("KeyT", "KeyG", "KeyF", "KeyH", "KeyR");
+  }
+
+  static forPlayerId(playerId) {
+    if (playerId === 1) {
+      return ControlScheme.player1();
+    }
+    if (playerId === 2) {
+      return ControlScheme.player2();
+    }
+    if (playerId === 3) {
+      return ControlScheme.player3();
+    }
+    if (playerId === 4) {
+      return ControlScheme.player4();
+    }
+    return null;
+  }
+}
+
+/**
+ * 玩家槽位配置（颜色、弹幕色、显示名）
+ */
+class PlayerSlotProfile {
+  constructor(id, displayName, color, glowColor, projectileColor) {
+    this.id = id;
+    this.displayName = displayName;
+    this.color = color;
+    this.glowColor = glowColor;
+    this.projectileColor = projectileColor;
+  }
+}
+
+/**
+ * 玩家槽位注册表
+ */
+class PlayerSlotRegistry {
+  static getProfiles(playerCount) {
+    const allProfiles = PlayerSlotRegistry.getAllProfiles();
+    return allProfiles.slice(0, playerCount);
+  }
+
+  static getAllProfiles() {
+    return [
+      new PlayerSlotProfile(
+        1,
+        "玩家1（红）",
+        GameConstants.PLAYER1_COLOR,
+        GameConstants.PLAYER1_GLOW,
+        GameConstants.PROJECTILE1_COLOR
+      ),
+      new PlayerSlotProfile(
+        2,
+        "玩家2（蓝）",
+        GameConstants.PLAYER2_COLOR,
+        GameConstants.PLAYER2_GLOW,
+        GameConstants.PROJECTILE2_COLOR
+      ),
+      new PlayerSlotProfile(
+        3,
+        "玩家3（绿）",
+        GameConstants.PLAYER3_COLOR,
+        GameConstants.PLAYER3_GLOW,
+        GameConstants.PROJECTILE3_COLOR
+      ),
+      new PlayerSlotProfile(
+        4,
+        "玩家4（紫）",
+        GameConstants.PLAYER4_COLOR,
+        GameConstants.PLAYER4_GLOW,
+        GameConstants.PROJECTILE4_COLOR
+      ),
+    ];
+  }
+
+  static getProfile(playerId) {
+    return PlayerSlotRegistry.getAllProfiles().find(
+      (profile) => profile.id === playerId
+    );
+  }
+}
+
+/**
+ * 竞技场出生点布局
+ */
+class ArenaSpawnLayout {
+  static getPoints(arena, canvasWidth, playerCount) {
+    const centerY = (arena.top + arena.bottom) / 2;
+    if (playerCount === GameConstants.DUAL_PLAYER_COUNT) {
+      return [
+        { x: arena.left + canvasWidth * 0.15, y: centerY },
+        { x: arena.right - canvasWidth * 0.15, y: centerY },
+      ];
+    }
+
+    const marginX = canvasWidth * 0.18;
+    const marginY = (arena.bottom - arena.top) * 0.22;
+    return [
+      { x: arena.left + marginX, y: arena.bottom - marginY },
+      { x: arena.right - marginX, y: arena.top + marginY },
+      { x: arena.left + marginX, y: arena.top + marginY },
+      { x: arena.right - marginX, y: arena.bottom - marginY },
+    ];
+  }
+
+  static aimTowardCenter(player, arena) {
+    const centerX = (arena.left + arena.right) / 2;
+    const centerY = (arena.top + arena.bottom) / 2;
+    const dir = new DirectionVector(
+      centerX - player.x,
+      centerY - player.y
+    ).normalize();
+    if (dir.x !== 0 || dir.y !== 0) {
+      player.lastMoveDir = dir;
+    }
+  }
+}
+
+/**
+ * 玩家工厂
+ */
+class BallPlayerFactory {
+  static createPlayers(arena, canvasWidth, ballRadius, playerCount, options) {
+    const config = options || {};
+    const isTraining = config.isTraining === true;
+    const spawnPoints = ArenaSpawnLayout.getPoints(
+      arena,
+      canvasWidth,
+      playerCount
+    );
+    const profiles = PlayerSlotRegistry.getProfiles(playerCount);
+    const players = [];
+
+    for (let index = 0; index < profiles.length; index += 1) {
+      const profile = profiles[index];
+      const spawn = spawnPoints[index];
+      const controlScheme =
+        isTraining && profile.id === 2
+          ? null
+          : ControlScheme.forPlayerId(profile.id);
+
+      const player = new BallPlayer(
+        profile.id,
+        spawn.x,
+        spawn.y,
+        ballRadius,
+        profile.color,
+        profile.glowColor,
+        controlScheme,
+        profile.projectileColor
+      );
+      ArenaSpawnLayout.aimTowardCenter(player, arena);
+      players.push(player);
+    }
+
+    return players;
   }
 }
 
@@ -607,6 +787,7 @@ class DualBallGame {
     this.ctx = canvas.getContext("2d");
     this.state = "idle";
     this.gameMode = GameMode.VERSUS;
+    this.playerCount = GameConstants.DUAL_PLAYER_COUNT;
     this.input = new InputManager();
     this.aiController = new AiOpponentController();
     this.players = [];
@@ -637,12 +818,12 @@ class DualBallGame {
       this.height - padY
     );
 
-    if (this.players.length === 2) {
+    if (this.players.length > 0) {
       const r = this.getBallRadius();
-      this.players[0].radius = r;
-      this.players[1].radius = r;
-      this.arena.clampBall(this.players[0]);
-      this.arena.clampBall(this.players[1]);
+      for (const player of this.players) {
+        player.radius = r;
+        this.arena.clampBall(player);
+      }
     }
   }
 
@@ -654,38 +835,27 @@ class DualBallGame {
     return Math.max(8, this.height * GameConstants.PROJECTILE_RADIUS_RATIO);
   }
 
-  start(mode) {
+  start(mode, playerCount) {
     this.gameMode = mode || GameMode.VERSUS;
+    this.playerCount =
+      playerCount ||
+      (this.gameMode === GameMode.FOUR_PLAYER
+        ? GameConstants.FOUR_PLAYER_COUNT
+        : GameConstants.DUAL_PLAYER_COUNT);
     this.state = "playing";
     this.winnerId = null;
     this.projectiles = [];
 
     const r = this.getBallRadius();
-    const centerY = (this.arena.top + this.arena.bottom) / 2;
     const isTraining = this.gameMode === GameMode.TRAINING;
 
-    const player2Scheme = isTraining ? null : ControlScheme.player2();
-
-    this.players = [
-      new BallPlayer(
-        1,
-        this.arena.left + this.width * 0.15,
-        centerY,
-        r,
-        GameConstants.PLAYER1_COLOR,
-        GameConstants.PLAYER1_GLOW,
-        ControlScheme.player1()
-      ),
-      new BallPlayer(
-        2,
-        this.arena.right - this.width * 0.15,
-        centerY,
-        r,
-        GameConstants.PLAYER2_COLOR,
-        GameConstants.PLAYER2_GLOW,
-        player2Scheme
-      ),
-    ];
+    this.players = BallPlayerFactory.createPlayers(
+      this.arena,
+      this.width,
+      r,
+      this.playerCount,
+      { isTraining }
+    );
 
     if (isTraining) {
       this.aiController.reset();
@@ -695,6 +865,10 @@ class DualBallGame {
       cancelAnimationFrame(this.animationId);
     }
     this.loop();
+  }
+
+  isFourPlayerMode() {
+    return this.gameMode === GameMode.FOUR_PLAYER;
   }
 
   isTrainingMode() {
@@ -742,15 +916,15 @@ class DualBallGame {
   handleAttacks() {
     const projectileRadius = this.getProjectileRadius();
 
-    const human = this.players[0];
-    if (human && human.isAlive() && human.wantsAttack(this.input)) {
-      const proj = human.tryAttack(projectileRadius);
-      if (proj) {
-        this.projectiles.push(proj);
-      }
-    }
-
     if (this.isTrainingMode()) {
+      const human = this.players[0];
+      if (human && human.isAlive() && human.wantsAttack(this.input)) {
+        const proj = human.tryAttack(projectileRadius);
+        if (proj) {
+          this.projectiles.push(proj);
+        }
+      }
+
       const aiPlayer = this.players[1];
       if (
         aiPlayer &&
@@ -767,9 +941,11 @@ class DualBallGame {
       return;
     }
 
-    const player2 = this.players[1];
-    if (player2 && player2.isAlive() && player2.wantsAttack(this.input)) {
-      const proj = player2.tryAttack(projectileRadius);
+    for (const player of this.players) {
+      if (!player.isAlive() || !player.wantsAttack(this.input)) {
+        continue;
+      }
+      const proj = player.tryAttack(projectileRadius);
       if (proj) {
         this.projectiles.push(proj);
       }
@@ -811,7 +987,7 @@ class DualBallGame {
 
   checkWinner() {
     const alive = this.players.filter((p) => p.isAlive());
-    if (alive.length === 1 && this.players.length === 2) {
+    if (alive.length === 1 && this.players.length > 1) {
       this.winnerId = alive[0].id;
       this.endGame();
     }
@@ -855,6 +1031,10 @@ class DualBallGame {
       this.ctx.fillStyle = "rgba(77, 171, 247, 0.2)";
       this.ctx.font = "14px system-ui, sans-serif";
       this.ctx.fillText("训练模式 · AI 对战", 12, 28);
+    } else if (this.isFourPlayerMode()) {
+      this.ctx.fillStyle = "rgba(190, 75, 219, 0.2)";
+      this.ctx.font = "14px system-ui, sans-serif";
+      this.ctx.fillText("四人模式 · 最后存活者获胜", 12, 28);
     }
   }
 
@@ -916,18 +1096,26 @@ class GameUI {
     this.groupHud = document.getElementById("group-hud");
     this.modeBadge = document.getElementById("mode-badge");
     this.versusBtn = document.getElementById("versus-btn");
+    this.fourPlayerBtn = document.getElementById("four-player-btn");
     this.trainingBtn = document.getElementById("training-btn");
     this.groupBattleBtn = document.getElementById("group-battle-btn");
     this.group1pBtn = document.getElementById("group-1p-btn");
     this.group2pBtn = document.getElementById("group-2p-btn");
     this.groupSetupBack = document.getElementById("group-setup-back");
     this.rulesVersus = document.getElementById("rules-versus");
+    this.rulesFourPlayer = document.getElementById("rules-four-player");
     this.rulesTraining = document.getElementById("rules-training");
     this.rulesGroup = document.getElementById("rules-group");
     this.hpP1 = document.getElementById("hp-p1");
     this.hpP2 = document.getElementById("hp-p2");
+    this.hpP3 = document.getElementById("hp-p3");
+    this.hpP4 = document.getElementById("hp-p4");
     this.p2Bar = document.querySelector(".health-bar.p2");
+    this.p3Bar = document.querySelector(".health-bar.p3");
+    this.p4Bar = document.querySelector(".health-bar.p4");
     this.p2Label = document.getElementById("p2-label");
+    this.p3Label = document.getElementById("p3-label");
+    this.p4Label = document.getElementById("p4-label");
     this.p1HudLabel = document.querySelector(".health-bar.p1 span");
     this.gbLevel = document.getElementById("gb-level");
     this.gbBoss = document.getElementById("gb-boss");
@@ -1044,10 +1232,19 @@ class GameUI {
   bindDualBallGame() {
     this.game.onGameOver = (winnerId) => {
       const winnerText = this.getWinnerMessage(winnerId);
-      const playerWon =
-        this.currentMode === GameMode.TRAINING ? winnerId === 1 : winnerId === 1;
+      const playerWon = this.didLocalPlayerWin(winnerId);
       this.finishMatchWithCoins(winnerText, playerWon);
     };
+  }
+
+  didLocalPlayerWin(winnerId) {
+    if (this.currentMode === GameMode.TRAINING) {
+      return winnerId === 1;
+    }
+    if (this.currentMode === GameMode.FOUR_PLAYER) {
+      return true;
+    }
+    return winnerId === 1;
   }
 
   bindGroupBattleGame() {
@@ -1254,6 +1451,9 @@ class GameUI {
     this.versusBtn.addEventListener("click", () =>
       this.beginDualGame(GameMode.VERSUS)
     );
+    this.fourPlayerBtn.addEventListener("click", () =>
+      this.beginDualGame(GameMode.FOUR_PLAYER)
+    );
     this.trainingBtn.addEventListener("click", () =>
       this.beginDualGame(GameMode.TRAINING)
     );
@@ -1293,7 +1493,11 @@ class GameUI {
     if (this.currentMode === GameMode.TRAINING) {
       return winnerId === 1 ? "你赢了！击败了 AI 机器人" : "AI 机器人获胜，再试一次！";
     }
-    return winnerId === 1 ? "玩家1（红球）获胜！" : "玩家2（蓝球）获胜！";
+    const profile = PlayerSlotRegistry.getProfile(winnerId);
+    if (profile) {
+      return `${profile.displayName}获胜！`;
+    }
+    return `玩家${winnerId}获胜！`;
   }
 
   hideAllOverlays() {
@@ -1305,6 +1509,16 @@ class GameUI {
     this.selfDefSetup.classList.add("hidden");
     this.selfDefRoom.classList.add("hidden");
     this.shopOverlay.classList.add("hidden");
+  }
+
+  configureStandardHud() {
+    this.hud.classList.remove("hud-4p");
+    if (this.p3Bar) {
+      this.p3Bar.classList.add("hidden-bar");
+    }
+    if (this.p4Bar) {
+      this.p4Bar.classList.add("hidden-bar");
+    }
   }
 
   updateCoinHud() {
@@ -1364,6 +1578,7 @@ class GameUI {
     this.stopInactiveGameLoops(this.selfDefinition);
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
+    this.configureStandardHud();
     this.groupHud.classList.add("hidden");
     this.westHud.classList.add("hidden");
     this.numberTeacherHud.classList.add("hidden");
@@ -1432,6 +1647,7 @@ class GameUI {
     this.stopInactiveGameLoops(this.numberTeacher);
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
+    this.configureStandardHud();
     this.groupHud.classList.add("hidden");
     this.heroHud.classList.add("hidden");
     this.westHud.classList.add("hidden");
@@ -1469,6 +1685,7 @@ class GameUI {
     this.stopInactiveGameLoops(this.westBulldog);
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
+    this.configureStandardHud();
     this.groupHud.classList.add("hidden");
     this.heroHud.classList.add("hidden");
     this.westHud.classList.remove("hidden");
@@ -1501,6 +1718,7 @@ class GameUI {
     this.stopInactiveGameLoops(this.littleBallHero);
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
+    this.configureStandardHud();
     this.groupHud.classList.add("hidden");
     this.westHud.classList.add("hidden");
     this.numberTeacherHud.classList.add("hidden");
@@ -1571,6 +1789,7 @@ class GameUI {
     this.overlay.classList.remove("hidden");
     this.updateCoinHud();
     this.hud.classList.add("hidden");
+    this.hud.classList.remove("hud-4p");
     this.groupHud.classList.add("hidden");
     this.heroHud.classList.add("hidden");
     this.westHud.classList.add("hidden");
@@ -1578,9 +1797,15 @@ class GameUI {
     this.modeBadge.classList.add("hidden");
     this.overlay.querySelector("h1").textContent = "双球对战";
     this.rulesVersus.classList.remove("hidden");
+    if (this.rulesFourPlayer) {
+      this.rulesFourPlayer.classList.add("hidden");
+    }
     this.rulesTraining.classList.add("hidden");
     this.rulesGroup.classList.add("hidden");
     this.versusBtn.textContent = "双人对战";
+    if (this.fourPlayerBtn) {
+      this.fourPlayerBtn.textContent = "四人模式";
+    }
     this.trainingBtn.textContent = "训练模式";
     this.groupBattleBtn.textContent = "组团战斗";
     this.heroModeBtn.textContent = "小球英雄";
@@ -1599,24 +1824,45 @@ class GameUI {
   beginDualGame(mode) {
     this.currentMode = mode;
     const isTraining = mode === GameMode.TRAINING;
+    const isFourPlayer = mode === GameMode.FOUR_PLAYER;
+    const playerCount = isFourPlayer
+      ? GameConstants.FOUR_PLAYER_COUNT
+      : GameConstants.DUAL_PLAYER_COUNT;
 
     this.stopInactiveGameLoops(this.game);
     this.hideHeroPickPanel();
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
+    this.hud.classList.toggle("hud-4p", isFourPlayer);
     this.groupHud.classList.add("hidden");
     this.heroHud.classList.add("hidden");
     this.westHud.classList.add("hidden");
     this.numberTeacherHud.classList.add("hidden");
     this.p2Bar.classList.remove("hidden-bar");
-    this.modeBadge.classList.toggle("hidden", !isTraining);
-    this.modeBadge.textContent = "训练模式";
+    if (this.p3Bar) {
+      this.p3Bar.classList.toggle("hidden-bar", !isFourPlayer);
+    }
+    if (this.p4Bar) {
+      this.p4Bar.classList.toggle("hidden-bar", !isFourPlayer);
+    }
+    this.modeBadge.classList.toggle("hidden", !isTraining && !isFourPlayer);
+    this.modeBadge.textContent = isTraining
+      ? "训练模式"
+      : isFourPlayer
+        ? "四人模式"
+        : "";
 
     this.p1HudLabel.textContent = isTraining ? "你" : "玩家1";
     this.p2Label.textContent = isTraining ? "AI 机器人" : "玩家2";
+    if (this.p3Label) {
+      this.p3Label.textContent = "玩家3";
+    }
+    if (this.p4Label) {
+      this.p4Label.textContent = "玩家4";
+    }
 
-    this.game.start(mode);
-    this.trackDualHealth();
+    this.game.start(mode, playerCount);
+    this.trackArenaHealth(playerCount);
   }
 
   beginGroupBattle(playerCount) {
@@ -1625,6 +1871,7 @@ class GameUI {
     this.hideHeroPickPanel();
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
+    this.configureStandardHud();
     this.heroHud.classList.add("hidden");
     this.westHud.classList.add("hidden");
     this.numberTeacherHud.classList.add("hidden");
@@ -1652,15 +1899,27 @@ class GameUI {
       snap.phase === "boss" ? "Boss 战中！" : `剩余怪物 ${snap.monstersLeft}`;
   }
 
-  trackDualHealth() {
+  trackArenaHealth(playerCount) {
     const tick = () => {
       if (this.game.state === "playing") {
         this.hpP1.style.width = `${this.game.getHealthPercent(1)}%`;
         this.hpP2.style.width = `${this.game.getHealthPercent(2)}%`;
+        if (playerCount >= GameConstants.FOUR_PLAYER_COUNT) {
+          if (this.hpP3) {
+            this.hpP3.style.width = `${this.game.getHealthPercent(3)}%`;
+          }
+          if (this.hpP4) {
+            this.hpP4.style.width = `${this.game.getHealthPercent(4)}%`;
+          }
+        }
         requestAnimationFrame(tick);
       }
     };
     requestAnimationFrame(tick);
+  }
+
+  trackDualHealth() {
+    this.trackArenaHealth(GameConstants.DUAL_PLAYER_COUNT);
   }
 
   trackGroupHealth() {
@@ -1704,6 +1963,7 @@ class GameUI {
     this.overlay.classList.remove("hidden");
     this.updateCoinHud();
     this.hud.classList.add("hidden");
+    this.hud.classList.remove("hud-4p");
     this.groupHud.classList.add("hidden");
     this.heroHud.classList.add("hidden");
     this.westHud.classList.add("hidden");
@@ -1717,9 +1977,15 @@ class GameUI {
       this.matchCoinReward.classList.add("hidden");
     }
     this.rulesVersus.classList.remove("hidden");
+    if (this.rulesFourPlayer) {
+      this.rulesFourPlayer.classList.add("hidden");
+    }
     this.rulesTraining.classList.add("hidden");
     this.rulesGroup.classList.add("hidden");
     this.versusBtn.textContent = "双人对战";
+    if (this.fourPlayerBtn) {
+      this.fourPlayerBtn.textContent = "四人模式";
+    }
     this.trainingBtn.textContent = "训练模式";
     this.groupBattleBtn.textContent = "组团战斗";
     this.heroModeBtn.textContent = "小球英雄";
