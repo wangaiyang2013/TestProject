@@ -47,11 +47,11 @@ const LittleBallHeroConstants = {
   /** 已削弱：不再追踪，仅直线飞行 */
   TEACHER_NUMBER_HOMING: 0,
   TEACHER_NUMBER_LIFETIME_MS: 1400,
-  /** 橙算球：叠乘伤害上限，防止数值溢出 */
-  ORANGE_CALC_MAX_DAMAGE: 99999,
   ORANGE_CALC_FLASH_MS: 280,
   /** 橙算球：每局最多叠乘次数 */
   ORANGE_CALC_MAX_MULTIPLY_COUNT: 2,
+  /** 橙算球：每次叠乘实际造成的伤害（不再出现数百点爆发） */
+  ORANGE_CALC_MULTIPLY_DAMAGE: 1,
 };
 
 /**
@@ -91,7 +91,7 @@ class HeroSkillType {
   /** 元素球专属：周期召唤四颗随机元素子弹 */
   static ELEMENT_BURST = "element_burst";
 
-  /** 橙算球专属：每次攻击后，下次攻击伤害乘以上次攻击伤害 */
+  /** 橙算球专属：叠乘攻击固定低伤，每局最多叠乘2次 */
   static ORANGE_CALC = "orange_calc";
 
   /** 磁铁球专属：吸附敌方投射物为盾，触碰反弹或超时环射 */
@@ -903,7 +903,7 @@ class IronWallSkillSystem {
 }
 
 /**
- * 橙算球技能：每次攻击后，下次攻击伤害 = 基础伤害 × 上次攻击伤害（每局最多叠乘2次）
+ * 橙算球技能：叠乘攻击固定造成 ORANGE_CALC_MULTIPLY_DAMAGE 点伤害（每局最多叠乘2次）
  */
 class OrangeCalcSkillSystem {
   static initFighter(fighter) {
@@ -937,18 +937,14 @@ class OrangeCalcSkillSystem {
       return baseDamage;
     }
 
-    const multiplied = baseDamage * lastDamage;
-    return Math.min(
-      multiplied,
-      LittleBallHeroConstants.ORANGE_CALC_MAX_DAMAGE
-    );
+    return LittleBallHeroConstants.ORANGE_CALC_MULTIPLY_DAMAGE;
   }
 
   static recordAttackDamage(fighter, attackDamage, baseDamage) {
     const didMultiply =
       OrangeCalcSkillSystem.canMultiply(fighter) &&
       (fighter.orangeCalcLastDamage || 0) > 0 &&
-      attackDamage > baseDamage;
+      attackDamage === LittleBallHeroConstants.ORANGE_CALC_MULTIPLY_DAMAGE;
 
     if (didMultiply) {
       fighter.orangeCalcMultiplyUsed += 1;
@@ -3273,7 +3269,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "元素爆破(暴击真实伤)";
   }
   if (skillType === HeroSkillType.ORANGE_CALC) {
-    return "叠乘伤害(每局限2次)";
+    return "叠乘1伤(每局限2次)";
   }
   if (skillType === HeroSkillType.MAGNET) {
     return "磁吸护盾/吸金属防具";
