@@ -52,6 +52,15 @@ const LittleBallHeroConstants = {
   ORANGE_CALC_MAX_MULTIPLY_COUNT: 2,
   /** 橙算球：每次叠乘实际造成的伤害（不再出现数百点爆发） */
   ORANGE_CALC_MULTIPLY_DAMAGE: 1,
+  /** 四人模式参战人数 */
+  FOUR_PLAYER_COUNT: 4,
+  /** 选球队伍标签 */
+  TEAM_LABEL_BY_STEP: {
+    1: "红队",
+    2: "蓝队",
+    3: "绿队",
+    4: "紫队",
+  },
 };
 
 /**
@@ -472,7 +481,24 @@ class HeroPickScreenLayout {
  * 选球输入解析：支持角色名称或列表编号
  */
 class HeroPickInputResolver {
-  static TEAM_KEYWORDS = ["红队", "蓝队", "红", "蓝", "玩家1", "玩家2", "p1", "p2"];
+  static TEAM_KEYWORDS = [
+    "红队",
+    "蓝队",
+    "绿队",
+    "紫队",
+    "红",
+    "蓝",
+    "绿",
+    "紫",
+    "玩家1",
+    "玩家2",
+    "玩家3",
+    "玩家4",
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+  ];
 
   static resolve(fullHeroes, availableHeroes, rawInput, options) {
     const config = options || {};
@@ -2366,6 +2392,78 @@ class PickTimer {
 }
 
 /**
+ * 英雄战场辅助：多目标寻敌与碰撞
+ */
+class HeroBattleArenaHelper {
+  static getAliveOpponents(fighter, allFighters) {
+    return allFighters.filter(
+      (other) => other.playerId !== fighter.playerId && other.isAlive()
+    );
+  }
+
+  static getNearestOpponent(fighter, allFighters) {
+    const opponents = HeroBattleArenaHelper.getAliveOpponents(
+      fighter,
+      allFighters
+    );
+    let nearest = null;
+    let nearestDistance = Infinity;
+
+    for (const opponent of opponents) {
+      const distance = Math.hypot(
+        opponent.x - fighter.x,
+        opponent.y - fighter.y
+      );
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = opponent;
+      }
+    }
+
+    return nearest;
+  }
+
+  static resolveAllBallCollisions(fighters) {
+    for (let i = 0; i < fighters.length; i += 1) {
+      for (let j = i + 1; j < fighters.length; j += 1) {
+        const fighterA = fighters[i];
+        const fighterB = fighters[j];
+        if (fighterA.isAlive() && fighterB.isAlive()) {
+          ContinuousBouncePhysics.resolveBallCollision(fighterA, fighterB);
+        }
+      }
+    }
+  }
+
+  static createFighterAtSpawn(playerId, template, spawn, arena, radius) {
+    const centerX = (arena.left + arena.right) / 2;
+    const centerY = (arena.top + arena.bottom) / 2;
+    const direction = new DirectionVector(
+      centerX - spawn.x,
+      centerY - spawn.y
+    ).normalize();
+    const dirX =
+      direction.x !== 0 || direction.y !== 0
+        ? direction.x
+        : playerId % 2 === 1
+          ? 1
+          : -1;
+    const dirY =
+      direction.x !== 0 || direction.y !== 0 ? direction.y : 0.2;
+
+    return new HeroBallFighter(
+      playerId,
+      template,
+      spawn.x,
+      spawn.y,
+      radius,
+      dirX,
+      dirY
+    );
+  }
+}
+
+/**
  * 小球英雄主游戏
  */
 class LittleBallHeroGame {
@@ -2382,6 +2480,8 @@ class LittleBallHeroGame {
     this.projectiles = [];
     this.p1HeroId = null;
     this.p2HeroId = null;
+    this.p3HeroId = null;
+    this.p4HeroId = null;
     this.takenHeroIds = new Set();
     this.customRoster = null;
     this.arena = null;
@@ -2452,6 +2552,8 @@ class LittleBallHeroGame {
     this.pickStep = 1;
     this.p1HeroId = null;
     this.p2HeroId = null;
+    this.p3HeroId = null;
+    this.p4HeroId = null;
     this.takenHeroIds = new Set();
     this.fighters = [];
     this.projectiles = [];
@@ -2466,6 +2568,77 @@ class LittleBallHeroGame {
 
   isTwoPlayer() {
     return this.subMode === "versus";
+  }
+
+  isFourPlayer() {
+    return this.subMode === "four_player";
+  }
+
+  getBattlePlayerCount() {
+    if (this.isFourPlayer()) {
+      return LittleBallHeroConstants.FOUR_PLAYER_COUNT;
+    }
+    return GameConstants.DUAL_PLAYER_COUNT;
+  }
+
+  getHumanPickCount() {
+    if (this.subMode === "training") {
+      return 1;
+    }
+    if (this.isTwoPlayer()) {
+      return GameConstants.DUAL_PLAYER_COUNT;
+    }
+    if (this.isFourPlayer()) {
+      return LittleBallHeroConstants.FOUR_PLAYER_COUNT;
+    }
+    return GameConstants.DUAL_PLAYER_COUNT;
+  }
+
+  getTeamLabelForStep(step) {
+    return (
+      LittleBallHeroConstants.TEAM_LABEL_BY_STEP[step] || `玩家${step}`
+    );
+  }
+
+  getHeroIdForPickStep(step) {
+    if (step === 1) {
+      return this.p1HeroId;
+    }
+    if (step === 2) {
+      return this.p2HeroId;
+    }
+    if (step === 3) {
+      return this.p3HeroId;
+    }
+    if (step === 4) {
+      return this.p4HeroId;
+    }
+    return null;
+  }
+
+  setHeroIdForPickStep(step, heroId) {
+    if (step === 1) {
+      this.p1HeroId = heroId;
+      return;
+    }
+    if (step === 2) {
+      this.p2HeroId = heroId;
+      return;
+    }
+    if (step === 3) {
+      this.p3HeroId = heroId;
+      return;
+    }
+    if (step === 4) {
+      this.p4HeroId = heroId;
+    }
+  }
+
+  fillTrainingAiPick() {
+    const available = this.getAvailableHeroes();
+    const aiHero = this.pickRandomHero(available);
+    this.p2HeroId = aiHero.id;
+    this.takenHeroIds.add(aiHero.id);
   }
 
   startPickTimer() {
@@ -2486,6 +2659,9 @@ class LittleBallHeroGame {
       pickRemainingMs: this.pickTimer ? this.pickTimer.getRemainingMs() : 0,
       p1HeroId: this.p1HeroId,
       p2HeroId: this.p2HeroId,
+      p3HeroId: this.p3HeroId,
+      p4HeroId: this.p4HeroId,
+      playerCount: this.getBattlePlayerCount(),
       fighters: this.fighters.map((f) => ({
         playerId: f.playerId,
         name: f.template.name,
@@ -2507,11 +2683,7 @@ class LittleBallHeroGame {
   }
 
   applyPick(heroId, wasAuto) {
-    if (this.pickStep === 1) {
-      this.p1HeroId = heroId;
-    } else {
-      this.p2HeroId = heroId;
-    }
+    this.setHeroIdForPickStep(this.pickStep, heroId);
     this.takenHeroIds.add(heroId);
     this.advancePick(wasAuto);
   }
@@ -2525,21 +2697,17 @@ class LittleBallHeroGame {
   }
 
   advancePick(wasAuto) {
-    if (this.pickStep === 1) {
-      this.pickStep = 2;
+    const humanPickCount = this.getHumanPickCount();
 
-      if (!this.isTwoPlayer()) {
-        const available = this.getAvailableHeroes();
-        const aiHero = this.pickRandomHero(available);
-        this.p2HeroId = aiHero.id;
-        this.takenHeroIds.add(aiHero.id);
-        this.beginBattle();
-        return;
-      }
-
+    if (this.pickStep < humanPickCount) {
+      this.pickStep += 1;
       this.startPickTimer();
       this.notifyPhase();
       return;
+    }
+
+    if (this.subMode === "training") {
+      this.fillTrainingAiPick();
     }
 
     this.beginBattle();
@@ -2547,30 +2715,29 @@ class LittleBallHeroGame {
 
   beginBattle() {
     const r = this.getBallRadius();
-    const cy = (this.arena.top + this.arena.bottom) / 2;
-    const p1Template = this.getHeroById(this.p1HeroId);
-    const p2Template = this.getHeroById(this.p2HeroId);
+    const playerCount = this.getBattlePlayerCount();
+    const spawnPoints = ArenaSpawnLayout.getPoints(
+      this.arena,
+      this.width,
+      playerCount
+    );
+    this.fighters = [];
 
-    this.fighters = [
-      new HeroBallFighter(
-        1,
-        p1Template,
-        this.arena.left + this.width * 0.28,
-        cy,
-        r,
-        1,
-        0.2
-      ),
-      new HeroBallFighter(
-        2,
-        p2Template,
-        this.arena.right - this.width * 0.28,
-        cy,
-        r,
-        -1,
-        0.2
-      ),
-    ];
+    for (let index = 0; index < playerCount; index += 1) {
+      const playerId = index + 1;
+      const heroId = this.getHeroIdForPickStep(playerId);
+      const template = this.getHeroById(heroId);
+      const spawn = spawnPoints[index];
+      this.fighters.push(
+        HeroBattleArenaHelper.createFighterAtSpawn(
+          playerId,
+          template,
+          spawn,
+          this.arena,
+          r
+        )
+      );
+    }
 
     for (const fighter of this.fighters) {
       if (DefenseBallSkillSystem.isDefenseFighter(fighter)) {
@@ -2596,14 +2763,11 @@ class LittleBallHeroGame {
     if (this.phase !== "pick") {
       return false;
     }
-    if (this.pickStep === 1) {
-      return true;
-    }
-    return this.pickStep === 2 && this.isTwoPlayer();
+    return this.pickStep >= 1 && this.pickStep <= this.getHumanPickCount();
   }
 
   getCurrentPickerTeamLabel() {
-    return this.pickStep === 1 ? "红队" : "蓝队";
+    return this.getTeamLabelForStep(this.pickStep);
   }
 
   getPickInputContext() {
@@ -2612,10 +2776,20 @@ class LittleBallHeroGame {
       blockedByTeam: "对方",
     };
 
-    if (this.pickStep === 2 && this.p1HeroId) {
-      const redHero = this.getHeroById(this.p1HeroId);
-      context.emptyHint = `红队已选【${redHero.name}】，蓝队请输入其他角色名或编号`;
-      context.blockedByTeam = "红队";
+    const previousPicks = [];
+    for (let step = 1; step < this.pickStep; step += 1) {
+      const heroId = this.getHeroIdForPickStep(step);
+      if (heroId) {
+        const hero = this.getHeroById(heroId);
+        previousPicks.push(`${this.getTeamLabelForStep(step)}【${hero.name}】`);
+      }
+    }
+
+    if (previousPicks.length > 0) {
+      context.emptyHint = `已选：${previousPicks.join("、")}；${this.getTeamLabelForStep(
+        this.pickStep
+      )}请输入其他角色名或编号`;
+      context.blockedByTeam = this.getTeamLabelForStep(1);
     }
 
     return context;
@@ -2623,10 +2797,14 @@ class LittleBallHeroGame {
 
   tryPickByInput(rawInput) {
     if (!this.canPlayerPickNow()) {
-      if (this.phase === "pick" && this.pickStep === 2 && !this.isTwoPlayer()) {
+      if (
+        this.phase === "pick" &&
+        this.pickStep > 1 &&
+        this.subMode === "training"
+      ) {
         return {
           ok: false,
-          message: "训练场蓝队由 AI 自动选球，双人模式才需蓝队手动输入",
+          message: "训练场仅红队手动选球，请使用「双人模式」或「四人模式」",
         };
       }
       return { ok: false, message: "当前不可选球" };
@@ -2722,94 +2900,91 @@ class LittleBallHeroGame {
   }
 
   updateBattle() {
-    const f1 = this.fighters[0];
-    const f2 = this.fighters[1];
-    if (!f1 || !f2) {
+    const fighters = this.fighters.filter((fighter) => fighter);
+    if (fighters.length < 2) {
       return;
     }
 
-    if (!ElementStatusEffectSystem.isFrozen(f1)) {
-      ContinuousBouncePhysics.updateBall(f1, this.arena);
+    for (const fighter of fighters) {
+      if (!fighter.isAlive()) {
+        continue;
+      }
+      if (!ElementStatusEffectSystem.isFrozen(fighter)) {
+        ContinuousBouncePhysics.updateBall(fighter, this.arena);
+      }
     }
-    if (!ElementStatusEffectSystem.isFrozen(f2)) {
-      ContinuousBouncePhysics.updateBall(f2, this.arena);
-    }
-    ContinuousBouncePhysics.resolveBallCollision(f1, f2);
+
+    HeroBattleArenaHelper.resolveAllBallCollisions(fighters);
 
     const now = Date.now();
-    ElementStatusEffectSystem.tickFighter(f1, now);
-    ElementStatusEffectSystem.tickFighter(f2, now);
-    DefenseBallSkillSystem.tickMovementRestriction(f1, now);
-    DefenseBallSkillSystem.tickMovementRestriction(f2, now);
+    for (const fighter of fighters) {
+      ElementStatusEffectSystem.tickFighter(fighter, now);
+      DefenseBallSkillSystem.tickMovementRestriction(fighter, now);
+    }
 
-    MagnetSkillSystem.tick(
-      f1,
-      f2,
-      this.projectiles,
-      this.fighters,
-      this.arena,
-      now
-    );
-    MagnetSkillSystem.tick(
-      f2,
-      f1,
-      this.projectiles,
-      this.fighters,
-      this.arena,
-      now
-    );
-    MagnetSkillSystem.onBallContact(f1, f2, this.fighters, now);
-    MagnetSkillSystem.onBallContact(f2, f1, this.fighters, now);
+    for (let i = 0; i < fighters.length; i += 1) {
+      for (let j = i + 1; j < fighters.length; j += 1) {
+        const fighterA = fighters[i];
+        const fighterB = fighters[j];
+        MagnetSkillSystem.tick(
+          fighterA,
+          fighterB,
+          this.projectiles,
+          fighters,
+          this.arena,
+          now
+        );
+        MagnetSkillSystem.tick(
+          fighterB,
+          fighterA,
+          this.projectiles,
+          fighters,
+          this.arena,
+          now
+        );
+        MagnetSkillSystem.onBallContact(fighterA, fighterB, fighters, now);
+        MagnetSkillSystem.onBallContact(fighterB, fighterA, fighters, now);
+      }
+    }
 
-    if (
-      typeof ElementStatusEffectSystem === "undefined" ||
-      !ElementStatusEffectSystem.isAttackBlocked(f1)
-    ) {
-      HeroAutoSkillSystem.tryUseSkill(
-        f1,
-        f2,
-        this.projectiles,
-        this.getProjectileRadius(),
-        this
+    for (const fighter of fighters) {
+      if (!fighter.isAlive()) {
+        continue;
+      }
+      const opponent = HeroBattleArenaHelper.getNearestOpponent(
+        fighter,
+        fighters
       );
-    }
-    if (
-      typeof ElementStatusEffectSystem === "undefined" ||
-      !ElementStatusEffectSystem.isAttackBlocked(f2)
-    ) {
-      HeroAutoSkillSystem.tryUseSkill(
-        f2,
-        f1,
-        this.projectiles,
-        this.getProjectileRadius(),
-        this
-      );
-    }
+      if (!opponent) {
+        continue;
+      }
 
-    if (
-      typeof ElementStatusEffectSystem === "undefined" ||
-      !ElementStatusEffectSystem.isAttackBlocked(f1)
-    ) {
-      ElementBurstSystem.updateOrbitBullets(f1, f2, this.fighters);
-    }
-    if (
-      typeof ElementStatusEffectSystem === "undefined" ||
-      !ElementStatusEffectSystem.isAttackBlocked(f2)
-    ) {
-      ElementBurstSystem.updateOrbitBullets(f2, f1, this.fighters);
-    }
+      if (
+        typeof ElementStatusEffectSystem === "undefined" ||
+        !ElementStatusEffectSystem.isAttackBlocked(fighter)
+      ) {
+        HeroAutoSkillSystem.tryUseSkill(
+          fighter,
+          opponent,
+          this.projectiles,
+          this.getProjectileRadius(),
+          this
+        );
+      }
 
-    if (
-      typeof ElementStatusEffectSystem === "undefined" ||
-      !ElementStatusEffectSystem.isAttackBlocked(f1)
-    ) {
-      IceRotSkillSystem.tick(f1, f2, now);
-    }
-    if (
-      typeof ElementStatusEffectSystem === "undefined" ||
-      !ElementStatusEffectSystem.isAttackBlocked(f2)
-    ) {
-      IceRotSkillSystem.tick(f2, f1, now);
+      if (
+        typeof ElementStatusEffectSystem === "undefined" ||
+        !ElementStatusEffectSystem.isAttackBlocked(fighter)
+      ) {
+        ElementBurstSystem.updateOrbitBullets(fighter, opponent, fighters);
+      }
+
+      if (
+        typeof ElementStatusEffectSystem === "undefined" ||
+        !ElementStatusEffectSystem.isAttackBlocked(fighter)
+      ) {
+        IceRotSkillSystem.tick(fighter, opponent, now);
+      }
     }
 
     if (typeof WeaponBoxSpawnSystem !== "undefined") {
@@ -2817,12 +2992,13 @@ class LittleBallHeroGame {
     }
 
     this.updateProjectiles();
+    this.checkBattleOutcome();
+  }
 
-    for (const fighter of this.fighters) {
-      if (!fighter.isAlive()) {
-        this.endGame(fighter.playerId === 1 ? 2 : 1);
-        return;
-      }
+  checkBattleOutcome() {
+    const aliveFighters = this.fighters.filter((fighter) => fighter.isAlive());
+    if (aliveFighters.length === 1) {
+      this.endGame(aliveFighters[0].playerId);
     }
   }
 
@@ -3047,12 +3223,11 @@ class LittleBallHeroGame {
     const remainingSec = Math.ceil(
       (this.pickTimer ? this.pickTimer.getRemainingMs() : 0) / 1000
     );
-    const pickerLabel =
-      this.pickStep === 1
-        ? "红队（玩家1）选球"
-        : this.isTwoPlayer()
-          ? "蓝队（玩家2）选球 · 不可与红队重复"
-          : "蓝队由 AI 自动选球";
+    const pickerLabel = `${this.getTeamLabelForStep(this.pickStep)}（玩家${this.pickStep}）选球${
+      this.isFourPlayer() || this.isTwoPlayer()
+        ? " · 不可与已选队伍重复"
+        : ""
+    }`;
 
     this.ctx.fillStyle = "rgba(0,0,0,0.55)";
     this.ctx.fillRect(
@@ -3148,7 +3323,9 @@ class LittleBallHeroGame {
     this.ctx.font = "13px system-ui, sans-serif";
     this.ctx.textAlign = "center";
     this.ctx.fillText(
-      "双球自动反弹对打 · 武器箱含匕首(3击共3伤)",
+      this.isFourPlayer()
+        ? "四球自动反弹混战 · 武器箱含匕首(3击共3伤)"
+        : "双球自动反弹对打 · 武器箱含匕首(3击共3伤)",
       this.width / 2,
       this.arena.bottom + 28
     );
@@ -3173,7 +3350,13 @@ class LittleBallHeroGame {
   }
 
   getModeLabel() {
-    return this.subMode === "training" ? "小球英雄 · 训练场" : "小球英雄 · 双人";
+    if (this.subMode === "training") {
+      return "小球英雄 · 训练场";
+    }
+    if (this.isFourPlayer()) {
+      return "小球英雄 · 四人模式";
+    }
+    return "小球英雄 · 双人";
   }
 }
 

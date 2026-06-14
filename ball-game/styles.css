@@ -594,6 +594,40 @@ kbd {
   color: #74c0fc;
 }
 
+.hero-info.p3 {
+  color: #69db7c;
+}
+
+.hero-info.p4 {
+  color: #da77f2;
+}
+
+.hero-info.hidden-info {
+  display: none;
+}
+
+.hero-hud.hero-hud-4p {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.15rem 1.5rem;
+  justify-items: stretch;
+  width: min(92vw, 520px);
+}
+
+.hero-hud.hero-hud-4p .hero-phase-text {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+.hero-hud.hero-hud-4p .hero-info.hidden-info {
+  display: block;
+}
+
+.hero-hud.hero-hud-4p .hero-info.p2,
+.hero-hud.hero-hud-4p .hero-info.p4 {
+  text-align: right;
+}
+
 .hero-pick-panel {
   position: absolute;
   left: 50%;
