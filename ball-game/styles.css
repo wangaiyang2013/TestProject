@@ -150,6 +150,39 @@ body {
   font-size: 0.85rem;
 }
 
+.shop-equipped-summary {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 212, 59, 0.35);
+  background: rgba(255, 212, 59, 0.08);
+}
+
+.shop-equipped-summary p {
+  margin: 0;
+  color: #ffd43b;
+  font-weight: 600;
+}
+
+.shop-unequip-btn {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid #868e96;
+  border-radius: 8px;
+  background: transparent;
+  color: #dee2e6;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.shop-unequip-btn:hover {
+  background: rgba(134, 142, 150, 0.15);
+}
+
 .overlay {
   position: absolute;
   inset: 0;

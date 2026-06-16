@@ -182,6 +182,32 @@ class PlayerInventory {
     return true;
   }
 
+  unequipSkin() {
+    if (!this.equippedSkinId) {
+      return false;
+    }
+    this.equippedSkinId = null;
+    this.save();
+    return true;
+  }
+
+  unequipAccessory() {
+    if (!this.equippedAccessoryId) {
+      return false;
+    }
+    this.equippedAccessoryId = null;
+    this.save();
+    return true;
+  }
+
+  isSkinEquipped(skinId) {
+    return this.equippedSkinId === skinId;
+  }
+
+  isAccessoryEquipped(accessoryId) {
+    return this.equippedAccessoryId === accessoryId;
+  }
+
   getEquippedSkinId() {
     return this.equippedSkinId;
   }
@@ -485,6 +511,20 @@ class ShopPurchaseService {
     }
     return { success: true, message: "已装备配饰" };
   }
+
+  unequipOwnedSkin() {
+    if (!this.inventory.unequipSkin()) {
+      return { success: false, message: "当前未装备皮肤" };
+    }
+    return { success: true, message: "已卸下皮肤" };
+  }
+
+  unequipOwnedAccessory() {
+    if (!this.inventory.unequipAccessory()) {
+      return { success: false, message: "当前未装备配饰" };
+    }
+    return { success: true, message: "已卸下配饰" };
+  }
 }
 
 /**
@@ -590,6 +630,8 @@ class ShopPanel {
       );
     }
 
+    this.renderEquippedSummary();
+
     for (const item of items) {
       const owned = this.economy.inventory.ownsItem(item.id, item.itemType);
       const card = document.createElement("div");
@@ -612,25 +654,31 @@ class ShopPanel {
       actionBtn.className = "shop-buy-btn";
 
       if (owned) {
-        actionBtn.textContent = "已拥有";
-        actionBtn.disabled = true;
         if (item.itemType === ShopItemType.SKIN) {
-          actionBtn.textContent = "装备";
+          const equipped = this.economy.inventory.isSkinEquipped(item.id);
+          actionBtn.textContent = equipped ? "已装备" : "装备";
+          actionBtn.disabled = equipped;
+          if (!equipped) {
+            actionBtn.addEventListener("click", () => {
+              const result = this.economy.purchaseService.equipOwnedSkin(item.id);
+              this.elements.message.textContent = result.message;
+              this.refresh();
+            });
+          }
+        } else if (item.itemType === ShopItemType.ACCESSORY) {
+          const equipped = this.economy.inventory.isAccessoryEquipped(item.id);
+          actionBtn.textContent = equipped ? "卸下" : "装备";
           actionBtn.disabled = false;
           actionBtn.addEventListener("click", () => {
-            const result = this.economy.purchaseService.equipOwnedSkin(item.id);
+            const result = equipped
+              ? this.economy.purchaseService.unequipOwnedAccessory()
+              : this.economy.purchaseService.equipOwnedAccessory(item.id);
             this.elements.message.textContent = result.message;
             this.refresh();
           });
-        }
-        if (item.itemType === ShopItemType.ACCESSORY) {
-          actionBtn.textContent = "装备";
-          actionBtn.disabled = false;
-          actionBtn.addEventListener("click", () => {
-            const result = this.economy.purchaseService.equipOwnedAccessory(item.id);
-            this.elements.message.textContent = result.message;
-            this.refresh();
-          });
+        } else {
+          actionBtn.textContent = "已拥有";
+          actionBtn.disabled = true;
         }
       } else if (locked) {
         actionBtn.textContent = "需先完成一局";
@@ -649,6 +697,73 @@ class ShopPanel {
 
       card.appendChild(actionBtn);
       this.elements.list.appendChild(card);
+    }
+  }
+
+  renderEquippedSummary() {
+    if (this.activeTab === ShopItemType.ACCESSORY) {
+      const equippedId = this.economy.inventory.getEquippedAccessoryId();
+      if (!equippedId) {
+        return;
+      }
+
+      const equippedItem = ShopCatalog.getAccessories().find(
+        (item) => item.id === equippedId
+      );
+      const summary = document.createElement("div");
+      summary.className = "shop-equipped-summary";
+
+      const label = document.createElement("p");
+      label.textContent = equippedItem
+        ? `当前配饰：${equippedItem.name}`
+        : "当前已装备配饰";
+
+      const unequipBtn = document.createElement("button");
+      unequipBtn.type = "button";
+      unequipBtn.className = "shop-unequip-btn";
+      unequipBtn.textContent = "卸下配饰";
+      unequipBtn.addEventListener("click", () => {
+        const result = this.economy.purchaseService.unequipOwnedAccessory();
+        this.elements.message.textContent = result.message;
+        this.refresh();
+      });
+
+      summary.appendChild(label);
+      summary.appendChild(unequipBtn);
+      this.elements.list.appendChild(summary);
+      return;
+    }
+
+    if (this.activeTab === ShopItemType.SKIN) {
+      const equippedId = this.economy.inventory.getEquippedSkinId();
+      if (!equippedId) {
+        return;
+      }
+
+      const equippedItem = ShopCatalog.getSkins().find(
+        (item) => item.id === equippedId
+      );
+      const summary = document.createElement("div");
+      summary.className = "shop-equipped-summary";
+
+      const label = document.createElement("p");
+      label.textContent = equippedItem
+        ? `当前皮肤：${equippedItem.name}`
+        : "当前已装备皮肤";
+
+      const unequipBtn = document.createElement("button");
+      unequipBtn.type = "button";
+      unequipBtn.className = "shop-unequip-btn";
+      unequipBtn.textContent = "卸下皮肤";
+      unequipBtn.addEventListener("click", () => {
+        const result = this.economy.purchaseService.unequipOwnedSkin();
+        this.elements.message.textContent = result.message;
+        this.refresh();
+      });
+
+      summary.appendChild(label);
+      summary.appendChild(unequipBtn);
+      this.elements.list.appendChild(summary);
     }
   }
 }
