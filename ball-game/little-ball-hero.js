@@ -54,6 +54,8 @@ const LittleBallHeroConstants = {
   ORANGE_CALC_MULTIPLY_DAMAGE: 1,
   /** 四人模式参战人数 */
   FOUR_PLAYER_COUNT: 4,
+  /** 双队团战总回合数 */
+  TEAM_BATTLE_MAX_ROUNDS: 30,
   /** 选球队伍标签 */
   TEAM_LABEL_BY_STEP: {
     1: "红队",
@@ -1884,7 +1886,10 @@ class ContinuousBouncePhysics {
     ContinuousBouncePhysics.maintainSpeed(ball);
   }
 
-  static resolveBallCollision(a, b, applyBumpDamage = true) {
+  static resolveBallCollision(a, b, options) {
+    const config = options || {};
+    const applyBumpDamage = config.applyBumpDamage !== false;
+    const game = config.game || null;
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const dist = Math.hypot(dx, dy);
@@ -1919,9 +1924,16 @@ class ContinuousBouncePhysics {
     b.vy += impulse * a.mass * ny;
 
     if (applyBumpDamage) {
-      const touchDamage = LittleBallHeroConstants.BUMP_DAMAGE;
-      a.takeDamage(touchDamage, b);
-      b.takeDamage(touchDamage, a);
+      const allowTeamBumpDamage =
+        !game ||
+        typeof game.isTeamBattle !== "function" ||
+        !game.isTeamBattle() ||
+        HeroTeamRegistry.areEnemies(a.playerId, b.playerId);
+      if (allowTeamBumpDamage) {
+        const touchDamage = LittleBallHeroConstants.BUMP_DAMAGE;
+        a.takeDamage(touchDamage, b);
+        b.takeDamage(touchDamage, a);
+      }
     }
 
     ContinuousBouncePhysics.maintainSpeed(a);
@@ -2401,11 +2413,16 @@ class HeroBattleArenaHelper {
     );
   }
 
-  static getNearestOpponent(fighter, allFighters) {
-    const opponents = HeroBattleArenaHelper.getAliveOpponents(
+  static getNearestOpponent(fighter, allFighters, game) {
+    let opponents = HeroBattleArenaHelper.getAliveOpponents(
       fighter,
       allFighters
     );
+    if (game && typeof game.isTeamBattle === "function" && game.isTeamBattle()) {
+      opponents = opponents.filter((opponent) =>
+        HeroTeamRegistry.areEnemies(fighter.playerId, opponent.playerId)
+      );
+    }
     let nearest = null;
     let nearestDistance = Infinity;
 
@@ -2423,13 +2440,15 @@ class HeroBattleArenaHelper {
     return nearest;
   }
 
-  static resolveAllBallCollisions(fighters) {
+  static resolveAllBallCollisions(fighters, game) {
     for (let i = 0; i < fighters.length; i += 1) {
       for (let j = i + 1; j < fighters.length; j += 1) {
         const fighterA = fighters[i];
         const fighterB = fighters[j];
         if (fighterA.isAlive() && fighterB.isAlive()) {
-          ContinuousBouncePhysics.resolveBallCollision(fighterA, fighterB);
+          ContinuousBouncePhysics.resolveBallCollision(fighterA, fighterB, {
+            game,
+          });
         }
       }
     }
@@ -2483,6 +2502,7 @@ class LittleBallHeroGame {
     this.p3HeroId = null;
     this.p4HeroId = null;
     this.takenHeroIds = new Set();
+    this.teamBattleManager = null;
     this.customRoster = null;
     this.arena = null;
     this.width = 0;
@@ -2557,6 +2577,13 @@ class LittleBallHeroGame {
     this.takenHeroIds = new Set();
     this.fighters = [];
     this.projectiles = [];
+    if (subMode === "team_battle") {
+      this.teamBattleManager = new TeamBattleRoundManager(
+        LittleBallHeroConstants.TEAM_BATTLE_MAX_ROUNDS
+      );
+    } else {
+      this.teamBattleManager = null;
+    }
     this.startPickTimer();
     this.notifyPhase();
 
@@ -2574,8 +2601,16 @@ class LittleBallHeroGame {
     return this.subMode === "four_player";
   }
 
+  isTeamBattle() {
+    return this.subMode === "team_battle";
+  }
+
+  isMultiplayerFourBall() {
+    return this.isFourPlayer() || this.isTeamBattle();
+  }
+
   getBattlePlayerCount() {
-    if (this.isFourPlayer()) {
+    if (this.isMultiplayerFourBall()) {
       return LittleBallHeroConstants.FOUR_PLAYER_COUNT;
     }
     return GameConstants.DUAL_PLAYER_COUNT;
@@ -2588,7 +2623,7 @@ class LittleBallHeroGame {
     if (this.isTwoPlayer()) {
       return GameConstants.DUAL_PLAYER_COUNT;
     }
-    if (this.isFourPlayer()) {
+    if (this.isMultiplayerFourBall()) {
       return LittleBallHeroConstants.FOUR_PLAYER_COUNT;
     }
     return GameConstants.DUAL_PLAYER_COUNT;
@@ -2662,6 +2697,9 @@ class LittleBallHeroGame {
       p3HeroId: this.p3HeroId,
       p4HeroId: this.p4HeroId,
       playerCount: this.getBattlePlayerCount(),
+      teamBattle: this.teamBattleManager
+        ? this.teamBattleManager.getSnapshot()
+        : null,
       fighters: this.fighters.map((f) => ({
         playerId: f.playerId,
         name: f.template.name,
@@ -2713,7 +2751,7 @@ class LittleBallHeroGame {
     this.beginBattle();
   }
 
-  beginBattle() {
+  spawnBattleFighters() {
     const r = this.getBallRadius();
     const playerCount = this.getBattlePlayerCount();
     const spawnPoints = ArenaSpawnLayout.getPoints(
@@ -2721,14 +2759,14 @@ class LittleBallHeroGame {
       this.width,
       playerCount
     );
-    this.fighters = [];
+    const fighters = [];
 
     for (let index = 0; index < playerCount; index += 1) {
       const playerId = index + 1;
       const heroId = this.getHeroIdForPickStep(playerId);
       const template = this.getHeroById(heroId);
       const spawn = spawnPoints[index];
-      this.fighters.push(
+      fighters.push(
         HeroBattleArenaHelper.createFighterAtSpawn(
           playerId,
           template,
@@ -2739,18 +2777,45 @@ class LittleBallHeroGame {
       );
     }
 
-    for (const fighter of this.fighters) {
+    for (const fighter of fighters) {
       if (DefenseBallSkillSystem.isDefenseFighter(fighter)) {
         DefenseBallSkillSystem.rollDefenseItemForBattle(fighter);
       }
     }
 
+    return fighters;
+  }
+
+  beginBattle() {
+    this.fighters = this.spawnBattleFighters();
     this.phase = "battle";
     this.projectiles = [];
     if (typeof WeaponBoxSpawnSystem !== "undefined") {
       WeaponBoxSpawnSystem.initBattle(this);
     }
     this.notifyPhase();
+  }
+
+  resetTeamRoundBattle() {
+    this.fighters = this.spawnBattleFighters();
+    this.projectiles = [];
+    if (typeof WeaponBoxSpawnSystem !== "undefined") {
+      WeaponBoxSpawnSystem.initBattle(this);
+    }
+    this.phase = "battle";
+  }
+
+  canFighterDamageTarget(attacker, target) {
+    if (!attacker || !target) {
+      return true;
+    }
+    if (
+      this.isTeamBattle() &&
+      !HeroTeamRegistry.areEnemies(attacker.playerId, target.playerId)
+    ) {
+      return false;
+    }
+    return true;
   }
 
   updatePickPhase() {
@@ -2914,7 +2979,7 @@ class LittleBallHeroGame {
       }
     }
 
-    HeroBattleArenaHelper.resolveAllBallCollisions(fighters);
+    HeroBattleArenaHelper.resolveAllBallCollisions(fighters, this);
 
     const now = Date.now();
     for (const fighter of fighters) {
@@ -2953,7 +3018,8 @@ class LittleBallHeroGame {
       }
       const opponent = HeroBattleArenaHelper.getNearestOpponent(
         fighter,
-        fighters
+        fighters,
+        this
       );
       if (!opponent) {
         continue;
@@ -2996,10 +3062,48 @@ class LittleBallHeroGame {
   }
 
   checkBattleOutcome() {
+    if (this.isTeamBattle()) {
+      this.checkTeamBattleOutcome();
+      return;
+    }
+
     const aliveFighters = this.fighters.filter((fighter) => fighter.isAlive());
     if (aliveFighters.length === 1) {
       this.endGame(aliveFighters[0].playerId);
     }
+  }
+
+  checkTeamBattleOutcome() {
+    const redBlueAlive = this.fighters.filter(
+      (fighter) =>
+        fighter.isAlive() && HeroTeamRegistry.isRedBlueTeam(fighter.playerId)
+    );
+    const greenPurpleAlive = this.fighters.filter(
+      (fighter) =>
+        fighter.isAlive() && HeroTeamRegistry.isGreenPurpleTeam(fighter.playerId)
+    );
+
+    if (redBlueAlive.length > 0 && greenPurpleAlive.length > 0) {
+      return;
+    }
+
+    const roundWinnerTeamId =
+      redBlueAlive.length > 0
+        ? HeroTeamRegistry.TEAM_RED_BLUE
+        : HeroTeamRegistry.TEAM_GREEN_PURPLE;
+
+    this.teamBattleManager.recordRoundWin(roundWinnerTeamId);
+    this.notifyPhase();
+
+    const seriesWinner = this.teamBattleManager.evaluateSeriesEnd();
+    if (seriesWinner) {
+      this.endGame(seriesWinner);
+      return;
+    }
+
+    this.teamBattleManager.advanceToNextRound();
+    this.resetTeamRoundBattle();
+    this.notifyPhase();
   }
 
   updateProjectiles() {
@@ -3018,6 +3122,7 @@ class LittleBallHeroGame {
         if (
           target &&
           target.isAlive() &&
+          this.canFighterDamageTarget(proj.ownerFighter, target) &&
           CollisionDetector.circleHitsCircle(
             proj.x,
             proj.y,
@@ -3046,6 +3151,12 @@ class LittleBallHeroGame {
         }
 
         for (const fighter of this.fighters) {
+          if (!fighter.isAlive()) {
+            continue;
+          }
+          if (!this.canFighterDamageTarget(owner, fighter)) {
+            continue;
+          }
           if (
             CollisionDetector.circleHitsCircle(
               proj.x,
@@ -3078,6 +3189,10 @@ class LittleBallHeroGame {
           if (fighter.playerId === proj.ownerId || !fighter.isAlive()) {
             continue;
           }
+          const shooter = this.getFighter(proj.ownerId);
+          if (!this.canFighterDamageTarget(shooter, fighter)) {
+            continue;
+          }
           if (
             CollisionDetector.circleHitsCircle(
               proj.x,
@@ -3088,7 +3203,6 @@ class LittleBallHeroGame {
               fighter.radius
             )
           ) {
-            const shooter = this.getFighter(proj.ownerId);
             fighter.takeDamage(proj.damage, shooter);
             proj.alive = false;
             this.projectiles.splice(i, 1);
@@ -3108,6 +3222,10 @@ class LittleBallHeroGame {
 
         for (const fighter of this.fighters) {
           if (fighter.playerId === proj.ownerId || !fighter.isAlive()) {
+            continue;
+          }
+          const shooter = this.getFighter(proj.ownerId);
+          if (!this.canFighterDamageTarget(shooter, fighter)) {
             continue;
           }
           if (
@@ -3141,6 +3259,10 @@ class LittleBallHeroGame {
           if (fighter.playerId === proj.ownerId || !fighter.isAlive()) {
             continue;
           }
+          const shooter = this.getFighter(proj.ownerId);
+          if (!this.canFighterDamageTarget(shooter, fighter)) {
+            continue;
+          }
           if (
             CollisionDetector.circleHitsCircle(
               proj.x,
@@ -3171,6 +3293,10 @@ class LittleBallHeroGame {
         if (fighter.playerId === proj.ownerId || !fighter.isAlive()) {
           continue;
         }
+        const shooter = this.getFighter(proj.ownerId);
+        if (!this.canFighterDamageTarget(shooter, fighter)) {
+          continue;
+        }
         if (
           CollisionDetector.circleHitsCircle(
             proj.x,
@@ -3181,7 +3307,6 @@ class LittleBallHeroGame {
             fighter.radius
           )
         ) {
-          const shooter = this.getFighter(proj.ownerId);
           fighter.takeDamage(proj.damage, shooter);
           proj.alive = false;
           this.projectiles.splice(i, 1);
@@ -3224,7 +3349,7 @@ class LittleBallHeroGame {
       (this.pickTimer ? this.pickTimer.getRemainingMs() : 0) / 1000
     );
     const pickerLabel = `${this.getTeamLabelForStep(this.pickStep)}（玩家${this.pickStep}）选球${
-      this.isFourPlayer() || this.isTwoPlayer()
+      this.isMultiplayerFourBall()
         ? " · 不可与已选队伍重复"
         : ""
     }`;
@@ -3323,9 +3448,11 @@ class LittleBallHeroGame {
     this.ctx.font = "13px system-ui, sans-serif";
     this.ctx.textAlign = "center";
     this.ctx.fillText(
-      this.isFourPlayer()
-        ? "四球自动反弹混战 · 武器箱含匕首(3击共3伤)"
-        : "双球自动反弹对打 · 武器箱含匕首(3击共3伤)",
+      this.isTeamBattle()
+        ? "双队团战 · 红蓝 vs 绿紫 · 30回合 · 团灭对方获胜"
+        : this.isFourPlayer()
+          ? "四球自动反弹混战 · 武器箱含匕首(3击共3伤)"
+          : "双球自动反弹对打 · 武器箱含匕首(3击共3伤)",
       this.width / 2,
       this.arena.bottom + 28
     );
@@ -3352,6 +3479,9 @@ class LittleBallHeroGame {
   getModeLabel() {
     if (this.subMode === "training") {
       return "小球英雄 · 训练场";
+    }
+    if (this.isTeamBattle()) {
+      return "小球英雄 · 双队团战";
     }
     if (this.isFourPlayer()) {
       return "小球英雄 · 四人模式";

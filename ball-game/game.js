@@ -1207,6 +1207,7 @@ class GameUI {
     this.heroTrainingBtn = document.getElementById("hero-training-btn");
     this.heroVersusBtn = document.getElementById("hero-versus-btn");
     this.heroFourPlayerBtn = document.getElementById("hero-four-player-btn");
+    this.heroTeamBattleBtn = document.getElementById("hero-team-battle-btn");
     this.heroSetupBack = document.getElementById("hero-setup-back");
 
     this.bindDualBallGame();
@@ -1373,7 +1374,7 @@ class GameUI {
       return;
     }
     if (!game.canPlayerPickNow()) {
-      if (game.phase === "pick" && game.pickStep > 1 && !game.isTwoPlayer() && !game.isFourPlayer()) {
+      if (game.phase === "pick" && game.pickStep > 1 && !game.isTwoPlayer() && !game.isMultiplayerFourBall()) {
         this.heroPickMatch.textContent =
           "训练场仅红队手动选球，请使用「双人模式」或「四人模式」";
       } else {
@@ -1447,13 +1448,18 @@ class GameUI {
             : "训练场失败，再试一次！";
       } else if (this.littleBallHero.subMode === "four_player") {
         msg = `${winnerName}获胜！最后存活者胜出`;
+      } else if (this.littleBallHero.subMode === "team_battle") {
+        msg = `${HeroTeamRegistry.getTeamLabel(winnerId)}获胜！30回合团战结束`;
       } else {
         msg =
           winnerId === 1
             ? "红队（玩家1）获胜！"
             : "蓝队（玩家2）获胜！";
       }
-      this.finishMatchWithCoins(msg, winnerId === 1);
+      this.finishMatchWithCoins(
+        msg,
+        this.littleBallHero.subMode === "team_battle" ? true : winnerId === 1
+      );
     };
   }
 
@@ -1461,7 +1467,7 @@ class GameUI {
     if (subMode === "training") {
       return 1;
     }
-    if (subMode === "four_player") {
+    if (subMode === "four_player" || subMode === "team_battle") {
       return GameConstants.FOUR_PLAYER_COUNT;
     }
     return GameConstants.DUAL_PLAYER_COUNT;
@@ -1545,6 +1551,9 @@ class GameUI {
     );
     this.heroFourPlayerBtn.addEventListener("click", () =>
       this.beginLittleBallHero("four_player")
+    );
+    this.heroTeamBattleBtn.addEventListener("click", () =>
+      this.beginLittleBallHero("team_battle")
     );
     this.heroSetupBack.addEventListener("click", () => this.showMainMenu());
   }
@@ -1776,28 +1785,32 @@ class GameUI {
 
   beginLittleBallHero(subMode) {
     this.currentMode = GameMode.LITTLE_BALL_HERO;
-    const isFourPlayer = subMode === "four_player";
+    const isMultiFour =
+      subMode === "four_player" || subMode === "team_battle";
     this.stopInactiveGameLoops(this.littleBallHero);
     this.hideAllOverlays();
     this.hud.classList.remove("hidden");
     this.configureStandardHud();
-    this.hud.classList.toggle("hud-4p", isFourPlayer);
+    this.hud.classList.toggle("hud-4p", isMultiFour);
     this.groupHud.classList.add("hidden");
     this.westHud.classList.add("hidden");
     this.numberTeacherHud.classList.add("hidden");
     this.heroHud.classList.remove("hidden");
-    this.configureHeroHudLayout(isFourPlayer);
+    this.configureHeroHudLayout(isMultiFour);
     this.p2Bar.classList.remove("hidden-bar");
     if (this.p3Bar) {
-      this.p3Bar.classList.toggle("hidden-bar", !isFourPlayer);
+      this.p3Bar.classList.toggle("hidden-bar", !isMultiFour);
     }
     if (this.p4Bar) {
-      this.p4Bar.classList.toggle("hidden-bar", !isFourPlayer);
+      this.p4Bar.classList.toggle("hidden-bar", !isMultiFour);
     }
     this.modeBadge.classList.remove("hidden");
-    this.modeBadge.textContent = isFourPlayer
-      ? "小球英雄 · 四人模式"
-      : "小球英雄";
+    this.modeBadge.textContent =
+      subMode === "team_battle"
+        ? "小球英雄 · 双队团战"
+        : isMultiFour
+          ? "小球英雄 · 四人模式"
+          : "小球英雄";
 
     this.p1HudLabel.textContent = "红队";
     this.p2Label.textContent = subMode === "training" ? "AI" : "蓝队";
@@ -1809,17 +1822,24 @@ class GameUI {
     }
 
     this.littleBallHero.start(subMode);
-    this.trackHeroHealth(isFourPlayer);
+    this.trackHeroHealth(isMultiFour);
   }
 
   updateHeroHud(snap) {
-    const isFourPlayer = snap.subMode === "four_player";
-    this.configureHeroHudLayout(isFourPlayer);
+    const isMultiFour =
+      snap.subMode === "four_player" || snap.subMode === "team_battle";
+    this.configureHeroHudLayout(isMultiFour);
 
     if (snap.phase === "pick") {
       const sec = Math.ceil(snap.pickRemainingMs / 1000);
       const teamLabel = this.getHeroTeamLabel(snap.pickStep);
-      this.heroPhaseText.textContent = `${teamLabel}选球 · 剩余 ${sec} 秒 · 在下方输入栏选球`;
+      if (snap.subMode === "team_battle") {
+        const alliance =
+          snap.pickStep <= 2 ? "（红蓝队阵营）" : "（绿紫队阵营）";
+        this.heroPhaseText.textContent = `${teamLabel}选球${alliance} · 剩余 ${sec} 秒`;
+      } else {
+        this.heroPhaseText.textContent = `${teamLabel}选球 · 剩余 ${sec} 秒 · 在下方输入栏选球`;
+      }
 
       this.updateHeroTeamInfoLine(
         this.heroP1Info,
@@ -1833,7 +1853,7 @@ class GameUI {
         snap,
         (heroId) => HeroRoster.getById(heroId)
       );
-      if (isFourPlayer && this.heroP3Info && this.heroP4Info) {
+      if (isMultiFour && this.heroP3Info && this.heroP4Info) {
         this.updateHeroTeamInfoLine(
           this.heroP3Info,
           3,
@@ -1865,7 +1885,7 @@ class GameUI {
       snap,
       (heroId) => HeroRoster.getById(heroId)
     );
-    if (isFourPlayer && this.heroP3Info && this.heroP4Info) {
+    if (isMultiFour && this.heroP3Info && this.heroP4Info) {
       this.updateHeroTeamInfoLine(
         this.heroP3Info,
         3,
@@ -1881,18 +1901,23 @@ class GameUI {
     }
 
     if (snap.phase === "battle") {
-      this.heroPhaseText.textContent = isFourPlayer
-        ? "四人混战 · 自动反弹对打"
-        : "自动对战中 · 双球持续反弹";
+      if (snap.subMode === "team_battle" && snap.teamBattle) {
+        const score = snap.teamBattle;
+        this.heroPhaseText.textContent = `第 ${score.roundNumber}/${score.maxRounds} 回合 · 红蓝 ${score.redBlueWins} : ${score.greenPurpleWins} 绿紫`;
+      } else {
+        this.heroPhaseText.textContent = isMultiFour
+          ? "四人混战 · 自动反弹对打"
+          : "自动对战中 · 双球持续反弹";
+      }
     }
   }
 
-  trackHeroHealth(isFourPlayer) {
+  trackHeroHealth(isMultiFour) {
     const tick = () => {
       if (this.littleBallHero.state === "playing") {
         this.hpP1.style.width = `${this.littleBallHero.getHealthPercent(1)}%`;
         this.hpP2.style.width = `${this.littleBallHero.getHealthPercent(2)}%`;
-        if (isFourPlayer) {
+        if (isMultiFour) {
           if (this.hpP3) {
             this.hpP3.style.width = `${this.littleBallHero.getHealthPercent(3)}%`;
           }

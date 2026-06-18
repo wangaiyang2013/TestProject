@@ -139,11 +139,18 @@
         <p>你<strong>只需选球</strong>（限时 8 秒，超时随机）</p>
         <p>在下方<strong>输入栏</strong>输入角色名或编号选球，会显示<strong>对弈编号</strong></p>
         <p>两球<strong>自动持续反弹</strong>对打，技能<strong>自动释放</strong></p>
+        <p><strong>双队团战</strong>：红蓝队 vs 绿紫队，30 回合得分制</p>
       </div>
       <div class="menu-buttons">
         <button id="hero-training-btn" type="button" class="btn-primary">训练场（蓝队 AI）</button>
         <button id="hero-versus-btn" type="button" class="btn-secondary">双人模式（红蓝轮流输入）</button>
         <button id="hero-four-player-btn" type="button" class="btn-four">四人模式（轮流选球）</button>
+        <button id="hero-team-battle-btn" type="button" class="btn-accent">双队团战（30回合）</button>
+      </div>
+      <div class="rules setup-hint" id="rules-hero-team">
+        <p><strong>红蓝队</strong>（玩家1+2）对战 <strong>绿紫队</strong>（玩家3+4）</p>
+        <p>共 <strong>30</strong> 回合；每回合团灭对方队伍得 1 分</p>
+        <p>30 回合后得分高者胜；领先到对手无法追平时提前结束</p>
       </div>
       <button id="hero-setup-back" type="button" class="btn-text">返回主菜单</button>
     </div>
@@ -241,6 +248,7 @@
   </div>
   <script src="game.js"></script>
   <script src="group-battle.js"></script>
+  <script src="hero-team-battle.js"></script>
   <script src="little-ball-hero.js"></script>
   <script src="element-burst.js"></script>
   <script src="magnet-ball.js"></script>
