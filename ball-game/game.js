@@ -1313,6 +1313,10 @@ class GameUI {
     });
 
     this.heroPickInput.addEventListener("input", () => {
+      const game = this.getActiveHeroPickGame();
+      if (game && game.phase === "pick" && typeof game.refreshPickTimer === "function") {
+        game.refreshPickTimer();
+      }
       this.updateHeroPickPreview();
     });
 
@@ -1374,9 +1378,16 @@ class GameUI {
       return;
     }
     if (!game.canPlayerPickNow()) {
-      if (game.phase === "pick" && game.pickStep > 1 && !game.isTwoPlayer() && !game.isMultiplayerFourBall()) {
+      if (
+        game.phase === "pick" &&
+        game.pickStep > 1 &&
+        !game.isTwoPlayer() &&
+        !game.isMultiplayerFourBall()
+      ) {
         this.heroPickMatch.textContent =
           "训练场仅红队手动选球，请使用「双人模式」或「四人模式」";
+      } else if (typeof game.getPickBlockingMessage === "function") {
+        this.heroPickMatch.textContent = game.getPickBlockingMessage();
       } else {
         this.heroPickMatch.textContent = "当前不可选球，请等待回合切换";
       }
@@ -1390,26 +1401,48 @@ class GameUI {
     }
   }
 
+  buildHeroPickPanelKey(snap) {
+    const roundKey = snap.teamBattle ? snap.teamBattle.roundNumber : 0;
+    return [
+      snap.phase,
+      snap.pickStep,
+      snap.subMode,
+      roundKey,
+      snap.p1HeroId || "",
+      snap.p2HeroId || "",
+      snap.p3HeroId || "",
+      snap.p4HeroId || "",
+    ].join(":");
+  }
+
   syncHeroPickPanel(snap) {
     if (snap.phase !== "pick") {
       this.hideHeroPickPanel();
       return;
     }
 
-    const canPick =
-      snap.pickStep >= 1 &&
-      snap.pickStep <= this.getHeroHumanPickCount(snap.subMode);
-    if (!canPick) {
+    const game = this.getActiveHeroPickGame();
+    if (!game) {
       this.hideHeroPickPanel();
       return;
     }
 
-    const game = this.getActiveHeroPickGame();
-    if (!game) {
+    if (!game.canPlayerPickNow()) {
+      this.hideHeroPickPanel();
+      if (typeof game.getPickBlockingMessage === "function") {
+        this.heroPickMatch.textContent = game.getPickBlockingMessage();
+      }
+      if (this.heroPickConfirm) {
+        this.heroPickConfirm.disabled = true;
+      }
       return;
     }
 
-    const panelKey = `${snap.phase}:${snap.pickStep}:${snap.subMode}:${snap.p1HeroId || ""}`;
+    if (this.heroPickConfirm) {
+      this.heroPickConfirm.disabled = false;
+    }
+
+    const panelKey = this.buildHeroPickPanelKey(snap);
     if (this.heroPickPanelKey !== panelKey) {
       this.heroPickPanelKey = panelKey;
       this.resetHeroPickInputForStep(snap, game);

@@ -529,11 +529,21 @@ class HeroPickInputResolver {
       };
     }
 
-    if (HeroPickInputResolver.isTeamKeyword(text)) {
+    if (HeroPickInputResolver.isCurrentStepTeamHint(text, config.pickStep)) {
+      const pickerLabel = config.currentPickerLabel || "当前队伍";
       return {
         hero: null,
         pickNumber: 0,
-        message: "请直接输入角色名或列表编号，不要输入「红队/蓝队」",
+        message: `当前轮到${pickerLabel}选球，请输入角色名或编号`,
+      };
+    }
+
+    if (HeroPickInputResolver.isTeamKeyword(text, config.pickStep)) {
+      const pickerLabel = config.currentPickerLabel || "当前队伍";
+      return {
+        hero: null,
+        pickNumber: 0,
+        message: `请输入角色名或编号（当前为${pickerLabel}选球）`,
       };
     }
 
@@ -554,11 +564,40 @@ class HeroPickInputResolver {
     );
   }
 
-  static isTeamKeyword(text) {
+  static isCurrentStepTeamHint(text, pickStep) {
     const lowerText = text.toLowerCase();
-    return HeroPickInputResolver.TEAM_KEYWORDS.some(
+    const stepKeywords = {
+      1: ["红队", "红", "玩家1", "p1"],
+      2: ["蓝队", "蓝", "玩家2", "p2"],
+      3: ["绿队", "绿", "玩家3", "p3"],
+      4: ["紫队", "紫", "玩家4", "p4"],
+    };
+    const allowedKeywords = pickStep ? stepKeywords[pickStep] || [] : [];
+    return allowedKeywords.some(
       (keyword) => keyword.toLowerCase() === lowerText
     );
+  }
+
+  static isTeamKeyword(text, pickStep) {
+    const lowerText = text.toLowerCase();
+    const stepKeywords = {
+      1: ["红队", "红", "玩家1", "p1"],
+      2: ["蓝队", "蓝", "玩家2", "p2"],
+      3: ["绿队", "绿", "玩家3", "p3"],
+      4: ["紫队", "紫", "玩家4", "p4"],
+    };
+    const allowedKeywords = pickStep ? stepKeywords[pickStep] || [] : [];
+
+    return HeroPickInputResolver.TEAM_KEYWORDS.some((keyword) => {
+      if (
+        allowedKeywords.some(
+          (allowedKeyword) => allowedKeyword.toLowerCase() === lowerText
+        )
+      ) {
+        return false;
+      }
+      return keyword.toLowerCase() === lowerText;
+    });
   }
 
   static resolveByNumber(fullHeroes, availableHeroes, pickNumber, options) {
@@ -2665,13 +2704,44 @@ class LittleBallHeroGame {
     if (this.subMode === "training") {
       return 1;
     }
-    if (this.isTwoPlayer()) {
-      return GameConstants.DUAL_PLAYER_COUNT;
-    }
-    if (this.isMultiplayerFourBall()) {
+    if (this.subMode === "four_player" || this.subMode === "team_battle") {
       return LittleBallHeroConstants.FOUR_PLAYER_COUNT;
     }
     return GameConstants.DUAL_PLAYER_COUNT;
+  }
+
+  canPlayerPickNow() {
+    if (this.state !== "playing" || this.phase !== "pick") {
+      return false;
+    }
+    const humanPickCount = this.getHumanPickCount();
+    return this.pickStep >= 1 && this.pickStep <= humanPickCount;
+  }
+
+  getPickBlockingMessage() {
+    if (this.state !== "playing") {
+      return "对局已结束，请返回主菜单";
+    }
+    if (this.phase === "battle") {
+      if (this.isTeamBattle()) {
+        return "战斗进行中，本回合结束后将重新选球";
+      }
+      return "战斗进行中，请等待本局结束";
+    }
+    if (this.phase !== "pick") {
+      return "当前不可选球，请等待回合切换";
+    }
+    const humanPickCount = this.getHumanPickCount();
+    if (this.pickStep > humanPickCount) {
+      return `当前为${this.getTeamLabelForStep(humanPickCount)}选球，请等待前序队伍完成`;
+    }
+    return "当前不可选球，请等待回合切换";
+  }
+
+  refreshPickTimer() {
+    if (this.phase === "pick") {
+      this.startPickTimer();
+    }
   }
 
   getTeamLabelForStep(step) {
@@ -2761,11 +2831,17 @@ class LittleBallHeroGame {
 
   autoPickForCurrentStep() {
     const available = this.getAvailableHeroes();
+    if (available.length === 0) {
+      return;
+    }
     const hero = this.pickRandomHero(available);
     this.applyPick(hero.id, true);
   }
 
   applyPick(heroId, wasAuto) {
+    if (this.phase !== "pick") {
+      return;
+    }
     this.setHeroIdForPickStep(this.pickStep, heroId);
     this.takenHeroIds.add(heroId);
     this.advancePick(wasAuto);
@@ -2874,13 +2950,6 @@ class LittleBallHeroGame {
     }
   }
 
-  canPlayerPickNow() {
-    if (this.phase !== "pick") {
-      return false;
-    }
-    return this.pickStep >= 1 && this.pickStep <= this.getHumanPickCount();
-  }
-
   getCurrentPickerTeamLabel() {
     return this.getTeamLabelForStep(this.pickStep);
   }
@@ -2889,6 +2958,8 @@ class LittleBallHeroGame {
     const context = {
       emptyHint: "输入角色名或编号，下方显示对弈编号",
       blockedByTeam: "对方",
+      pickStep: this.pickStep,
+      currentPickerLabel: this.getTeamLabelForStep(this.pickStep),
     };
 
     const previousPicks = [];
@@ -2922,7 +2993,13 @@ class LittleBallHeroGame {
           message: "训练场仅红队手动选球，请使用「双人模式」或「四人模式」",
         };
       }
-      return { ok: false, message: "当前不可选球" };
+      return {
+        ok: false,
+        message:
+          typeof this.getPickBlockingMessage === "function"
+            ? this.getPickBlockingMessage()
+            : "当前不可选球",
+      };
     }
 
     const resolved = HeroPickInputResolver.resolve(
@@ -3165,7 +3242,6 @@ class LittleBallHeroGame {
         : HeroTeamRegistry.TEAM_GREEN_PURPLE;
 
     this.teamBattleManager.recordRoundWin(roundWinnerTeamId);
-    this.notifyPhase();
 
     const seriesWinner = this.teamBattleManager.evaluateSeriesEnd();
     if (seriesWinner) {
@@ -3403,14 +3479,14 @@ class LittleBallHeroGame {
       return;
     }
 
+    if (this.phase === "battle") {
+      this.updateBattle();
+    }
     if (this.phase === "pick") {
       this.updatePickPhase();
-      this.notifyPhase();
-    } else if (this.phase === "battle") {
-      this.updateBattle();
-      this.notifyPhase();
     }
 
+    this.notifyPhase();
     this.input.clearFrame();
   }
 
