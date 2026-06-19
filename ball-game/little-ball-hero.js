@@ -2796,13 +2796,18 @@ class LittleBallHeroGame {
     this.notifyPhase();
   }
 
-  resetTeamRoundBattle() {
-    this.fighters = this.spawnBattleFighters();
+  startTeamBattlePickPhase() {
+    this.phase = "pick";
+    this.pickStep = 1;
+    this.p1HeroId = null;
+    this.p2HeroId = null;
+    this.p3HeroId = null;
+    this.p4HeroId = null;
+    this.takenHeroIds = new Set();
+    this.fighters = [];
     this.projectiles = [];
-    if (typeof WeaponBoxSpawnSystem !== "undefined") {
-      WeaponBoxSpawnSystem.initBattle(this);
-    }
-    this.phase = "battle";
+    this.startPickTimer();
+    this.notifyPhase();
   }
 
   canFighterDamageTarget(attacker, target) {
@@ -3102,8 +3107,7 @@ class LittleBallHeroGame {
     }
 
     this.teamBattleManager.advanceToNextRound();
-    this.resetTeamRoundBattle();
-    this.notifyPhase();
+    this.startTeamBattlePickPhase();
   }
 
   updateProjectiles() {
@@ -3354,6 +3358,17 @@ class LittleBallHeroGame {
         : ""
     }`;
 
+    if (this.isTeamBattle() && this.teamBattleManager) {
+      const score = this.teamBattleManager.getSnapshot();
+      this.ctx.fillStyle = "#ffd43b";
+      this.ctx.font = "bold 16px system-ui, sans-serif";
+      this.ctx.fillText(
+        `第 ${score.roundNumber}/${score.maxRounds} 回合选球 · 红蓝 ${score.redBlueWins} : ${score.greenPurpleWins} 绿紫`,
+        this.width / 2,
+        this.arena.top + 18
+      );
+    }
+
     this.ctx.fillStyle = "rgba(0,0,0,0.55)";
     this.ctx.fillRect(
       this.arena.left,
@@ -3449,7 +3464,7 @@ class LittleBallHeroGame {
     this.ctx.textAlign = "center";
     this.ctx.fillText(
       this.isTeamBattle()
-        ? "双队团战 · 红蓝 vs 绿紫 · 30回合 · 团灭对方获胜"
+        ? "双队团战 · 红蓝 vs 绿紫 · 30回合 · 每回合重选球 · 团灭对方获胜"
         : this.isFourPlayer()
           ? "四球自动反弹混战 · 武器箱含匕首(3击共3伤)"
           : "双球自动反弹对打 · 武器箱含匕首(3击共3伤)",

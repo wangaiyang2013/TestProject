@@ -1836,7 +1836,10 @@ class GameUI {
       if (snap.subMode === "team_battle") {
         const alliance =
           snap.pickStep <= 2 ? "（红蓝队阵营）" : "（绿紫队阵营）";
-        this.heroPhaseText.textContent = `${teamLabel}选球${alliance} · 剩余 ${sec} 秒`;
+        const scoreLine = snap.teamBattle
+          ? `第 ${snap.teamBattle.roundNumber}/${snap.teamBattle.maxRounds} 回合 · 红蓝 ${snap.teamBattle.redBlueWins} : ${snap.teamBattle.greenPurpleWins} 绿紫 · `
+          : "";
+        this.heroPhaseText.textContent = `${scoreLine}${teamLabel}选球${alliance} · 剩余 ${sec} 秒`;
       } else {
         this.heroPhaseText.textContent = `${teamLabel}选球 · 剩余 ${sec} 秒 · 在下方输入栏选球`;
       }
