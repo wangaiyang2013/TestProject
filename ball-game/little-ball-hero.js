@@ -4,6 +4,8 @@
 
 const LittleBallHeroConstants = {
   PICK_TIME_LIMIT_MS: 8000,
+  /** 进入新选球步骤后的保护时间，避免同帧或瞬间超时误触发自动选球 */
+  PICK_STEP_GRACE_MS: 600,
   MIN_BOUNCE_SPEED: 7,
   MAX_BOUNCE_SPEED: 11,
   WALL_BOUNCE: 0.98,
@@ -2616,6 +2618,7 @@ class LittleBallHeroGame {
     this.phase = "pick";
     this.pickStep = 1;
     this.pickTimer = null;
+    this.pickStepEnteredAt = 0;
     this.fighters = [];
     this.projectiles = [];
     this.p1HeroId = null;
@@ -2764,6 +2767,17 @@ class LittleBallHeroGame {
       return "对局已结束，请返回主菜单";
     }
     if (this.phase === "battle") {
+      const humanPickCount = this.getHumanPickCount();
+      const waitingHeroId = this.getHeroIdForPickStep(this.pickStep);
+      if (
+        this.pickStep >= 1 &&
+        this.pickStep <= humanPickCount &&
+        !waitingHeroId
+      ) {
+        return `${this.getTeamLabelForStep(
+          this.pickStep
+        )}选球已超时，战斗已开始；请等待本回合结束后再选球`;
+      }
       if (this.isTeamBattle()) {
         return "战斗进行中，本回合结束后将重新选球";
       }
@@ -2834,6 +2848,25 @@ class LittleBallHeroGame {
 
   startPickTimer() {
     this.pickTimer = new PickTimer(LittleBallHeroConstants.PICK_TIME_LIMIT_MS);
+    this.pickStepEnteredAt = Date.now();
+  }
+
+  canAutoPickByTimer() {
+    if (!this.pickTimer || !this.pickTimer.isExpired()) {
+      return false;
+    }
+    const elapsedSinceStep = Date.now() - (this.pickStepEnteredAt || 0);
+    return elapsedSinceStep >= LittleBallHeroConstants.PICK_STEP_GRACE_MS;
+  }
+
+  areAllBattleHeroesSelected() {
+    const playerCount = this.getBattlePlayerCount();
+    for (let step = 1; step <= playerCount; step += 1) {
+      if (!this.getHeroIdForPickStep(step)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   notifyPhase() {
@@ -2910,6 +2943,10 @@ class LittleBallHeroGame {
       this.fillTrainingAiPick();
     }
 
+    if (!this.areAllBattleHeroesSelected()) {
+      return;
+    }
+
     this.beginBattle();
   }
 
@@ -2949,6 +2986,10 @@ class LittleBallHeroGame {
   }
 
   beginBattle() {
+    if (!this.areAllBattleHeroesSelected()) {
+      return;
+    }
+
     this.fighters = this.spawnBattleFighters();
     if (
       this.isCrazyFight() &&
@@ -2992,7 +3033,7 @@ class LittleBallHeroGame {
   }
 
   updatePickPhase() {
-    if (this.pickTimer && this.pickTimer.isExpired()) {
+    if (this.canAutoPickByTimer()) {
       this.autoPickForCurrentStep();
     }
   }
@@ -3526,10 +3567,13 @@ class LittleBallHeroGame {
       return;
     }
 
-    if (this.phase === "battle") {
+    const phaseAtFrameStart = this.phase;
+    if (phaseAtFrameStart === "battle") {
       this.updateBattle();
-    }
-    if (this.phase === "pick") {
+      if (this.phase === "pick") {
+        this.updatePickPhase();
+      }
+    } else if (phaseAtFrameStart === "pick") {
       this.updatePickPhase();
     }
 

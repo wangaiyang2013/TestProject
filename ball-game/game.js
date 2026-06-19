@@ -1392,6 +1392,7 @@ class GameUI {
       } else {
         this.heroPickMatch.textContent = "当前不可选球，请等待回合切换";
       }
+      this.updateHeroHud(game.getPhaseSnapshot());
       return;
     }
 
@@ -1417,18 +1418,13 @@ class GameUI {
   }
 
   syncHeroPickPanel(snap) {
-    if (snap.phase !== "pick") {
-      this.hideHeroPickPanel();
-      return;
-    }
-
     const game = this.getActiveHeroPickGame();
-    if (!game) {
+    if (!game || game.state !== "playing") {
       this.hideHeroPickPanel();
       return;
     }
 
-    if (!game.canPlayerPickNow()) {
+    if (game.phase !== "pick" || !game.canPlayerPickNow()) {
       this.hideHeroPickPanel();
       if (typeof game.getPickBlockingMessage === "function") {
         this.heroPickMatch.textContent = game.getPickBlockingMessage();
@@ -1447,6 +1443,9 @@ class GameUI {
     if (this.heroPickPanelKey !== panelKey) {
       this.heroPickPanelKey = panelKey;
       this.resetHeroPickInputForStep(snap, game);
+      if (typeof game.refreshPickTimer === "function") {
+        game.refreshPickTimer();
+      }
     }
 
     this.showHeroPickPanel(snap, game);
@@ -1870,18 +1869,25 @@ class GameUI {
   }
 
   updateHeroHud(snap) {
+    const game = this.littleBallHero;
+    const liveSnap =
+      game &&
+      game.state === "playing" &&
+      this.currentMode === GameMode.LITTLE_BALL_HERO
+        ? game.getPhaseSnapshot()
+        : snap;
     const isMultiFour =
-      snap.subMode === "four_player" || snap.subMode === "team_battle";
+      liveSnap.subMode === "four_player" || liveSnap.subMode === "team_battle";
     this.configureHeroHudLayout(isMultiFour);
 
-    if (snap.phase === "pick") {
-      const sec = Math.ceil(snap.pickRemainingMs / 1000);
-      const teamLabel = this.getHeroTeamLabel(snap.pickStep);
-      if (snap.subMode === "team_battle") {
+    if (liveSnap.phase === "pick") {
+      const sec = Math.ceil(liveSnap.pickRemainingMs / 1000);
+      const teamLabel = this.getHeroTeamLabel(liveSnap.pickStep);
+      if (liveSnap.subMode === "team_battle") {
         const alliance =
-          snap.pickStep <= 2 ? "（红蓝队阵营）" : "（绿紫队阵营）";
-        const scoreLine = snap.teamBattle
-          ? `第 ${snap.teamBattle.roundNumber}/${snap.teamBattle.maxRounds} 回合 · 红蓝 ${snap.teamBattle.redBlueWins} : ${snap.teamBattle.greenPurpleWins} 绿紫 · `
+          liveSnap.pickStep <= 2 ? "（红蓝队阵营）" : "（绿紫队阵营）";
+        const scoreLine = liveSnap.teamBattle
+          ? `第 ${liveSnap.teamBattle.roundNumber}/${liveSnap.teamBattle.maxRounds} 回合 · 红蓝 ${liveSnap.teamBattle.redBlueWins} : ${liveSnap.teamBattle.greenPurpleWins} 绿紫 · `
           : "";
         this.heroPhaseText.textContent = `${scoreLine}${teamLabel}选球${alliance} · 剩余 ${sec} 秒`;
       } else {
@@ -1891,30 +1897,30 @@ class GameUI {
       this.updateHeroTeamInfoLine(
         this.heroP1Info,
         1,
-        snap,
+        liveSnap,
         (heroId) => HeroRoster.getById(heroId)
       );
       this.updateHeroTeamInfoLine(
         this.heroP2Info,
         2,
-        snap,
+        liveSnap,
         (heroId) => HeroRoster.getById(heroId)
       );
       if (isMultiFour && this.heroP3Info && this.heroP4Info) {
         this.updateHeroTeamInfoLine(
           this.heroP3Info,
           3,
-          snap,
+          liveSnap,
           (heroId) => HeroRoster.getById(heroId)
         );
         this.updateHeroTeamInfoLine(
           this.heroP4Info,
           4,
-          snap,
+          liveSnap,
           (heroId) => HeroRoster.getById(heroId)
         );
       }
-      this.syncHeroPickPanel(snap);
+      this.syncHeroPickPanel(liveSnap);
       return;
     }
 
@@ -1923,36 +1929,36 @@ class GameUI {
     this.updateHeroTeamInfoLine(
       this.heroP1Info,
       1,
-      snap,
+      liveSnap,
       (heroId) => HeroRoster.getById(heroId)
     );
     this.updateHeroTeamInfoLine(
       this.heroP2Info,
       2,
-      snap,
+      liveSnap,
       (heroId) => HeroRoster.getById(heroId)
     );
     if (isMultiFour && this.heroP3Info && this.heroP4Info) {
       this.updateHeroTeamInfoLine(
         this.heroP3Info,
         3,
-        snap,
+        liveSnap,
         (heroId) => HeroRoster.getById(heroId)
       );
       this.updateHeroTeamInfoLine(
         this.heroP4Info,
         4,
-        snap,
+        liveSnap,
         (heroId) => HeroRoster.getById(heroId)
       );
     }
 
-    if (snap.phase === "battle") {
-      if (snap.subMode === "team_battle" && snap.teamBattle) {
-        const score = snap.teamBattle;
+    if (liveSnap.phase === "battle") {
+      if (liveSnap.subMode === "team_battle" && liveSnap.teamBattle) {
+        const score = liveSnap.teamBattle;
         this.heroPhaseText.textContent = `第 ${score.roundNumber}/${score.maxRounds} 回合 · 红蓝 ${score.redBlueWins} : ${score.greenPurpleWins} 绿紫`;
       } else {
-        this.heroPhaseText.textContent = snap.subMode === "crazy_fight"
+        this.heroPhaseText.textContent = liveSnap.subMode === "crazy_fight"
           ? "疯狂对战 · 全场超强 · 自动对战中"
           : isMultiFour
             ? "四人混战 · 自动反弹对打"
