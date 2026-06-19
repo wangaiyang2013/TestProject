@@ -1,5 +1,5 @@
 /**
- * 劍刃球 - 敌人进入挥剑范围时劈砍吸血；每 20 秒无敌 20 秒并释放元素弹
+ * 劍刃球 - 敌人进入挥剑范围时劈砍吸血；释放大招后无敌 20 秒并释放元素弹，无敌结束后 80 秒冷却
  */
 
 const SwordBladeConstants = {
@@ -12,10 +12,10 @@ const SwordBladeConstants = {
   SLASH_DAMAGE_MULTIPLIER: 1.35,
   /** 吸血比例：按造成伤害回复生命 */
   LIFESTEAL_RATIO: 0.4,
-  /** 大招冷却：每 20 秒触发一次 */
-  ULT_INTERVAL_MS: 20000,
-  /** 无敌持续时间：固定 20 秒（与元素弹释放同时进行，互不绑定） */
+  /** 无敌持续时间：固定 20 秒（与元素弹释放同时进行） */
   INVINCIBLE_DURATION_MS: 20000,
+  /** 无敌结束后的的大招冷却时间 */
+  ULT_COOLDOWN_AFTER_INVINCIBLE_MS: 80000,
   SLASH_FLASH_MS: 320,
   INVINCIBLE_RING_PULSE_MS: 600,
   ULT_FLASH_MS: 400,
@@ -51,6 +51,7 @@ class SwordBladeSkillSystem {
     fighter.swordBladeSlashFlashUntil = 0;
     fighter.swordBladeSlashAngle = 0;
     fighter.swordBladeInvincibleUntil = 0;
+    fighter.swordBladeNextUltAt = 0;
     fighter.lastSwordSlashTime = 0;
     fighter.swordBladeUltFlashUntil = 0;
     fighter.swordBladeLifestealTextUntil = 0;
@@ -60,6 +61,28 @@ class SwordBladeSkillSystem {
     return (
       SwordBladeSkillSystem.isSwordFighter(fighter) &&
       Date.now() < fighter.swordBladeInvincibleUntil
+    );
+  }
+
+  static isUltOnCooldown(fighter, now) {
+    return (
+      SwordBladeSkillSystem.isSwordFighter(fighter) &&
+      now < fighter.swordBladeNextUltAt &&
+      !SwordBladeSkillSystem.isInvincible(fighter)
+    );
+  }
+
+  static getUltCooldownRemainingSec(fighter, now) {
+    if (!SwordBladeSkillSystem.isUltOnCooldown(fighter, now)) {
+      return 0;
+    }
+    return Math.ceil((fighter.swordBladeNextUltAt - now) / 1000);
+  }
+
+  static canUseUltimate(fighter, now) {
+    return (
+      SwordBladeSkillSystem.isSwordFighter(fighter) &&
+      now >= fighter.swordBladeNextUltAt
     );
   }
 
@@ -138,6 +161,10 @@ class SwordBladeSkillSystem {
     const now = Date.now();
     fighter.swordBladeInvincibleUntil =
       now + SwordBladeConstants.INVINCIBLE_DURATION_MS;
+    fighter.swordBladeNextUltAt =
+      now +
+      SwordBladeConstants.INVINCIBLE_DURATION_MS +
+      SwordBladeConstants.ULT_COOLDOWN_AFTER_INVINCIBLE_MS;
     fighter.swordBladeUltFlashUntil = now + SwordBladeConstants.ULT_FLASH_MS;
     ElementBurstSystem.summonOrbitBullets(
       fighter,
@@ -191,6 +218,27 @@ class SwordBladeSkillSystem {
     ctx.stroke();
   }
 
+  static drawUltCooldownText(ctx, fighter) {
+    const now = Date.now();
+    if (!SwordBladeSkillSystem.isUltOnCooldown(fighter, now)) {
+      return;
+    }
+
+    const remainingSec = SwordBladeSkillSystem.getUltCooldownRemainingSec(
+      fighter,
+      now
+    );
+    ctx.fillStyle = "#adb5bd";
+    ctx.font = "bold 10px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(
+      `大招冷却 ${remainingSec}s`,
+      fighter.x,
+      fighter.y - fighter.radius - 22
+    );
+    ctx.textAlign = "left";
+  }
+
   static drawInvincibleRing(ctx, fighter) {
     if (!SwordBladeSkillSystem.isInvincible(fighter)) {
       return;
@@ -235,6 +283,7 @@ class SwordBladeSkillSystem {
 
     SwordBladeSkillSystem.drawSlashRange(ctx, fighter);
     SwordBladeSkillSystem.drawInvincibleRing(ctx, fighter);
+    SwordBladeSkillSystem.drawUltCooldownText(ctx, fighter);
     SwordBladeSkillSystem.drawSlash(ctx, fighter);
     SwordBladeSkillSystem.drawLifestealText(ctx, fighter);
 

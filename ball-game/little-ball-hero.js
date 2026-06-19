@@ -331,7 +331,8 @@ class HeroRoster {
         1.0,
         HeroSkillType.SWORD_BLADE,
         26,
-        SwordBladeConstants.ULT_INTERVAL_MS
+        SwordBladeConstants.INVINCIBLE_DURATION_MS +
+          SwordBladeConstants.ULT_COOLDOWN_AFTER_INVINCIBLE_MS
       ),
       new HeroBallTemplate(
         "ice_rot",
@@ -1975,8 +1976,7 @@ class HeroAutoSkillSystem {
 
     if (template.skillType === HeroSkillType.SWORD_BLADE) {
       SwordBladeSkillSystem.tickSlash(fighter, opponent, now);
-      if (fighter.canUseSkill(now)) {
-        fighter.markSkillUsed(now);
+      if (SwordBladeSkillSystem.canUseUltimate(fighter, now)) {
         SwordBladeSkillSystem.activateUltimate(fighter);
       }
       return;
@@ -3546,6 +3546,13 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
     if (SwordBladeSkillSystem.isInvincible(fighter)) {
       return `${baseLabel}·无敌中`;
     }
+    const cooldownSec = SwordBladeSkillSystem.getUltCooldownRemainingSec(
+      fighter,
+      Date.now()
+    );
+    if (cooldownSec > 0) {
+      return `${baseLabel}·冷却${cooldownSec}s`;
+    }
   }
   if (fighter.template.skillType === HeroSkillType.ICE_ROT) {
     const hp = IceRotSkillSystem.getCurrentHpDisplay(fighter);
@@ -3606,7 +3613,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "随机防具头";
   }
   if (skillType === HeroSkillType.SWORD_BLADE) {
-    return "范围内挥剑吸血/20秒无敌+元素";
+    return "范围内挥剑吸血/20秒无敌+元素/无敌后80秒冷却";
   }
   if (skillType === HeroSkillType.ICE_ROT) {
     return "冰弹/血量<100狂暴/狂暴受防卫近战最高伤";
