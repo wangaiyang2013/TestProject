@@ -131,7 +131,7 @@ class MeleeHeroClassifier {
       skillType === HeroSkillType.BROKEN_BLADE ||
       skillType === HeroSkillType.SWORD_BLADE ||
       skillType === HeroSkillType.ICE_ROT ||
-      skillType === HeroSkillType.FITNESS
+      skillType === HeroSkillType.TRACKING
     );
   }
 }

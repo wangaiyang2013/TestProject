@@ -117,8 +117,8 @@ class HeroSkillType {
   /** 寒冰腐烂球专属：冰球减速叠层冻结；受伤后狂暴近战；踩踏吞噬 */
   static ICE_ROT = "ice_rot";
 
-  /** 健身球专属：贴身追击敌人，触碰近战，不弹跳 */
-  static FITNESS = "fitness";
+  /** 追踪球专属：贴身追击敌人，触碰近战，不弹跳 */
+  static TRACKING = "tracking";
 }
 
 /**
@@ -350,16 +350,16 @@ class HeroRoster {
         IceRotConstants.ICE_SHOT_INTERVAL_MS
       ),
       new HeroBallTemplate(
-        "fitness",
-        "健身球",
-        "#f76707",
-        "#ffa94d",
+        "tracking",
+        "追踪球",
+        "#4c6ef5",
+        "#748ffc",
         BallHealthResolver.resolve(108),
         9.5,
         1.15,
-        HeroSkillType.FITNESS,
+        HeroSkillType.TRACKING,
         14,
-        FitnessBallConstants.CONTACT_DAMAGE_INTERVAL_MS
+        TrackingBallConstants.CONTACT_DAMAGE_INTERVAL_MS
       ),
     ];
   }
@@ -841,12 +841,12 @@ class HeroPickPreviewRenderer {
       return;
     }
 
-    if (hero.skillType === HeroSkillType.FITNESS) {
+    if (hero.skillType === HeroSkillType.TRACKING) {
       ctx.fillStyle = "#fff";
       ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("健", cx, cy);
+      ctx.fillText("追", cx, cy);
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       return;
@@ -1419,8 +1419,8 @@ class HeroBallFighter {
       IceRotSkillSystem.initFighter(this);
     }
 
-    if (FitnessBallSkillSystem.isFitnessFighter(this)) {
-      FitnessBallSkillSystem.initFighter(this);
+    if (TrackingBallSkillSystem.isTrackingFighter(this)) {
+      TrackingBallSkillSystem.initFighter(this);
     }
 
     if (SpikeReflectSystem.isSpikeFighter(this)) {
@@ -1648,8 +1648,8 @@ class HeroBallFighter {
       IceRotSkillSystem.draw(ctx, this);
     }
 
-    if (this.template.skillType === HeroSkillType.FITNESS) {
-      FitnessBallSkillSystem.draw(ctx, this);
+    if (this.template.skillType === HeroSkillType.TRACKING) {
+      TrackingBallSkillSystem.draw(ctx, this);
     }
 
     if (typeof ElementStatusEffectSystem !== "undefined") {
@@ -2008,7 +2008,7 @@ class HeroAutoSkillSystem {
 
     const template = fighter.template;
 
-    if (template.skillType === HeroSkillType.FITNESS) {
+    if (template.skillType === HeroSkillType.TRACKING) {
       return;
     }
 
@@ -2487,8 +2487,8 @@ class HeroBattleArenaHelper {
           continue;
         }
         if (
-          typeof FitnessBallSkillSystem !== "undefined" &&
-          FitnessBallSkillSystem.resolveContactPair(fighterA, fighterB, game)
+          typeof TrackingBallSkillSystem !== "undefined" &&
+          TrackingBallSkillSystem.resolveContactPair(fighterA, fighterB, game)
         ) {
           continue;
         }
@@ -3026,15 +3026,15 @@ class LittleBallHeroGame {
       }
       if (!ElementStatusEffectSystem.isFrozen(fighter)) {
         if (
-          typeof FitnessBallSkillSystem !== "undefined" &&
-          FitnessBallSkillSystem.isFitnessFighter(fighter)
+          typeof TrackingBallSkillSystem !== "undefined" &&
+          TrackingBallSkillSystem.isTrackingFighter(fighter)
         ) {
           const chaseTarget = HeroBattleArenaHelper.getNearestOpponent(
             fighter,
             fighters,
             this
           );
-          FitnessBallSkillSystem.updateMovement(
+          TrackingBallSkillSystem.updateMovement(
             fighter,
             chaseTarget,
             this.arena
@@ -3052,10 +3052,10 @@ class LittleBallHeroGame {
       ElementStatusEffectSystem.tickFighter(fighter, now);
       DefenseBallSkillSystem.tickMovementRestriction(fighter, now);
       if (
-        typeof FitnessBallSkillSystem !== "undefined" &&
-        FitnessBallSkillSystem.isFitnessFighter(fighter)
+        typeof TrackingBallSkillSystem !== "undefined" &&
+        TrackingBallSkillSystem.isTrackingFighter(fighter)
       ) {
-        FitnessBallSkillSystem.tickContact(fighter, fighters, this, now);
+        TrackingBallSkillSystem.tickContact(fighter, fighters, this, now);
       }
     }
 
@@ -3630,8 +3630,8 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
     }
     return `${baseLabel}·冰弹${hp}`;
   }
-  if (fighter.template.skillType === HeroSkillType.FITNESS) {
-    return `${baseLabel}·贴身追击`;
+  if (fighter.template.skillType === HeroSkillType.TRACKING) {
+    return `${baseLabel}·追踪追击`;
   }
   return baseLabel;
 };
@@ -3688,8 +3688,8 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   if (skillType === HeroSkillType.ICE_ROT) {
     return "冰弹/血量<100狂暴/狂暴受防卫近战最高伤";
   }
-  if (skillType === HeroSkillType.FITNESS) {
-    return "贴身追击/触碰近战/不弹跳";
+  if (skillType === HeroSkillType.TRACKING) {
+    return "追踪敌人/触碰近战/不弹跳";
   }
   return "技能";
 };

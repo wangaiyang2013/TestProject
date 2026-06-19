@@ -1,8 +1,8 @@
 /**
- * 健身球 - 贴身追击最近敌人，触碰近战攻击，不与墙壁或其他球体弹跳
+ * 追踪球 - 贴身追击最近敌人，触碰近战攻击，不与墙壁或其他球体弹跳
  */
 
-const FitnessBallConstants = {
+const TrackingBallConstants = {
   /** 触碰近战伤害间隔（毫秒） */
   CONTACT_DAMAGE_INTERVAL_MS: 700,
   CONTACT_HIT_FLASH_MS: 280,
@@ -12,16 +12,16 @@ const FitnessBallConstants = {
 };
 
 /**
- * 健身球技能系统
+ * 追踪球技能系统
  */
-class FitnessBallSkillSystem {
-  static isFitnessFighter(fighter) {
-    return fighter && fighter.template.skillType === HeroSkillType.FITNESS;
+class TrackingBallSkillSystem {
+  static isTrackingFighter(fighter) {
+    return fighter && fighter.template.skillType === HeroSkillType.TRACKING;
   }
 
   static initFighter(fighter) {
-    fighter.fitnessHitFlashUntil = 0;
-    fighter.fitnessLastHitByTarget = {};
+    fighter.trackingHitFlashUntil = 0;
+    fighter.trackingLastHitByTarget = {};
   }
 
   static isOverlapping(fighterA, fighterB) {
@@ -54,7 +54,7 @@ class FitnessBallSkillSystem {
     if (!target || !target.isAlive()) {
       fighter.vx *= 0.9;
       fighter.vy *= 0.9;
-      FitnessBallSkillSystem.applyPosition(fighter, arena);
+      TrackingBallSkillSystem.applyPosition(fighter, arena);
       return;
     }
 
@@ -65,10 +65,10 @@ class FitnessBallSkillSystem {
       return;
     }
 
-    const speed = FitnessBallSkillSystem.getChaseSpeed(fighter);
+    const speed = TrackingBallSkillSystem.getChaseSpeed(fighter);
     fighter.vx = (dx / dist) * speed;
     fighter.vy = (dy / dist) * speed;
-    FitnessBallSkillSystem.applyPosition(fighter, arena);
+    TrackingBallSkillSystem.applyPosition(fighter, arena);
   }
 
   static applyPosition(fighter, arena) {
@@ -100,7 +100,7 @@ class FitnessBallSkillSystem {
   }
 
   static tickContact(fighter, allFighters, game, now) {
-    if (!FitnessBallSkillSystem.isFitnessFighter(fighter) || !fighter.isAlive()) {
+    if (!TrackingBallSkillSystem.isTrackingFighter(fighter) || !fighter.isAlive()) {
       return;
     }
     if (
@@ -110,40 +110,40 @@ class FitnessBallSkillSystem {
       return;
     }
 
-    const opponents = FitnessBallSkillSystem.getContactOpponents(
+    const opponents = TrackingBallSkillSystem.getContactOpponents(
       fighter,
       allFighters,
       game
     );
 
     for (const opponent of opponents) {
-      if (!FitnessBallSkillSystem.isOverlapping(fighter, opponent)) {
+      if (!TrackingBallSkillSystem.isOverlapping(fighter, opponent)) {
         continue;
       }
 
-      const lastHitTime = fighter.fitnessLastHitByTarget[opponent.playerId] || 0;
-      if (now - lastHitTime < FitnessBallConstants.CONTACT_DAMAGE_INTERVAL_MS) {
+      const lastHitTime = fighter.trackingLastHitByTarget[opponent.playerId] || 0;
+      if (now - lastHitTime < TrackingBallConstants.CONTACT_DAMAGE_INTERVAL_MS) {
         continue;
       }
 
-      fighter.fitnessLastHitByTarget[opponent.playerId] = now;
+      fighter.trackingLastHitByTarget[opponent.playerId] = now;
       opponent.takeDamage(fighter.template.skillDamage, fighter);
-      fighter.fitnessHitFlashUntil =
-        now + FitnessBallConstants.CONTACT_HIT_FLASH_MS;
+      fighter.trackingHitFlashUntil =
+        now + TrackingBallConstants.CONTACT_HIT_FLASH_MS;
 
       if (typeof ElementStatusEffectSystem !== "undefined") {
-        ElementStatusEffectSystem.setStatusText(opponent, "贴身打击");
+        ElementStatusEffectSystem.setStatusText(opponent, "追踪打击");
       }
     }
   }
 
   /**
-   * 健身球参与碰撞时仅做分离，不触发弹性反弹
+   * 追踪球参与碰撞时仅做分离，不触发弹性反弹
    */
   static resolveContactPair(fighterA, fighterB, game) {
-    const fitnessA = FitnessBallSkillSystem.isFitnessFighter(fighterA);
-    const fitnessB = FitnessBallSkillSystem.isFitnessFighter(fighterB);
-    if (!fitnessA && !fitnessB) {
+    const trackingA = TrackingBallSkillSystem.isTrackingFighter(fighterA);
+    const trackingB = TrackingBallSkillSystem.isTrackingFighter(fighterB);
+    if (!trackingA && !trackingB) {
       return false;
     }
 
@@ -166,12 +166,12 @@ class FitnessBallSkillSystem {
     fighterB.x += (nx * overlap * fighterA.mass) / totalMass;
     fighterB.y += (ny * overlap * fighterA.mass) / totalMass;
 
-    const push = FitnessBallConstants.SEPARATION_PUSH_STRENGTH;
-    if (fitnessA && !fitnessB) {
+    const push = TrackingBallConstants.SEPARATION_PUSH_STRENGTH;
+    if (trackingA && !trackingB) {
       fighterB.vx += nx * push;
       fighterB.vy += ny * push;
       ContinuousBouncePhysics.maintainSpeed(fighterB);
-    } else if (fitnessB && !fitnessA) {
+    } else if (trackingB && !trackingA) {
       fighterA.vx -= nx * push;
       fighterA.vy -= ny * push;
       ContinuousBouncePhysics.maintainSpeed(fighterA);
@@ -181,7 +181,7 @@ class FitnessBallSkillSystem {
   }
 
   static draw(ctx, fighter) {
-    if (!FitnessBallSkillSystem.isFitnessFighter(fighter)) {
+    if (!TrackingBallSkillSystem.isTrackingFighter(fighter)) {
       return;
     }
 
@@ -189,34 +189,34 @@ class FitnessBallSkillSystem {
       0.5 +
       0.5 *
         Math.sin(
-          (Date.now() % FitnessBallConstants.CHASE_RING_PULSE_MS) /
-            (FitnessBallConstants.CHASE_RING_PULSE_MS / (Math.PI * 2))
+          (Date.now() % TrackingBallConstants.CHASE_RING_PULSE_MS) /
+            (TrackingBallConstants.CHASE_RING_PULSE_MS / (Math.PI * 2))
         );
 
     ctx.beginPath();
     ctx.arc(fighter.x, fighter.y, fighter.radius + 8 + pulse * 3, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(247, 103, 7, ${0.28 + pulse * 0.2})`;
+    ctx.strokeStyle = `rgba(76, 110, 245, ${0.28 + pulse * 0.2})`;
     ctx.lineWidth = 2;
     ctx.setLineDash([4, 4]);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    if (Date.now() < fighter.fitnessHitFlashUntil) {
+    if (Date.now() < fighter.trackingHitFlashUntil) {
       ctx.beginPath();
       ctx.arc(fighter.x, fighter.y, fighter.radius + 12, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(255, 146, 43, 0.85)";
+      ctx.strokeStyle = "rgba(116, 143, 252, 0.85)";
       ctx.lineWidth = 3;
       ctx.stroke();
       ctx.fillStyle = "#ffd43b";
       ctx.font = "bold 10px system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("贴身打击", fighter.x, fighter.y - fighter.radius - 20);
+      ctx.fillText("追踪打击", fighter.x, fighter.y - fighter.radius - 20);
       ctx.textAlign = "left";
     } else {
-      ctx.fillStyle = "#ffa94d";
+      ctx.fillStyle = "#748ffc";
       ctx.font = "bold 9px system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("追击", fighter.x, fighter.y - fighter.radius - 18);
+      ctx.fillText("追踪", fighter.x, fighter.y - fighter.radius - 18);
       ctx.textAlign = "left";
     }
   }

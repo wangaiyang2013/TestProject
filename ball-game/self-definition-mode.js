@@ -84,11 +84,11 @@ class CustomSkillTypeParser {
       return HeroSkillType.ICE_ROT;
     }
     if (
-      text.includes("健身") ||
-      text.includes("fitness") ||
+      text.includes("追踪") ||
+      text.includes("tracking") ||
       text.includes("追击")
     ) {
-      return HeroSkillType.FITNESS;
+      return HeroSkillType.TRACKING;
     }
     if (text.includes("尖刺") || text.includes("反伤") || text.includes("spike")) {
       return HeroSkillType.SPIKE;
