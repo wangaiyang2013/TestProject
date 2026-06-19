@@ -261,7 +261,7 @@ class IceRotSkillSystem {
     );
   }
 
-  static fireIceBall(fighter, opponent, projectiles, projectileRadius) {
+  static fireIceBall(fighter, opponent, projectiles, projectileRadius, game) {
     if (!opponent || !opponent.isAlive()) {
       return;
     }
@@ -275,6 +275,10 @@ class IceRotSkillSystem {
 
     const startX = fighter.x + (dx / dist) * (fighter.radius + projectileRadius);
     const startY = fighter.y + (dy / dist) * (fighter.radius + projectileRadius);
+    const damage =
+      typeof fighter.getSkillDamage === "function"
+        ? fighter.getSkillDamage()
+        : fighter.template.skillDamage;
 
     projectiles.push(
       new IceRotProjectile(
@@ -283,7 +287,7 @@ class IceRotSkillSystem {
         dx / dist,
         dy / dist,
         fighter.playerId,
-        fighter.template.skillDamage,
+        damage,
         fighter
       )
     );
@@ -298,7 +302,11 @@ class IceRotSkillSystem {
     const ratio = swallowing
       ? IceRotConstants.SWALLOW_DAMAGE_RATIO
       : IceRotConstants.CRAZY_MELEE_DAMAGE_RATIO;
-    return Math.max(1, Math.round(fighter.template.skillDamage * ratio));
+    const baseDamage =
+      typeof fighter.getSkillDamage === "function"
+        ? fighter.getSkillDamage()
+        : fighter.template.skillDamage;
+    return Math.max(1, Math.round(baseDamage * ratio));
   }
 
   static tickCrazyBurst(fighter, opponent, now) {
@@ -403,7 +411,12 @@ class IceRotSkillSystem {
       ctx.fillStyle = "#ff6b6b";
       ctx.font = "bold 9px system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("狂暴<100", fighter.x, fighter.y - fighter.radius - 28);
+      const crazyLabel =
+        typeof CrazyFightSkillSystem !== "undefined" &&
+        CrazyFightSkillSystem.isSupercharged(fighter)
+          ? "狂暴<100·冰弹"
+          : "狂暴<100";
+      ctx.fillText(crazyLabel, fighter.x, fighter.y - fighter.radius - 28);
       ctx.fillStyle = "#ffd43b";
       ctx.fillText("惧防卫近战", fighter.x, fighter.y - fighter.radius - 16);
       ctx.textAlign = "left";

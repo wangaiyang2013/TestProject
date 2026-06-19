@@ -127,7 +127,7 @@ class TrackingBallSkillSystem {
       }
 
       fighter.trackingLastHitByTarget[opponent.playerId] = now;
-      opponent.takeDamage(fighter.template.skillDamage, fighter);
+      opponent.takeDamage(fighter.getSkillDamage(), fighter);
       fighter.trackingHitFlashUntil =
         now + TrackingBallConstants.CONTACT_HIT_FLASH_MS;
 

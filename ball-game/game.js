@@ -1208,6 +1208,7 @@ class GameUI {
     this.heroVersusBtn = document.getElementById("hero-versus-btn");
     this.heroFourPlayerBtn = document.getElementById("hero-four-player-btn");
     this.heroTeamBattleBtn = document.getElementById("hero-team-battle-btn");
+    this.heroCrazyFightBtn = document.getElementById("hero-crazy-fight-btn");
     this.heroSetupBack = document.getElementById("hero-setup-back");
 
     this.bindDualBallGame();
@@ -1483,6 +1484,11 @@ class GameUI {
         msg = `${winnerName}获胜！最后存活者胜出`;
       } else if (this.littleBallHero.subMode === "team_battle") {
         msg = `${HeroTeamRegistry.getTeamLabel(winnerId)}获胜！30回合团战结束`;
+      } else if (this.littleBallHero.subMode === "crazy_fight") {
+        msg =
+          winnerId === 1
+            ? "红队（玩家1）获胜！疯狂对战结束"
+            : "蓝队（玩家2）获胜！疯狂对战结束";
       } else {
         msg =
           winnerId === 1
@@ -1587,6 +1593,9 @@ class GameUI {
     );
     this.heroTeamBattleBtn.addEventListener("click", () =>
       this.beginLittleBallHero("team_battle")
+    );
+    this.heroCrazyFightBtn.addEventListener("click", () =>
+      this.beginLittleBallHero("crazy_fight")
     );
     this.heroSetupBack.addEventListener("click", () => this.showMainMenu());
   }
@@ -1841,9 +1850,11 @@ class GameUI {
     this.modeBadge.textContent =
       subMode === "team_battle"
         ? "小球英雄 · 双队团战"
-        : isMultiFour
-          ? "小球英雄 · 四人模式"
-          : "小球英雄";
+        : subMode === "crazy_fight"
+          ? "小球英雄 · 疯狂对战"
+          : isMultiFour
+            ? "小球英雄 · 四人模式"
+            : "小球英雄";
 
     this.p1HudLabel.textContent = "红队";
     this.p2Label.textContent = subMode === "training" ? "AI" : "蓝队";
@@ -1941,9 +1952,11 @@ class GameUI {
         const score = snap.teamBattle;
         this.heroPhaseText.textContent = `第 ${score.roundNumber}/${score.maxRounds} 回合 · 红蓝 ${score.redBlueWins} : ${score.greenPurpleWins} 绿紫`;
       } else {
-        this.heroPhaseText.textContent = isMultiFour
-          ? "四人混战 · 自动反弹对打"
-          : "自动对战中 · 双球持续反弹";
+        this.heroPhaseText.textContent = snap.subMode === "crazy_fight"
+          ? "疯狂对战 · 全场超强 · 自动对战中"
+          : isMultiFour
+            ? "四人混战 · 自动反弹对打"
+            : "自动对战中 · 双球持续反弹";
       }
     }
   }

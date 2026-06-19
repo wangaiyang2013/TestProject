@@ -937,6 +937,13 @@ class BrokenBladeSkillSystem {
     return fighter && fighter.template.skillType === HeroSkillType.BROKEN_BLADE;
   }
 
+  static getStackIntervalMs(fighter) {
+    if (typeof CrazyFightSkillSystem !== "undefined") {
+      return CrazyFightSkillSystem.getBladeStackIntervalMs(fighter);
+    }
+    return LittleBallHeroConstants.BLADE_STACK_INTERVAL_MS;
+  }
+
   static tick(fighter, opponent, now) {
     if (!BrokenBladeSkillSystem.isBladeFighter(fighter)) {
       return;
@@ -953,7 +960,7 @@ class BrokenBladeSkillSystem {
       return;
     }
 
-    if (now - fighter.lastBladeStackTime < LittleBallHeroConstants.BLADE_STACK_INTERVAL_MS) {
+    if (now - fighter.lastBladeStackTime < BrokenBladeSkillSystem.getStackIntervalMs(fighter)) {
       return;
     }
 
@@ -1011,18 +1018,19 @@ class OrangeCalcSkillSystem {
   }
 
   static canMultiply(fighter) {
-    return (
-      fighter.orangeCalcMultiplyUsed <
-      LittleBallHeroConstants.ORANGE_CALC_MAX_MULTIPLY_COUNT
-    );
+    const maxCount =
+      typeof CrazyFightSkillSystem !== "undefined"
+        ? CrazyFightSkillSystem.getOrangeCalcMaxMultiply(fighter)
+        : LittleBallHeroConstants.ORANGE_CALC_MAX_MULTIPLY_COUNT;
+    return fighter.orangeCalcMultiplyUsed < maxCount;
   }
 
   static getMultiplyRemaining(fighter) {
-    return Math.max(
-      0,
-      LittleBallHeroConstants.ORANGE_CALC_MAX_MULTIPLY_COUNT -
-        fighter.orangeCalcMultiplyUsed
-    );
+    const maxCount =
+      typeof CrazyFightSkillSystem !== "undefined"
+        ? CrazyFightSkillSystem.getOrangeCalcMaxMultiply(fighter)
+        : LittleBallHeroConstants.ORANGE_CALC_MAX_MULTIPLY_COUNT;
+    return Math.max(0, maxCount - fighter.orangeCalcMultiplyUsed);
   }
 
   static computeAttackDamage(fighter, baseDamage) {
@@ -1552,8 +1560,23 @@ class HeroBallFighter {
     ) {
       return false;
     }
-    const interval = this.template.skillIntervalMs;
+    const interval =
+      typeof CrazyFightSkillSystem !== "undefined"
+        ? CrazyFightSkillSystem.getSkillIntervalMs(
+            this,
+            this.template.skillIntervalMs
+          )
+        : this.template.skillIntervalMs;
     return now - this.lastSkillTime >= interval;
+  }
+
+  getSkillDamage(baseDamage) {
+    const damage =
+      baseDamage !== undefined ? baseDamage : this.template.skillDamage;
+    if (typeof CrazyFightSkillSystem !== "undefined") {
+      return CrazyFightSkillSystem.getSkillDamage(this, damage);
+    }
+    return damage;
   }
 
   markSkillUsed(now) {
@@ -1697,6 +1720,10 @@ class HeroBallFighter {
 
     if (typeof WeaponBoxCombatSystem !== "undefined") {
       WeaponBoxCombatSystem.drawFighterWeaponBadge(ctx, this);
+    }
+
+    if (typeof CrazyFightSkillSystem !== "undefined") {
+      CrazyFightSkillSystem.drawAura(ctx, this);
     }
 
     if (Date.now() < this.ironCritHitFlashUntil) {
@@ -2060,13 +2087,19 @@ class HeroAutoSkillSystem {
     }
 
     if (template.skillType === HeroSkillType.ICE_ROT) {
-      if (!IceRotSkillSystem.isCrazyBurst(fighter) && fighter.canUseSkill(now)) {
+      const keepIceInCrazy =
+        typeof CrazyFightSkillSystem !== "undefined" &&
+        CrazyFightSkillSystem.shouldIceRotKeepIceShots(game);
+      const allowIceShots =
+        !IceRotSkillSystem.isCrazyBurst(fighter) || keepIceInCrazy;
+      if (allowIceShots && fighter.canUseSkill(now)) {
         fighter.markSkillUsed(now);
         IceRotSkillSystem.fireIceBall(
           fighter,
           opponent,
           projectiles,
-          projectileRadius
+          projectileRadius,
+          game
         );
       }
       return;
@@ -2088,7 +2121,7 @@ class HeroAutoSkillSystem {
     if (template.skillType === HeroSkillType.BOXING) {
       if (BoxingRangeHelper.isClosestEnemyInRange(fighter, opponent)) {
         fighter.markSkillUsed(now);
-        HeroAutoSkillSystem.fireBoxingPunch(fighter, opponent, template.skillDamage);
+        HeroAutoSkillSystem.fireBoxingPunch(fighter, opponent, fighter.getSkillDamage());
       }
       return;
     }
@@ -2106,20 +2139,20 @@ class HeroAutoSkillSystem {
         opponent,
         projectiles,
         projectileRadius,
-        template.skillDamage
+        fighter.getSkillDamage()
       );
       return;
     }
 
     if (template.skillType === HeroSkillType.IRON_WALL) {
       fighter.markSkillUsed(now);
-      HeroAutoSkillSystem.fireIronWallStrike(fighter, opponent, template.skillDamage);
+      HeroAutoSkillSystem.fireIronWallStrike(fighter, opponent, fighter.getSkillDamage());
       return;
     }
 
     if (template.skillType === HeroSkillType.ELEMENT_BURST) {
       fighter.markSkillUsed(now);
-      ElementBurstSystem.summonOrbitBullets(fighter, template.skillDamage);
+      ElementBurstSystem.summonOrbitBullets(fighter, fighter.getSkillDamage());
       return;
     }
 
@@ -2130,7 +2163,7 @@ class HeroAutoSkillSystem {
         opponent,
         projectiles,
         projectileRadius,
-        template.skillDamage
+        fighter.getSkillDamage()
       );
       return;
     }
@@ -2158,17 +2191,17 @@ class HeroAutoSkillSystem {
     fighter.markSkillUsed(now);
 
     if (template.skillType === HeroSkillType.SHOT) {
-      HeroAutoSkillSystem.fireShot(fighter, opponent, projectiles, projectileRadius, template.skillDamage);
+      HeroAutoSkillSystem.fireShot(fighter, opponent, projectiles, projectileRadius, fighter.getSkillDamage());
       return;
     }
 
     if (template.skillType === HeroSkillType.PULSE) {
-      HeroAutoSkillSystem.firePulse(fighter, opponent, template.skillDamage);
+      HeroAutoSkillSystem.firePulse(fighter, opponent, fighter.getSkillDamage());
       return;
     }
 
     if (template.skillType === HeroSkillType.BUMP) {
-      HeroAutoSkillSystem.fireBump(fighter, opponent, template.skillDamage);
+      HeroAutoSkillSystem.fireBump(fighter, opponent, fighter.getSkillDamage());
       return;
     }
 
@@ -2178,7 +2211,7 @@ class HeroAutoSkillSystem {
         opponent,
         projectiles,
         projectileRadius,
-        template.skillDamage
+        fighter.getSkillDamage()
       );
       return;
     }
@@ -2189,7 +2222,7 @@ class HeroAutoSkillSystem {
         opponent,
         projectiles,
         projectileRadius,
-        template.skillDamage,
+        fighter.getSkillDamage(),
         template.returnDamage
       );
     }
@@ -2227,7 +2260,11 @@ class HeroAutoSkillSystem {
       return;
     }
 
-    if (Math.random() >= LittleBallHeroConstants.FLAMETHROWER_PROC_CHANCE) {
+    const procChance =
+      typeof CrazyFightSkillSystem !== "undefined"
+        ? CrazyFightSkillSystem.getFlamethrowerProcChance(fighter)
+        : LittleBallHeroConstants.FLAMETHROWER_PROC_CHANCE;
+    if (Math.random() >= procChance) {
       fighter.flameFizzleUntil =
         Date.now() + LittleBallHeroConstants.FLAMETHROWER_BURST_FLASH_MS;
       return;
@@ -2689,6 +2726,10 @@ class LittleBallHeroGame {
     return this.subMode === "team_battle";
   }
 
+  isCrazyFight() {
+    return this.subMode === "crazy_fight";
+  }
+
   isMultiplayerFourBall() {
     return this.isFourPlayer() || this.isTeamBattle();
   }
@@ -2909,6 +2950,12 @@ class LittleBallHeroGame {
 
   beginBattle() {
     this.fighters = this.spawnBattleFighters();
+    if (
+      this.isCrazyFight() &&
+      typeof CrazyFightSkillSystem !== "undefined"
+    ) {
+      CrazyFightSkillSystem.activateAllFighters(this.fighters);
+    }
     this.phase = "battle";
     this.projectiles = [];
     if (typeof WeaponBoxSpawnSystem !== "undefined") {
@@ -3608,9 +3655,11 @@ class LittleBallHeroGame {
     this.ctx.fillText(
       this.isTeamBattle()
         ? "双队团战 · 红蓝 vs 绿紫 · 30回合 · 每回合重选球 · 团灭对方获胜"
-        : this.isFourPlayer()
-          ? "四球自动反弹混战 · 武器箱含匕首(3击共3伤)"
-          : "双球自动反弹对打 · 武器箱含匕首(3击共3伤)",
+        : this.isCrazyFight()
+          ? "疯狂对战 · 全场球体超强 · 寒冰狂暴仍发射冰弹"
+          : this.isFourPlayer()
+            ? "四球自动反弹混战 · 武器箱含匕首(3击共3伤)"
+            : "双球自动反弹对打 · 武器箱含匕首(3击共3伤)",
       this.width / 2,
       this.arena.bottom + 28
     );
@@ -3638,6 +3687,9 @@ class LittleBallHeroGame {
     if (this.subMode === "training") {
       return "小球英雄 · 训练场";
     }
+    if (this.isCrazyFight()) {
+      return "小球英雄 · 疯狂对战";
+    }
     if (this.isTeamBattle()) {
       return "小球英雄 · 双队团战";
     }
@@ -3649,9 +3701,15 @@ class LittleBallHeroGame {
 }
 
 HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter) {
-  const baseLabel =
+  let baseLabel =
     fighter.template.skillDisplayName ||
     HeroAutoSkillSystem.getSkillLabel(fighter.template.skillType);
+  if (
+    typeof CrazyFightSkillSystem !== "undefined" &&
+    CrazyFightSkillSystem.isSupercharged(fighter)
+  ) {
+    baseLabel = `${baseLabel}·超强`;
+  }
   if (fighter.template.skillType === HeroSkillType.NUMBER_TEACHER) {
     return `${baseLabel}·${fighter.attackNumber}`;
   }
@@ -3700,9 +3758,14 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
   if (fighter.template.skillType === HeroSkillType.ICE_ROT) {
     const hp = IceRotSkillSystem.getCurrentHpDisplay(fighter);
     if (IceRotSkillSystem.isCrazyBurst(fighter)) {
+      const iceTag =
+        typeof CrazyFightSkillSystem !== "undefined" &&
+        CrazyFightSkillSystem.isSupercharged(fighter)
+          ? "·冰弹+狂暴"
+          : "";
       return fighter.iceRotSwallowing
-        ? `${baseLabel}·吞噬狂暴${hp}`
-        : `${baseLabel}·狂暴${hp}·惧防卫近战`;
+        ? `${baseLabel}·吞噬狂暴${hp}${iceTag}`
+        : `${baseLabel}·狂暴${hp}·惧防卫近战${iceTag}`;
     }
     return `${baseLabel}·冰弹${hp}`;
   }

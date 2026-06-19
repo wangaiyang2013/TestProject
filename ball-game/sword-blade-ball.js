@@ -100,7 +100,10 @@ class SwordBladeSkillSystem {
   }
 
   static computeSlashDamage(fighter) {
-    const base = fighter.template.skillDamage;
+    const base =
+      typeof fighter.getSkillDamage === "function"
+        ? fighter.getSkillDamage()
+        : fighter.template.skillDamage;
     return Math.round(base * SwordBladeConstants.SLASH_DAMAGE_MULTIPLIER);
   }
 

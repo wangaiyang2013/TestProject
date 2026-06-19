@@ -571,6 +571,23 @@ kbd {
   box-shadow: 0 4px 20px rgba(190, 75, 219, 0.4);
 }
 
+.btn-crazy {
+  padding: 0.75rem 2rem;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #ff6b6b, #e03131);
+  color: #fff;
+  font-weight: 600;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.btn-crazy:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(255, 107, 107, 0.45);
+}
+
 .btn-hero {
   padding: 0.75rem 2rem;
   font-size: 1.1rem;
