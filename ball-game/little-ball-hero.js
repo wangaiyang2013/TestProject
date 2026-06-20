@@ -72,6 +72,7 @@ const LittleBallHeroConstants = {
  * 英雄技能类型
  */
 class HeroSkillType {
+  /** 弹射球专属：仅触碰敌人时向前射出子弹 */
   static SHOT = "shot";
 
   /** 喷火球专属：每次攻击 80% 概率造成喷火伤害 */
@@ -1475,6 +1476,10 @@ class HeroBallFighter {
       TrackingBallSkillSystem.initFighter(this);
     }
 
+    if (ForwardShotSkillSystem.isShotFighter(this)) {
+      ForwardShotSkillSystem.initFighter(this);
+    }
+
     if (SpikeReflectSystem.isSpikeFighter(this)) {
       SpikeReflectSystem.initFighter(this);
     }
@@ -1717,6 +1722,10 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.TRACKING) {
       TrackingBallSkillSystem.draw(ctx, this);
+    }
+
+    if (this.template.skillType === HeroSkillType.SHOT) {
+      ForwardShotSkillSystem.draw(ctx, this);
     }
 
     if (typeof ElementStatusEffectSystem !== "undefined") {
@@ -2083,6 +2092,10 @@ class HeroAutoSkillSystem {
       return;
     }
 
+    if (template.skillType === HeroSkillType.SHOT) {
+      return;
+    }
+
     if (template.skillType === HeroSkillType.SWORD_BLADE) {
       SwordBladeSkillSystem.tickSlash(fighter, opponent, now);
       if (SwordBladeSkillSystem.canUseUltimate(fighter, now)) {
@@ -2194,11 +2207,6 @@ class HeroAutoSkillSystem {
     }
 
     fighter.markSkillUsed(now);
-
-    if (template.skillType === HeroSkillType.SHOT) {
-      HeroAutoSkillSystem.fireShot(fighter, opponent, projectiles, projectileRadius, fighter.getSkillDamage());
-      return;
-    }
 
     if (template.skillType === HeroSkillType.PULSE) {
       HeroAutoSkillSystem.firePulse(fighter, opponent, fighter.getSkillDamage());
@@ -3225,6 +3233,19 @@ class LittleBallHeroGame {
       ) {
         TrackingBallSkillSystem.tickContact(fighter, fighters, this, now);
       }
+      if (
+        typeof ForwardShotSkillSystem !== "undefined" &&
+        ForwardShotSkillSystem.isShotFighter(fighter)
+      ) {
+        ForwardShotSkillSystem.tickContact(
+          fighter,
+          fighters,
+          this,
+          this.projectiles,
+          this.getProjectileRadius(),
+          now
+        );
+      }
     }
 
     for (let i = 0; i < fighters.length; i += 1) {
@@ -3824,7 +3845,7 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
 
 HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   if (skillType === HeroSkillType.SHOT) {
-    return "弹射";
+    return "触碰弹射";
   }
   if (skillType === HeroSkillType.FLAMETHROWER) {
     return "喷火(80%)";
