@@ -154,7 +154,10 @@ class IceRotSkillSystem {
       return attacker.bladeDamage || template.skillDamage;
     }
     if (template.skillType === HeroSkillType.IRON_WALL) {
-      return IronWallSkillSystem.applyCriticalDamage(template.skillDamage);
+      return IronWallSkillSystem.applyCriticalDamage(
+        template.skillDamage,
+        attacker
+      );
     }
     if (template.skillType === HeroSkillType.DEFENSE) {
       return DefenseBallConstants.STRIKE_DAMAGE;

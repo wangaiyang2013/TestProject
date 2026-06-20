@@ -197,7 +197,7 @@ class CustomBallBlueprint {
         glow: "#ced4da",
         decoration: "盾",
         skillTypeName: "震荡",
-        skillDamage: 18,
+        skillDamage: LittleBallHeroConstants.IRON_WALL_STRIKE_DAMAGE,
         maxHealth: BallHealthResolver.resolve(130),
         moveSpeed: 8,
         mass: 1.4,

@@ -38,7 +38,8 @@ const LittleBallHeroConstants = {
   FLAMETHROWER_PROJECTILE_LIFETIME_MS: 750,
   FLAMETHROWER_BURST_FLASH_MS: 260,
   IRON_WALL_DAMAGE_REDUCTION: 0.9,
-  IRON_WALL_CRIT_MULTIPLIER: 2.0,
+  /** 铁壁丸出击伤害（已削弱：由 80 降至 30） */
+  IRON_WALL_STRIKE_DAMAGE: 30,
   IRON_WALL_SHIELD_FLASH_MS: 300,
   IRON_WALL_CRIT_FLASH_MS: 320,
   AI_PICK_DELAY_MS: 500,
@@ -192,7 +193,7 @@ class HeroRoster {
         8,
         1.4,
         HeroSkillType.IRON_WALL,
-        18
+        LittleBallHeroConstants.IRON_WALL_STRIKE_DAMAGE
       ),
       new HeroBallTemplate(
         "bolt",
@@ -984,10 +985,12 @@ class IronWallSkillSystem {
     return Math.max(1, Math.ceil(amount * ratio));
   }
 
-  static applyCriticalDamage(baseDamage) {
-    return Math.round(
-      baseDamage * LittleBallHeroConstants.IRON_WALL_CRIT_MULTIPLIER
-    );
+  static getStrikeDamage() {
+    return LittleBallHeroConstants.IRON_WALL_STRIKE_DAMAGE;
+  }
+
+  static applyCriticalDamage(baseDamage, fighter) {
+    return IronWallSkillSystem.getStrikeDamage();
   }
 
   static markShieldHit(fighter) {
@@ -2238,9 +2241,9 @@ class HeroAutoSkillSystem {
       return;
     }
 
-    const critDamage = IronWallSkillSystem.applyCriticalDamage(damage);
+    const strikeDamage = IronWallSkillSystem.getStrikeDamage();
     if (dist <= LittleBallHeroConstants.PULSE_RANGE + opponent.radius) {
-      opponent.takeDamage(critDamage, fighter);
+      opponent.takeDamage(strikeDamage, fighter);
       IronWallSkillSystem.markCriticalStrike(fighter, opponent);
 
       const nx = dx / dist;
@@ -3830,7 +3833,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "震荡";
   }
   if (skillType === HeroSkillType.IRON_WALL) {
-    return "减伤90%+暴击";
+    return `减伤90%+出击${LittleBallHeroConstants.IRON_WALL_STRIKE_DAMAGE}`;
   }
   if (skillType === HeroSkillType.BUMP) {
     return "冲击";
