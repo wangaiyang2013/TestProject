@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>猜数字游戏</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="game-container">
+    <header class="game-header">
+      <h1>猜数字</h1>
+      <p class="subtitle">在 1 到 100 之间猜一个数</p>
+    </header>
+
+    <section class="game-panel">
+      <form id="guess-form" class="guess-form" autocomplete="off">
+        <label class="input-label" for="guess-input">输入你的猜测</label>
+        <div class="input-row">
+          <input
+            id="guess-input"
+            class="guess-input"
+            type="number"
+            min="1"
+            max="100"
+            step="1"
+            inputmode="numeric"
+            placeholder="1 - 100"
+            required
+          >
+          <button id="submit-btn" class="btn-primary" type="submit">猜！</button>
+        </div>
+      </form>
+
+      <p id="feedback" class="feedback" aria-live="polite">开始猜吧！</p>
+
+      <div class="stats-bar">
+        <div class="stat-item stat-wrong">
+          <span class="stat-label">猜错次数</span>
+          <span id="wrong-count" class="stat-value">0</span>
+        </div>
+        <div class="stat-item stat-correct">
+          <span class="stat-label">猜对次数</span>
+          <span id="correct-count" class="stat-value">0</span>
+        </div>
+      </div>
+
+      <button id="restart-btn" class="btn-secondary hidden" type="button">再玩一局</button>
+    </section>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
