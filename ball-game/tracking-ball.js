@@ -1,11 +1,13 @@
 /**
- * 追踪球 - 贴身追击最近敌人，触碰近战攻击，不与墙壁或其他球体弹跳
+ * 追踪球 - 首次触碰敌人后解锁贴身追击，触碰近战攻击
  */
 
 const TrackingBallConstants = {
   /** 触碰近战伤害间隔（毫秒） */
   CONTACT_DAMAGE_INTERVAL_MS: 700,
   CONTACT_HIT_FLASH_MS: 280,
+  /** 首次触碰后解锁追击的提示时长 */
+  CHASE_UNLOCK_FLASH_MS: 900,
   /** 与其他球体重叠时的最小分离力度 */
   SEPARATION_PUSH_STRENGTH: 1.2,
   CHASE_RING_PULSE_MS: 700,
@@ -22,6 +24,38 @@ class TrackingBallSkillSystem {
   static initFighter(fighter) {
     fighter.trackingHitFlashUntil = 0;
     fighter.trackingLastHitByTarget = {};
+    fighter.trackingChaseUnlocked = false;
+    fighter.trackingChaseUnlockFlashUntil = 0;
+  }
+
+  static canChase(fighter) {
+    return Boolean(fighter && fighter.trackingChaseUnlocked);
+  }
+
+  static unlockChase(fighter, now) {
+    if (!fighter || fighter.trackingChaseUnlocked) {
+      return;
+    }
+    fighter.trackingChaseUnlocked = true;
+    fighter.trackingChaseUnlockFlashUntil =
+      now + TrackingBallConstants.CHASE_UNLOCK_FLASH_MS;
+    if (typeof ElementStatusEffectSystem !== "undefined") {
+      ElementStatusEffectSystem.setStatusText(fighter, "追击已解锁");
+    }
+  }
+
+  static tryUnlockChaseOnContact(fighter, opponent, now) {
+    if (
+      !TrackingBallSkillSystem.isTrackingFighter(fighter) ||
+      !opponent ||
+      !opponent.isAlive()
+    ) {
+      return;
+    }
+    if (!TrackingBallSkillSystem.isOverlapping(fighter, opponent)) {
+      return;
+    }
+    TrackingBallSkillSystem.unlockChase(fighter, now);
   }
 
   static isOverlapping(fighterA, fighterB) {
@@ -51,6 +85,10 @@ class TrackingBallSkillSystem {
   }
 
   static updateMovement(fighter, target, arena) {
+    if (!TrackingBallSkillSystem.canChase(fighter)) {
+      return;
+    }
+
     if (!target || !target.isAlive()) {
       fighter.vx *= 0.9;
       fighter.vy *= 0.9;
@@ -121,6 +159,8 @@ class TrackingBallSkillSystem {
         continue;
       }
 
+      TrackingBallSkillSystem.unlockChase(fighter, now);
+
       const lastHitTime = fighter.trackingLastHitByTarget[opponent.playerId] || 0;
       if (now - lastHitTime < TrackingBallConstants.CONTACT_DAMAGE_INTERVAL_MS) {
         continue;
@@ -147,6 +187,20 @@ class TrackingBallSkillSystem {
       return false;
     }
 
+    const now = Date.now();
+    if (trackingA && !trackingB) {
+      TrackingBallSkillSystem.tryUnlockChaseOnContact(fighterA, fighterB, now);
+    }
+    if (trackingB && !trackingA) {
+      TrackingBallSkillSystem.tryUnlockChaseOnContact(fighterB, fighterA, now);
+    }
+
+    const chaseA = trackingA && TrackingBallSkillSystem.canChase(fighterA);
+    const chaseB = trackingB && TrackingBallSkillSystem.canChase(fighterB);
+    if (!chaseA && !chaseB) {
+      return false;
+    }
+
     const dx = fighterB.x - fighterA.x;
     const dy = fighterB.y - fighterA.y;
     const dist = Math.hypot(dx, dy);
@@ -167,11 +221,11 @@ class TrackingBallSkillSystem {
     fighterB.y += (ny * overlap * fighterA.mass) / totalMass;
 
     const push = TrackingBallConstants.SEPARATION_PUSH_STRENGTH;
-    if (trackingA && !trackingB) {
+    if (chaseA && !chaseB) {
       fighterB.vx += nx * push;
       fighterB.vy += ny * push;
       ContinuousBouncePhysics.maintainSpeed(fighterB);
-    } else if (trackingB && !trackingA) {
+    } else if (chaseB && !chaseA) {
       fighterA.vx -= nx * push;
       fighterA.vy -= ny * push;
       ContinuousBouncePhysics.maintainSpeed(fighterA);
@@ -195,11 +249,20 @@ class TrackingBallSkillSystem {
 
     ctx.beginPath();
     ctx.arc(fighter.x, fighter.y, fighter.radius + 8 + pulse * 3, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(76, 110, 245, ${0.28 + pulse * 0.2})`;
+    const ringAlpha = TrackingBallSkillSystem.canChase(fighter) ? 0.28 + pulse * 0.2 : 0.14;
+    ctx.strokeStyle = `rgba(76, 110, 245, ${ringAlpha})`;
     ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
+    ctx.setLineDash(TrackingBallSkillSystem.canChase(fighter) ? [4, 4] : [2, 6]);
     ctx.stroke();
     ctx.setLineDash([]);
+
+    if (Date.now() < fighter.trackingChaseUnlockFlashUntil) {
+      ctx.fillStyle = "#51cf66";
+      ctx.font = "bold 9px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("追击解锁", fighter.x, fighter.y - fighter.radius - 28);
+      ctx.textAlign = "left";
+    }
 
     if (Date.now() < fighter.trackingHitFlashUntil) {
       ctx.beginPath();
@@ -213,10 +276,14 @@ class TrackingBallSkillSystem {
       ctx.fillText("追踪打击", fighter.x, fighter.y - fighter.radius - 20);
       ctx.textAlign = "left";
     } else {
-      ctx.fillStyle = "#748ffc";
+      ctx.fillStyle = TrackingBallSkillSystem.canChase(fighter) ? "#748ffc" : "#adb5bd";
       ctx.font = "bold 9px system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("追踪", fighter.x, fighter.y - fighter.radius - 18);
+      ctx.fillText(
+        TrackingBallSkillSystem.canChase(fighter) ? "追踪" : "待触碰",
+        fighter.x,
+        fighter.y - fighter.radius - 18
+      );
       ctx.textAlign = "left";
     }
   }

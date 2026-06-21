@@ -72,7 +72,6 @@ const LittleBallHeroConstants = {
  * 英雄技能类型
  */
 class HeroSkillType {
-  /** 弹射球专属：仅触碰敌人时向前射出子弹 */
   static SHOT = "shot";
 
   /** 喷火球专属：每次攻击 80% 概率造成喷火伤害 */
@@ -121,7 +120,7 @@ class HeroSkillType {
   /** 寒冰腐烂球专属：冰球减速叠层冻结；受伤后狂暴近战；踩踏吞噬 */
   static ICE_ROT = "ice_rot";
 
-  /** 追踪球专属：贴身追击敌人，触碰近战，不弹跳 */
+  /** 追踪球专属：首次触碰敌人后解锁贴身追击，触碰近战 */
   static TRACKING = "tracking";
 }
 
@@ -1476,10 +1475,6 @@ class HeroBallFighter {
       TrackingBallSkillSystem.initFighter(this);
     }
 
-    if (ForwardShotSkillSystem.isShotFighter(this)) {
-      ForwardShotSkillSystem.initFighter(this);
-    }
-
     if (SpikeReflectSystem.isSpikeFighter(this)) {
       SpikeReflectSystem.initFighter(this);
     }
@@ -1722,10 +1717,6 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.TRACKING) {
       TrackingBallSkillSystem.draw(ctx, this);
-    }
-
-    if (this.template.skillType === HeroSkillType.SHOT) {
-      ForwardShotSkillSystem.draw(ctx, this);
     }
 
     if (typeof ElementStatusEffectSystem !== "undefined") {
@@ -2092,10 +2083,6 @@ class HeroAutoSkillSystem {
       return;
     }
 
-    if (template.skillType === HeroSkillType.SHOT) {
-      return;
-    }
-
     if (template.skillType === HeroSkillType.SWORD_BLADE) {
       SwordBladeSkillSystem.tickSlash(fighter, opponent, now);
       if (SwordBladeSkillSystem.canUseUltimate(fighter, now)) {
@@ -2207,6 +2194,17 @@ class HeroAutoSkillSystem {
     }
 
     fighter.markSkillUsed(now);
+
+    if (template.skillType === HeroSkillType.SHOT) {
+      HeroAutoSkillSystem.fireShot(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius,
+        fighter.getSkillDamage()
+      );
+      return;
+    }
 
     if (template.skillType === HeroSkillType.PULSE) {
       HeroAutoSkillSystem.firePulse(fighter, opponent, fighter.getSkillDamage());
@@ -3203,7 +3201,8 @@ class LittleBallHeroGame {
       if (!ElementStatusEffectSystem.isFrozen(fighter)) {
         if (
           typeof TrackingBallSkillSystem !== "undefined" &&
-          TrackingBallSkillSystem.isTrackingFighter(fighter)
+          TrackingBallSkillSystem.isTrackingFighter(fighter) &&
+          TrackingBallSkillSystem.canChase(fighter)
         ) {
           const chaseTarget = HeroBattleArenaHelper.getNearestOpponent(
             fighter,
@@ -3232,19 +3231,6 @@ class LittleBallHeroGame {
         TrackingBallSkillSystem.isTrackingFighter(fighter)
       ) {
         TrackingBallSkillSystem.tickContact(fighter, fighters, this, now);
-      }
-      if (
-        typeof ForwardShotSkillSystem !== "undefined" &&
-        ForwardShotSkillSystem.isShotFighter(fighter)
-      ) {
-        ForwardShotSkillSystem.tickContact(
-          fighter,
-          fighters,
-          this,
-          this.projectiles,
-          this.getProjectileRadius(),
-          now
-        );
       }
     }
 
@@ -3845,7 +3831,7 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
 
 HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   if (skillType === HeroSkillType.SHOT) {
-    return "触碰弹射";
+    return "弹射";
   }
   if (skillType === HeroSkillType.FLAMETHROWER) {
     return "喷火(80%)";
@@ -3896,7 +3882,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "冰弹/血量<100狂暴/狂暴受防卫近战最高伤";
   }
   if (skillType === HeroSkillType.TRACKING) {
-    return "追踪敌人/触碰近战/不弹跳";
+    return "触碰后追击/近战";
   }
   return "技能";
 };

@@ -140,7 +140,7 @@ class CustomBallBlueprint {
     this.maxHealth = BallHealthResolver.getDefaultMaxHealth();
     this.moveSpeed = 9;
     this.mass = 1.0;
-    this.skillTypeName = "触碰弹射";
+    this.skillTypeName = "弹射";
     this.skillType = HeroSkillType.SHOT;
     this.skillDamage = 16;
     this.skillIntervalSec = 1.4;
