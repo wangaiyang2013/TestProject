@@ -36,6 +36,15 @@ class BallTouchBonusSystem {
     if (CycloneMechaSkillSystem.isCycloneMechaFighter(fighter)) {
       return false;
     }
+    if (fighter.template.skillType === HeroSkillType.BOXING) {
+      return false;
+    }
+    if (fighter.template.skillType === HeroSkillType.BROKEN_BLADE) {
+      return false;
+    }
+    if (fighter.template.skillType === HeroSkillType.SWORD_BLADE) {
+      return false;
+    }
     return true;
   }
 

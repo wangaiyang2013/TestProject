@@ -19,18 +19,12 @@ const LittleBallHeroConstants = {
   SUNGLASSES_OUTBOUND_DAMAGE: 14,
   SUNGLASSES_RETURN_DAMAGE: 11,
   SUNGLASSES_SPEED: 10,
-  BOXING_MIN_RANGE_METERS: 1,
-  BOXING_MAX_RANGE_METERS: 2,
-  BOXING_METERS_TO_RADIUS_FACTOR: 4.5,
   BOXING_PUNCH_FLASH_MS: 280,
   SPIKE_REFLECT_FLASH_MS: 280,
   /** 尖刺球：每场最多反伤次数 */
   SPIKE_MAX_REFLECT_COUNT: 2,
   /** 尖刺球：反伤伤害比例（削弱） */
   SPIKE_REFLECT_DAMAGE_RATIO: 0.6,
-  BLADE_MIN_RANGE_METERS: 0.8,
-  BLADE_MAX_RANGE_METERS: 2.2,
-  BLADE_METERS_TO_RADIUS_FACTOR: 4.5,
   BLADE_STACK_DAMAGE_PER_SEC: 10,
   BLADE_STACK_INTERVAL_MS: 1000,
   BLADE_SLASH_FLASH_MS: 320,
@@ -90,7 +84,7 @@ class HeroSkillType {
   /** 墨镜球专属：投出墨镜，命中后折返造成二次伤害 */
   static SUNGLASSES = "sunglasses";
 
-  /** 拳击球专属：最近敌人在 1-2 米内时出拳 */
+  /** 拳击球专属：触碰敌人时出拳 */
   static BOXING = "boxing";
 
   /** 数字老师球专属：头顶数字追踪敌人，命中后数字增长 */
@@ -99,7 +93,7 @@ class HeroSkillType {
   /** 尖刺球专属：受到攻击时反伤攻击者 */
   static SPIKE = "spike";
 
-  /** 斷刀球专属：近距挥刀劈砍，远离敌人时每秒叠伤 */
+  /** 斷刀球专属：触碰挥刀劈砍，远离敌人时每秒叠伤 */
   static BROKEN_BLADE = "broken_blade";
 
   /** 元素球专属：周期召唤四颗随机元素子弹 */
@@ -114,7 +108,7 @@ class HeroSkillType {
   /** 防卫球专属：每局随机防具头，须先击破防具 */
   static DEFENSE = "defense";
 
-  /** 劍刃球专属：敌人靠近挥剑吸血；周期无敌释放元素弹 */
+  /** 劍刃球专属：触碰挥剑吸血；周期无敌释放元素弹 */
   static SWORD_BLADE = "sword_blade";
 
   /** 寒冰腐烂球专属：冰球减速叠层冻结；受伤后狂暴近战；踩踏吞噬 */
@@ -923,47 +917,113 @@ class HeroPickPreviewRenderer {
 }
 
 /**
- * 斷刀球劈砍距离判定
+ * 触碰近战公共判定（拳击球、斷刀球、劍刃球等）
  */
-class BrokenBladeRangeHelper {
-  static metersToPixels(meters, ballRadius) {
-    return (
-      meters * ballRadius * LittleBallHeroConstants.BLADE_METERS_TO_RADIUS_FACTOR
+class ContactMeleeHelper {
+  static isOverlapping(fighterA, fighterB) {
+    return CollisionDetector.circleHitsCircle(
+      fighterA.x,
+      fighterA.y,
+      fighterA.radius,
+      fighterB.x,
+      fighterB.y,
+      fighterB.radius
     );
   }
 
-  static getSlashRangePixels(ballRadius) {
-    return {
-      min: BrokenBladeRangeHelper.metersToPixels(
-        LittleBallHeroConstants.BLADE_MIN_RANGE_METERS,
-        ballRadius
-      ),
-      max: BrokenBladeRangeHelper.metersToPixels(
-        LittleBallHeroConstants.BLADE_MAX_RANGE_METERS,
-        ballRadius
-      ),
-    };
+  static getContactOpponents(fighter, allFighters, game) {
+    let opponents = HeroBattleArenaHelper.getAliveOpponents(fighter, allFighters);
+    if (game && typeof game.isTeamBattle === "function" && game.isTeamBattle()) {
+      opponents = opponents.filter((opponent) =>
+        HeroTeamRegistry.areEnemies(fighter.playerId, opponent.playerId)
+      );
+    }
+    return opponents;
   }
 
-  /**
-   * 最近敌人是否在斷刀劈砍范围内
-   */
-  static isEnemyInSlashRange(fighter, opponent) {
-    if (!opponent || !opponent.isAlive()) {
-      return false;
+  static isTouchingAnyOpponent(fighter, allFighters, game) {
+    const opponents = ContactMeleeHelper.getContactOpponents(
+      fighter,
+      allFighters,
+      game
+    );
+    return opponents.some((opponent) =>
+      ContactMeleeHelper.isOverlapping(fighter, opponent)
+    );
+  }
+
+  static getMeleeIntervalMs(fighter) {
+    if (typeof CrazyFightSkillSystem !== "undefined") {
+      return CrazyFightSkillSystem.getSkillIntervalMs(
+        fighter,
+        fighter.template.skillIntervalMs
+      );
     }
-    const dist = Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y);
-    const range = BrokenBladeRangeHelper.getSlashRangePixels(fighter.radius);
-    return dist >= range.min && dist <= range.max;
+    return fighter.template.skillIntervalMs;
   }
 }
 
 /**
- * 斷刀球技能：范围内劈砍，范围外每秒叠伤
+ * 拳击球技能：触碰敌人时出拳
+ */
+class BoxingSkillSystem {
+  static isBoxingFighter(fighter) {
+    return fighter && fighter.template.skillType === HeroSkillType.BOXING;
+  }
+
+  static initFighter(fighter) {
+    fighter.boxingLastHitByTarget = {};
+  }
+
+  static tickContact(fighter, allFighters, game, now) {
+    if (!BoxingSkillSystem.isBoxingFighter(fighter) || !fighter.isAlive()) {
+      return;
+    }
+    if (
+      typeof ElementStatusEffectSystem !== "undefined" &&
+      ElementStatusEffectSystem.isAttackBlocked(fighter)
+    ) {
+      return;
+    }
+
+    const opponents = ContactMeleeHelper.getContactOpponents(
+      fighter,
+      allFighters,
+      game
+    );
+    const hitInterval = ContactMeleeHelper.getMeleeIntervalMs(fighter);
+
+    for (const opponent of opponents) {
+      if (!ContactMeleeHelper.isOverlapping(fighter, opponent)) {
+        continue;
+      }
+
+      const lastHitTime =
+        fighter.boxingLastHitByTarget[opponent.playerId] || 0;
+      if (now - lastHitTime < hitInterval) {
+        continue;
+      }
+
+      fighter.boxingLastHitByTarget[opponent.playerId] = now;
+      HeroAutoSkillSystem.fireBoxingPunch(
+        fighter,
+        opponent,
+        fighter.getSkillDamage()
+      );
+    }
+  }
+}
+
+/**
+ * 斷刀球技能：触碰劈砍，未触碰时每秒叠伤
  */
 class BrokenBladeSkillSystem {
   static isBladeFighter(fighter) {
     return fighter && fighter.template.skillType === HeroSkillType.BROKEN_BLADE;
+  }
+
+  static initFighter(fighter) {
+    fighter.bladeLastHitByTarget = {};
   }
 
   static getStackIntervalMs(fighter) {
@@ -973,23 +1033,53 @@ class BrokenBladeSkillSystem {
     return LittleBallHeroConstants.BLADE_STACK_INTERVAL_MS;
   }
 
-  static tick(fighter, opponent, now) {
-    if (!BrokenBladeSkillSystem.isBladeFighter(fighter)) {
+  static tick(fighter, allFighters, game, now) {
+    if (!BrokenBladeSkillSystem.isBladeFighter(fighter) || !fighter.isAlive()) {
       return;
     }
-    if (!opponent || !opponent.isAlive()) {
+    if (
+      typeof ElementStatusEffectSystem !== "undefined" &&
+      ElementStatusEffectSystem.isAttackBlocked(fighter)
+    ) {
       return;
     }
 
-    if (BrokenBladeRangeHelper.isEnemyInSlashRange(fighter, opponent)) {
-      if (fighter.canUseSkill(now)) {
-        fighter.markSkillUsed(now);
-        HeroAutoSkillSystem.fireBladeSlash(fighter, opponent, fighter.bladeDamage);
+    const opponents = ContactMeleeHelper.getContactOpponents(
+      fighter,
+      allFighters,
+      game
+    );
+    const hitInterval = ContactMeleeHelper.getMeleeIntervalMs(fighter);
+    let touchingAnyone = false;
+
+    for (const opponent of opponents) {
+      if (!ContactMeleeHelper.isOverlapping(fighter, opponent)) {
+        continue;
       }
+
+      touchingAnyone = true;
+      const lastHitTime =
+        fighter.bladeLastHitByTarget[opponent.playerId] || 0;
+      if (now - lastHitTime < hitInterval) {
+        continue;
+      }
+
+      fighter.bladeLastHitByTarget[opponent.playerId] = now;
+      HeroAutoSkillSystem.fireBladeSlash(
+        fighter,
+        opponent,
+        fighter.bladeDamage
+      );
+    }
+
+    if (touchingAnyone) {
       return;
     }
 
-    if (now - fighter.lastBladeStackTime < BrokenBladeSkillSystem.getStackIntervalMs(fighter)) {
+    if (
+      now - fighter.lastBladeStackTime <
+      BrokenBladeSkillSystem.getStackIntervalMs(fighter)
+    ) {
       return;
     }
 
@@ -1409,40 +1499,6 @@ class SunglassesProjectile {
 }
 
 /**
- * 拳击球攻击距离（1-2 米，按球半径换算像素）
- */
-class BoxingRangeHelper {
-  static metersToPixels(meters, ballRadius) {
-    return meters * ballRadius * LittleBallHeroConstants.BOXING_METERS_TO_RADIUS_FACTOR;
-  }
-
-  static getRangePixels(ballRadius) {
-    return {
-      min: BoxingRangeHelper.metersToPixels(
-        LittleBallHeroConstants.BOXING_MIN_RANGE_METERS,
-        ballRadius
-      ),
-      max: BoxingRangeHelper.metersToPixels(
-        LittleBallHeroConstants.BOXING_MAX_RANGE_METERS,
-        ballRadius
-      ),
-    };
-  }
-
-  /**
-   * 最近敌人是否在拳击有效距离内（1-2 米）
-   */
-  static isClosestEnemyInRange(fighter, opponent) {
-    if (!opponent || !opponent.isAlive()) {
-      return false;
-    }
-    const dist = Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y);
-    const range = BoxingRangeHelper.getRangePixels(fighter.radius);
-    return dist >= range.min && dist <= range.max;
-  }
-}
-
-/**
  * 场上战斗用英雄球（自动反弹 + 自动技能）
  */
 class HeroBallFighter {
@@ -1491,6 +1547,14 @@ class HeroBallFighter {
 
     if (SwordBladeSkillSystem.isSwordFighter(this)) {
       SwordBladeSkillSystem.initFighter(this);
+    }
+
+    if (BoxingSkillSystem.isBoxingFighter(this)) {
+      BoxingSkillSystem.initFighter(this);
+    }
+
+    if (BrokenBladeSkillSystem.isBladeFighter(this)) {
+      BrokenBladeSkillSystem.initFighter(this);
     }
 
     if (IceRotSkillSystem.isIceRotFighter(this)) {
@@ -1708,7 +1772,6 @@ class HeroBallFighter {
     }
 
     if (this.template.skillType === HeroSkillType.BOXING) {
-      this.drawBoxingRange(ctx);
       this.drawBoxingPunch(ctx);
     }
 
@@ -1717,7 +1780,6 @@ class HeroBallFighter {
     }
 
     if (this.template.skillType === HeroSkillType.BROKEN_BLADE) {
-      this.drawBladeRange(ctx);
       this.drawBladeDamageBadge(ctx);
       this.drawBladeSlash(ctx);
     }
@@ -1834,21 +1896,6 @@ class HeroBallFighter {
     }
   }
 
-  drawBladeRange(ctx) {
-    const range = BrokenBladeRangeHelper.getSlashRangePixels(this.radius);
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, range.min, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(204, 93, 232, 0.2)";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 6]);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, range.max, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(204, 93, 232, 0.4)";
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
   drawBladeDamageBadge(ctx) {
     const text = String(this.bladeDamage);
     const badgeY = this.y - this.radius - 16;
@@ -1941,21 +1988,6 @@ class HeroBallFighter {
     ctx.fillText(text, this.x, badgeY);
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-  }
-
-  drawBoxingRange(ctx) {
-    const range = BoxingRangeHelper.getRangePixels(this.radius);
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, range.min, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255, 135, 135, 0.2)";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 6]);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, range.max, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255, 135, 135, 0.35)";
-    ctx.stroke();
-    ctx.setLineDash([]);
   }
 
   drawBoxingPunch(ctx) {
@@ -2136,7 +2168,6 @@ class HeroAutoSkillSystem {
     }
 
     if (template.skillType === HeroSkillType.SWORD_BLADE) {
-      SwordBladeSkillSystem.tickSlash(fighter, opponent, now);
       if (SwordBladeSkillSystem.canUseUltimate(fighter, now)) {
         SwordBladeSkillSystem.activateUltimate(fighter);
       }
@@ -2163,7 +2194,6 @@ class HeroAutoSkillSystem {
     }
 
     if (template.skillType === HeroSkillType.BROKEN_BLADE) {
-      BrokenBladeSkillSystem.tick(fighter, opponent, now);
       return;
     }
 
@@ -2176,10 +2206,6 @@ class HeroAutoSkillSystem {
     }
 
     if (template.skillType === HeroSkillType.BOXING) {
-      if (BoxingRangeHelper.isClosestEnemyInRange(fighter, opponent)) {
-        fighter.markSkillUsed(now);
-        HeroAutoSkillSystem.fireBoxingPunch(fighter, opponent, fighter.getSkillDamage());
-      }
       return;
     }
 
@@ -3303,6 +3329,15 @@ class LittleBallHeroGame {
           now
         );
       }
+      if (BoxingSkillSystem.isBoxingFighter(fighter)) {
+        BoxingSkillSystem.tickContact(fighter, fighters, this, now);
+      }
+      if (BrokenBladeSkillSystem.isBladeFighter(fighter)) {
+        BrokenBladeSkillSystem.tick(fighter, fighters, this, now);
+      }
+      if (SwordBladeSkillSystem.isSwordFighter(fighter)) {
+        SwordBladeSkillSystem.tickContact(fighter, fighters, this, now);
+      }
     }
 
     for (let i = 0; i < fighters.length; i += 1) {
@@ -3973,7 +4008,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "回旋墨镜";
   }
   if (skillType === HeroSkillType.BOXING) {
-    return "近距重拳";
+    return "触身重拳";
   }
   if (skillType === HeroSkillType.NUMBER_TEACHER) {
     return "直线数字(无追踪)";
@@ -3982,7 +4017,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "受击反伤×2(削弱)";
   }
   if (skillType === HeroSkillType.BROKEN_BLADE) {
-    return "斷刀劈砍";
+    return "触身斷刀/远离叠伤";
   }
   if (skillType === HeroSkillType.ELEMENT_BURST) {
     return "元素爆破(暴击真实伤)";
@@ -3997,7 +4032,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "随机防具头";
   }
   if (skillType === HeroSkillType.SWORD_BLADE) {
-    return "范围内挥剑吸血/20秒无敌+元素/无敌后80秒冷却";
+    return "触身挥剑吸血/20秒无敌+元素/无敌后80秒冷却";
   }
   if (skillType === HeroSkillType.ICE_ROT) {
     return "冰弹/血量<100狂暴/狂暴受防卫近战最高伤";

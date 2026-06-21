@@ -252,7 +252,7 @@ class CustomBallBlueprint {
         color: "#e03131",
         glow: "#ff8787",
         decoration: "拳套",
-        skillTypeName: "近距重拳",
+        skillTypeName: "触身重拳",
         skillDamage: 20,
         maxHealth: BallHealthResolver.resolve(96),
         moveSpeed: 9,

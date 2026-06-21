@@ -1,13 +1,10 @@
 /**
- * 劍刃球 - 敌人进入挥剑范围时劈砍吸血；释放大招后无敌 20 秒并释放元素弹，无敌结束后 80 秒冷却
+ * 劍刃球 - 触碰敌人时劈砍吸血；释放大招后无敌 20 秒并释放元素弹，无敌结束后 80 秒冷却
  */
 
 const SwordBladeConstants = {
   /** 挥剑冷却（毫秒） */
   SLASH_INTERVAL_MS: 900,
-  /** 挥剑有效距离：米（敌人进入此范围即挥剑） */
-  SLASH_RANGE_METERS: 2.4,
-  METERS_TO_RADIUS_FACTOR: 4.5,
   /** 劈砍伤害倍率（基于 skillDamage） */
   SLASH_DAMAGE_MULTIPLIER: 1.35,
   /** 吸血比例：按造成伤害回复生命 */
@@ -22,24 +19,6 @@ const SwordBladeConstants = {
 };
 
 /**
- * 劍刃球近距判定
- */
-class SwordBladeRangeHelper {
-  static metersToPixels(meters, ballRadius) {
-    return (
-      meters * ballRadius * SwordBladeConstants.METERS_TO_RADIUS_FACTOR
-    );
-  }
-
-  static getSlashRangePixels(ballRadius) {
-    return SwordBladeRangeHelper.metersToPixels(
-      SwordBladeConstants.SLASH_RANGE_METERS,
-      ballRadius
-    );
-  }
-}
-
-/**
  * 劍刃球技能系统
  */
 class SwordBladeSkillSystem {
@@ -52,7 +31,7 @@ class SwordBladeSkillSystem {
     fighter.swordBladeSlashAngle = 0;
     fighter.swordBladeInvincibleUntil = 0;
     fighter.swordBladeNextUltAt = 0;
-    fighter.lastSwordSlashTime = 0;
+    fighter.swordSlashLastHitByTarget = {};
     fighter.swordBladeUltFlashUntil = 0;
     fighter.swordBladeLifestealTextUntil = 0;
   }
@@ -86,19 +65,6 @@ class SwordBladeSkillSystem {
     );
   }
 
-  /**
-   * 敌人是否在挥剑范围内（进入范围即攻击，不要求朝本体移动）
-   */
-  static isEnemyInSlashRange(fighter, opponent) {
-    if (!opponent || !opponent.isAlive()) {
-      return false;
-    }
-
-    const dist = Math.hypot(opponent.x - fighter.x, opponent.y - fighter.y);
-    const slashRange = SwordBladeRangeHelper.getSlashRangePixels(fighter.radius);
-    return dist <= slashRange + opponent.radius;
-  }
-
   static computeSlashDamage(fighter) {
     const base =
       typeof fighter.getSkillDamage === "function"
@@ -107,26 +73,37 @@ class SwordBladeSkillSystem {
     return Math.round(base * SwordBladeConstants.SLASH_DAMAGE_MULTIPLIER);
   }
 
-  static canSlash(fighter, now) {
-    return now - fighter.lastSwordSlashTime >= SwordBladeConstants.SLASH_INTERVAL_MS;
-  }
-
-  static tickSlash(fighter, opponent, now) {
-    if (!SwordBladeSkillSystem.isSwordFighter(fighter)) {
+  static tickContact(fighter, allFighters, game, now) {
+    if (!SwordBladeSkillSystem.isSwordFighter(fighter) || !fighter.isAlive()) {
       return;
     }
-    if (!opponent || !opponent.isAlive()) {
-      return;
-    }
-    if (!SwordBladeSkillSystem.isEnemyInSlashRange(fighter, opponent)) {
-      return;
-    }
-    if (!SwordBladeSkillSystem.canSlash(fighter, now)) {
+    if (
+      typeof ElementStatusEffectSystem !== "undefined" &&
+      ElementStatusEffectSystem.isAttackBlocked(fighter)
+    ) {
       return;
     }
 
-    fighter.lastSwordSlashTime = now;
-    SwordBladeSkillSystem.fireSlash(fighter, opponent);
+    const opponents = ContactMeleeHelper.getContactOpponents(
+      fighter,
+      allFighters,
+      game
+    );
+
+    for (const opponent of opponents) {
+      if (!ContactMeleeHelper.isOverlapping(fighter, opponent)) {
+        continue;
+      }
+
+      const lastHitTime =
+        fighter.swordSlashLastHitByTarget[opponent.playerId] || 0;
+      if (now - lastHitTime < SwordBladeConstants.SLASH_INTERVAL_MS) {
+        continue;
+      }
+
+      fighter.swordSlashLastHitByTarget[opponent.playerId] = now;
+      SwordBladeSkillSystem.fireSlash(fighter, opponent);
+    }
   }
 
   static fireSlash(fighter, opponent) {
@@ -176,17 +153,6 @@ class SwordBladeSkillSystem {
     if (typeof ElementStatusEffectSystem !== "undefined") {
       ElementStatusEffectSystem.setStatusText(fighter, "无敌元素");
     }
-  }
-
-  static drawSlashRange(ctx, fighter) {
-    const range = SwordBladeRangeHelper.getSlashRangePixels(fighter.radius);
-    ctx.beginPath();
-    ctx.arc(fighter.x, fighter.y, range, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(51, 154, 240, 0.22)";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]);
-    ctx.stroke();
-    ctx.setLineDash([]);
   }
 
   static drawSlash(ctx, fighter) {
@@ -284,7 +250,6 @@ class SwordBladeSkillSystem {
       return;
     }
 
-    SwordBladeSkillSystem.drawSlashRange(ctx, fighter);
     SwordBladeSkillSystem.drawInvincibleRing(ctx, fighter);
     SwordBladeSkillSystem.drawUltCooldownText(ctx, fighter);
     SwordBladeSkillSystem.drawSlash(ctx, fighter);
