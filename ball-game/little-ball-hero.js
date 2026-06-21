@@ -120,7 +120,7 @@ class HeroSkillType {
   /** 寒冰腐烂球专属：冰球减速叠层冻结；受伤后狂暴近战；踩踏吞噬 */
   static ICE_ROT = "ice_rot";
 
-  /** 追踪球专属：首次触碰敌人后解锁贴身追击，触碰近战 */
+  /** 追踪球专属：贴身追击敌人，触碰追加近战（其他球贴身时也有触身加成） */
   static TRACKING = "tracking";
 }
 
@@ -1486,6 +1486,10 @@ class HeroBallFighter {
       ElementStatusEffectSystem.initFighter(this);
     }
 
+    if (typeof BallTouchBonusSystem !== "undefined") {
+      BallTouchBonusSystem.initFighter(this);
+    }
+
     this.weaponCharge = null;
     this.weaponPickupFlashUntil = 0;
     this.weaponUseFlashUntil = 0;
@@ -1565,13 +1569,19 @@ class HeroBallFighter {
     ) {
       return false;
     }
-    const interval =
+    let interval =
       typeof CrazyFightSkillSystem !== "undefined"
         ? CrazyFightSkillSystem.getSkillIntervalMs(
             this,
             this.template.skillIntervalMs
           )
         : this.template.skillIntervalMs;
+    if (typeof BallTouchBonusSystem !== "undefined") {
+      interval = Math.max(
+        400,
+        Math.round(interval * BallTouchBonusSystem.getSkillIntervalRatio(this))
+      );
+    }
     return now - this.lastSkillTime >= interval;
   }
 
@@ -1717,6 +1727,10 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.TRACKING) {
       TrackingBallSkillSystem.draw(ctx, this);
+    }
+
+    if (typeof BallTouchBonusSystem !== "undefined") {
+      BallTouchBonusSystem.draw(ctx, this);
     }
 
     if (typeof ElementStatusEffectSystem !== "undefined") {
@@ -3201,8 +3215,7 @@ class LittleBallHeroGame {
       if (!ElementStatusEffectSystem.isFrozen(fighter)) {
         if (
           typeof TrackingBallSkillSystem !== "undefined" &&
-          TrackingBallSkillSystem.isTrackingFighter(fighter) &&
-          TrackingBallSkillSystem.canChase(fighter)
+          TrackingBallSkillSystem.isTrackingFighter(fighter)
         ) {
           const chaseTarget = HeroBattleArenaHelper.getNearestOpponent(
             fighter,
@@ -3224,8 +3237,16 @@ class LittleBallHeroGame {
 
     const now = Date.now();
     for (const fighter of fighters) {
+      if (typeof BallTouchBonusSystem !== "undefined") {
+        BallTouchBonusSystem.updateTouchState(fighter, fighters, this);
+      }
       ElementStatusEffectSystem.tickFighter(fighter, now);
       DefenseBallSkillSystem.tickMovementRestriction(fighter, now);
+      if (
+        typeof BallTouchBonusSystem !== "undefined"
+      ) {
+        BallTouchBonusSystem.tickContactBonus(fighter, fighters, this, now);
+      }
       if (
         typeof TrackingBallSkillSystem !== "undefined" &&
         TrackingBallSkillSystem.isTrackingFighter(fighter)
@@ -3882,7 +3903,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "冰弹/血量<100狂暴/狂暴受防卫近战最高伤";
   }
   if (skillType === HeroSkillType.TRACKING) {
-    return "触碰后追击/近战";
+    return "追踪贴身/触身连击";
   }
   return "技能";
 };
