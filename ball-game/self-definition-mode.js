@@ -90,6 +90,14 @@ class CustomSkillTypeParser {
     ) {
       return HeroSkillType.TRACKING;
     }
+    if (
+      text.includes("旋风") ||
+      text.includes("机甲") ||
+      text.includes("cyclone") ||
+      text.includes("mecha")
+    ) {
+      return HeroSkillType.CYCLONE_MECHA;
+    }
     if (text.includes("尖刺") || text.includes("反伤") || text.includes("spike")) {
       return HeroSkillType.SPIKE;
     }

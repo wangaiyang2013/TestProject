@@ -33,6 +33,9 @@ class BallTouchBonusSystem {
     if (fighter.template.skillType === HeroSkillType.SPIKE) {
       return false;
     }
+    if (CycloneMechaSkillSystem.isCycloneMechaFighter(fighter)) {
+      return false;
+    }
     return true;
   }
 

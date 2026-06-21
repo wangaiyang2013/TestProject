@@ -122,6 +122,9 @@ class HeroSkillType {
 
   /** 追踪球专属：贴身追击敌人，触碰追加近战（其他球贴身时也有触身加成） */
   static TRACKING = "tracking";
+
+  /** 旋风机甲球：触碰近战；20秒后导弹齐射5秒，冷却30秒 */
+  static CYCLONE_MECHA = "cyclone_mecha";
 }
 
 /**
@@ -363,6 +366,18 @@ class HeroRoster {
         HeroSkillType.TRACKING,
         14,
         TrackingBallConstants.CONTACT_DAMAGE_INTERVAL_MS
+      ),
+      new HeroBallTemplate(
+        "cyclone_mecha",
+        "旋风机甲球",
+        "#37b24d",
+        "#8ce99a",
+        BallHealthResolver.resolve(112),
+        9,
+        1.1,
+        HeroSkillType.CYCLONE_MECHA,
+        16,
+        CycloneMechaConstants.MELEE_INTERVAL_MS
       ),
     ];
   }
@@ -889,6 +904,17 @@ class HeroPickPreviewRenderer {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("追", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.CYCLONE_MECHA) {
+      ctx.fillStyle = "#e9fac8";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("甲", cx, cy);
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       return;
@@ -1475,6 +1501,10 @@ class HeroBallFighter {
       TrackingBallSkillSystem.initFighter(this);
     }
 
+    if (CycloneMechaSkillSystem.isCycloneMechaFighter(this)) {
+      CycloneMechaSkillSystem.initFighter(this);
+    }
+
     if (SpikeReflectSystem.isSpikeFighter(this)) {
       SpikeReflectSystem.initFighter(this);
     }
@@ -1727,6 +1757,10 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.TRACKING) {
       TrackingBallSkillSystem.draw(ctx, this);
+    }
+
+    if (this.template.skillType === HeroSkillType.CYCLONE_MECHA) {
+      CycloneMechaSkillSystem.draw(ctx, this);
     }
 
     if (typeof BallTouchBonusSystem !== "undefined") {
@@ -2094,6 +2128,10 @@ class HeroAutoSkillSystem {
     const template = fighter.template;
 
     if (template.skillType === HeroSkillType.TRACKING) {
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.CYCLONE_MECHA) {
       return;
     }
 
@@ -3253,6 +3291,18 @@ class LittleBallHeroGame {
       ) {
         TrackingBallSkillSystem.tickContact(fighter, fighters, this, now);
       }
+      if (
+        typeof CycloneMechaSkillSystem !== "undefined" &&
+        CycloneMechaSkillSystem.isCycloneMechaFighter(fighter)
+      ) {
+        CycloneMechaSkillSystem.tick(
+          fighter,
+          fighters,
+          this,
+          this.projectiles,
+          now
+        );
+      }
     }
 
     for (let i = 0; i < fighters.length; i += 1) {
@@ -3402,6 +3452,35 @@ class LittleBallHeroGame {
           if (proj.ownerFighter) {
             proj.ownerFighter.attackNumber += 1;
           }
+          this.projectiles.splice(i, 1);
+        }
+        continue;
+      }
+
+      if (proj instanceof CycloneMechaHomingMissile) {
+        proj.update();
+
+        if (!proj.alive || proj.isOutOfBounds(this.arena)) {
+          this.projectiles.splice(i, 1);
+          continue;
+        }
+
+        const missileTarget = proj.target;
+        if (
+          missileTarget &&
+          missileTarget.isAlive() &&
+          this.canFighterDamageTarget(proj.ownerFighter, missileTarget) &&
+          CollisionDetector.circleHitsCircle(
+            proj.x,
+            proj.y,
+            proj.radius,
+            missileTarget.x,
+            missileTarget.y,
+            missileTarget.radius
+          )
+        ) {
+          missileTarget.takeDamage(proj.damage, proj.ownerFighter);
+          proj.alive = false;
           this.projectiles.splice(i, 1);
         }
         continue;
@@ -3847,6 +3926,27 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
   if (fighter.template.skillType === HeroSkillType.TRACKING) {
     return `${baseLabel}·追踪追击`;
   }
+  if (fighter.template.skillType === HeroSkillType.CYCLONE_MECHA) {
+    const now = Date.now();
+    if (CycloneMechaSkillSystem.isBursting(fighter, now)) {
+      return `${baseLabel}·导弹齐射`;
+    }
+    const cooldownSec = CycloneMechaSkillSystem.getBurstCooldownRemainingSec(
+      fighter,
+      now
+    );
+    if (cooldownSec > 0) {
+      return `${baseLabel}·导弹冷却${cooldownSec}s`;
+    }
+    const prepareSec = CycloneMechaSkillSystem.getBurstPrepareRemainingSec(
+      fighter,
+      now
+    );
+    if (prepareSec > 0) {
+      return `${baseLabel}·导弹${prepareSec}s`;
+    }
+    return `${baseLabel}·触身近战`;
+  }
   return baseLabel;
 };
 
@@ -3904,6 +4004,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.TRACKING) {
     return "追踪贴身/触身连击";
+  }
+  if (skillType === HeroSkillType.CYCLONE_MECHA) {
+    return "触身近战/20秒导弹5秒/冷却30秒";
   }
   return "技能";
 };
