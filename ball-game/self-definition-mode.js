@@ -98,6 +98,13 @@ class CustomSkillTypeParser {
     ) {
       return HeroSkillType.CYCLONE_MECHA;
     }
+    if (
+      text.includes("医疗") ||
+      text.includes("医护") ||
+      text.includes("medical")
+    ) {
+      return HeroSkillType.MEDICAL;
+    }
     if (text.includes("尖刺") || text.includes("反伤") || text.includes("spike")) {
       return HeroSkillType.SPIKE;
     }

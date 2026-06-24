@@ -119,6 +119,9 @@ class HeroSkillType {
 
   /** 旋风机甲球：触碰近战；20秒后导弹齐射5秒，冷却30秒 */
   static CYCLONE_MECHA = "cyclone_mecha";
+
+  /** 医疗球：触碰队友治疗；仅双队团战模式可选 */
+  static MEDICAL = "medical";
 }
 
 /**
@@ -150,6 +153,7 @@ class HeroBallTemplate {
     this.skillIntervalMs =
       skillIntervalMs || LittleBallHeroConstants.SKILL_INTERVAL_MS;
     this.returnDamage = returnDamage || Math.round(skillDamage * 0.8);
+    this.teamBattleOnly = false;
   }
 }
 
@@ -373,7 +377,42 @@ class HeroRoster {
         16,
         CycloneMechaConstants.MELEE_INTERVAL_MS
       ),
+      HeroRoster.createMedicalBallTemplate(),
     ];
+  }
+
+  static createMedicalBallTemplate() {
+    const medicalBall = new HeroBallTemplate(
+      "medical",
+      "医疗球",
+      "#20c997",
+      "#63e6be",
+      BallHealthResolver.resolve(100),
+      8.5,
+      1.0,
+      HeroSkillType.MEDICAL,
+      MedicalBallConstants.DEFAULT_HEAL_AMOUNT,
+      MedicalBallConstants.HEAL_INTERVAL_MS
+    );
+    medicalBall.teamBattleOnly = true;
+    medicalBall.decoration = "医护";
+    return medicalBall;
+  }
+
+  static isHeroAvailableInSubMode(hero, subMode) {
+    if (!hero) {
+      return false;
+    }
+    if (hero.teamBattleOnly && subMode !== "team_battle") {
+      return false;
+    }
+    return true;
+  }
+
+  static filterHeroesForSubMode(heroes, subMode) {
+    return heroes.filter((hero) =>
+      HeroRoster.isHeroAvailableInSubMode(hero, subMode)
+    );
   }
 
   static getPurchasedHeroes() {
@@ -909,6 +948,17 @@ class HeroPickPreviewRenderer {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("甲", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.MEDICAL) {
+      ctx.fillStyle = "#fff";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("医", cx, cy);
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       return;
@@ -1569,6 +1619,10 @@ class HeroBallFighter {
       CycloneMechaSkillSystem.initFighter(this);
     }
 
+    if (MedicalSkillSystem.isMedicalFighter(this)) {
+      MedicalSkillSystem.initFighter(this);
+    }
+
     if (SpikeReflectSystem.isSpikeFighter(this)) {
       SpikeReflectSystem.initFighter(this);
     }
@@ -1823,6 +1877,10 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.CYCLONE_MECHA) {
       CycloneMechaSkillSystem.draw(ctx, this);
+    }
+
+    if (this.template.skillType === HeroSkillType.MEDICAL) {
+      MedicalSkillSystem.draw(ctx, this);
     }
 
     if (typeof BallTouchBonusSystem !== "undefined") {
@@ -2164,6 +2222,10 @@ class HeroAutoSkillSystem {
     }
 
     if (template.skillType === HeroSkillType.CYCLONE_MECHA) {
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.MEDICAL) {
       return;
     }
 
@@ -2763,7 +2825,8 @@ class LittleBallHeroGame {
   }
 
   getHeroes() {
-    return this.customRoster || HeroRoster.getAll();
+    const heroes = this.customRoster || HeroRoster.getAll();
+    return HeroRoster.filterHeroesForSubMode(heroes, this.subMode);
   }
 
   getHeroById(id) {
@@ -3010,6 +3073,10 @@ class LittleBallHeroGame {
 
   tryPickHero(heroId) {
     if (this.phase !== "pick" || this.takenHeroIds.has(heroId)) {
+      return false;
+    }
+    const hero = this.getHeroById(heroId);
+    if (!HeroRoster.isHeroAvailableInSubMode(hero, this.subMode)) {
       return false;
     }
     this.applyPick(heroId, false);
@@ -3337,6 +3404,9 @@ class LittleBallHeroGame {
       }
       if (SwordBladeSkillSystem.isSwordFighter(fighter)) {
         SwordBladeSkillSystem.tickContact(fighter, fighters, this, now);
+      }
+      if (MedicalSkillSystem.isMedicalFighter(fighter)) {
+        MedicalSkillSystem.tickHeal(fighter, fighters, this, now);
       }
     }
 
@@ -3982,6 +4052,9 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
     }
     return `${baseLabel}·触身近战`;
   }
+  if (fighter.template.skillType === HeroSkillType.MEDICAL) {
+    return `${baseLabel}·触身治疗`;
+  }
   return baseLabel;
 };
 
@@ -4042,6 +4115,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.CYCLONE_MECHA) {
     return "触身近战/20秒导弹5秒/冷却30秒";
+  }
+  if (skillType === HeroSkillType.MEDICAL) {
+    return "触身治疗队友(仅团战)";
   }
   return "技能";
 };
