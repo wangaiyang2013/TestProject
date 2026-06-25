@@ -1561,7 +1561,6 @@ class HeroBallFighter {
     this.lastBladeStackTime = Date.now();
     this.flameBurstUntil = 0;
     this.flameFizzleUntil = 0;
-    this.ironShieldFlashUntil = 0;
     this.ironCritFlashUntil = 0;
     this.ironCritHitFlashUntil = 0;
     this.bladeDamage =
@@ -1634,6 +1633,8 @@ class HeroBallFighter {
     this.weaponGrenadeFlashUntil = 0;
     this.weaponDaggerSlashUntil = 0;
     this.lastWeaponUseTime = 0;
+    this.weaponInvincibleUntil = 0;
+    this.weaponBloodHealFlashUntil = 0;
   }
 
   get maxHealth() {
@@ -1666,6 +1667,12 @@ class HeroBallFighter {
 
   takeDamage(amount, attacker, skipReflect, isTrueDamage) {
     if (SwordBladeSkillSystem.isInvincible(this)) {
+      return;
+    }
+    if (
+      typeof WeaponBoxCombatSystem !== "undefined" &&
+      WeaponBoxCombatSystem.isInvincible(this)
+    ) {
       return;
     }
 

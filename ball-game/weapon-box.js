@@ -32,6 +32,11 @@ const WeaponBoxConstants = {
   DAGGER_HIT_DAMAGE: 1,
   DAGGER_HIT_INTERVAL_MS: 380,
   DAGGER_MELEE_EXTRA_REACH: 30,
+  /** 血袋：拾取即饮用，恢复最大生命 30% */
+  BLOOD_POUCH_HEAL_RATIO: 0.3,
+  /** 血袋：饮用后无敌时间（毫秒） */
+  BLOOD_POUCH_INVINCIBLE_MS: 3000,
+  BLOOD_POUCH_HEAL_FLASH_MS: 500,
 };
 
 /**
@@ -54,6 +59,8 @@ class WeaponType {
 
   static DAGGER = "dagger";
 
+  static BLOOD_POUCH = "blood_pouch";
+
   static getAll() {
     return [
       WeaponType.STEN,
@@ -64,7 +71,12 @@ class WeaponType {
       WeaponType.C4,
       WeaponType.MINE,
       WeaponType.DAGGER,
+      WeaponType.BLOOD_POUCH,
     ];
+  }
+
+  static isConsumableOnPickup(weaponType) {
+    return weaponType === WeaponType.BLOOD_POUCH;
   }
 
   static rollRandom() {
@@ -82,6 +94,7 @@ class WeaponType {
       [WeaponType.C4]: "C4炸弹",
       [WeaponType.MINE]: "地雷",
       [WeaponType.DAGGER]: "匕首",
+      [WeaponType.BLOOD_POUCH]: "血袋",
     };
     return labels[weaponType] || "武器";
   }
@@ -96,6 +109,7 @@ class WeaponType {
       [WeaponType.C4]: "C4",
       [WeaponType.MINE]: "雷",
       [WeaponType.DAGGER]: "匕",
+      [WeaponType.BLOOD_POUCH]: "血",
     };
     return labels[weaponType] || "武";
   }
@@ -110,6 +124,7 @@ class WeaponType {
       [WeaponType.C4]: WeaponBoxConstants.C4_DAMAGE,
       [WeaponType.MINE]: WeaponBoxConstants.MINE_DAMAGE,
       [WeaponType.DAGGER]: WeaponBoxConstants.DAGGER_HIT_DAMAGE,
+      [WeaponType.BLOOD_POUCH]: 0,
     };
     return damageMap[weaponType] || 20;
   }
@@ -124,6 +139,7 @@ class WeaponType {
       [WeaponType.C4]: "#51cf66",
       [WeaponType.MINE]: "#845ef7",
       [WeaponType.DAGGER]: "#ced4da",
+      [WeaponType.BLOOD_POUCH]: "#c92a2a",
     };
     return colors[weaponType] || "#dee2e6";
   }
@@ -358,6 +374,34 @@ class WeaponFieldTrap {
 class WeaponBoxCombatSystem {
   static hasWeapon(fighter) {
     return !!(fighter && fighter.weaponCharge);
+  }
+
+  static isInvincible(fighter) {
+    return !!(fighter && Date.now() < (fighter.weaponInvincibleUntil || 0));
+  }
+
+  static applyBloodPouch(fighter, now) {
+    const healAmount = Math.max(
+      1,
+      Math.round(
+        fighter.maxHealth * WeaponBoxConstants.BLOOD_POUCH_HEAL_RATIO
+      )
+    );
+    fighter.health = Math.min(fighter.maxHealth, fighter.health + healAmount);
+    fighter.weaponInvincibleUntil =
+      now + WeaponBoxConstants.BLOOD_POUCH_INVINCIBLE_MS;
+    fighter.weaponPickupFlashUntil = now + WeaponBoxConstants.PICKUP_FLASH_MS;
+    fighter.weaponBloodHealFlashUntil =
+      now + WeaponBoxConstants.BLOOD_POUCH_HEAL_FLASH_MS;
+
+    if (typeof ElementStatusEffectSystem !== "undefined") {
+      ElementStatusEffectSystem.setStatusText(
+        fighter,
+        `血袋+${healAmount}·无敌3秒`
+      );
+    }
+
+    return healAmount;
   }
 
   static tryUseWeapon(fighter, opponent, projectiles, projectileRadius, now, game) {
@@ -722,6 +766,36 @@ class WeaponBoxCombatSystem {
       ctx.lineWidth = 3;
       ctx.stroke();
     }
+
+    if (WeaponBoxCombatSystem.isInvincible(fighter)) {
+      const pulse =
+        0.5 +
+        0.5 * Math.sin((Date.now() % 500) / (500 / (Math.PI * 2)));
+      ctx.beginPath();
+      ctx.arc(
+        fighter.x,
+        fighter.y,
+        fighter.radius + 10 + pulse * 4,
+        0,
+        Math.PI * 2
+      );
+      ctx.strokeStyle = `rgba(255, 107, 107, ${0.45 + pulse * 0.35})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#ff6b6b";
+      ctx.font = "bold 9px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("无敌", fighter.x, fighter.y + fighter.radius + 24);
+      ctx.textAlign = "left";
+    }
+
+    if (Date.now() < (fighter.weaponBloodHealFlashUntil || 0)) {
+      ctx.fillStyle = "#51cf66";
+      ctx.font = "bold 10px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("饮血回复", fighter.x, fighter.y - fighter.radius - 58);
+      ctx.textAlign = "left";
+    }
   }
 }
 
@@ -894,11 +968,17 @@ class WeaponBoxSpawnSystem {
           box.radius
         )
       ) {
-        fighter.weaponCharge = new FighterWeaponCharge(box.weaponType);
-        fighter.weaponPickupFlashUntil =
-          Date.now() + WeaponBoxConstants.PICKUP_FLASH_MS;
+        const now = Date.now();
         box.alive = false;
         game.weaponBox = null;
+
+        if (WeaponType.isConsumableOnPickup(box.weaponType)) {
+          WeaponBoxCombatSystem.applyBloodPouch(fighter, now);
+          return;
+        }
+
+        fighter.weaponCharge = new FighterWeaponCharge(box.weaponType);
+        fighter.weaponPickupFlashUntil = now + WeaponBoxConstants.PICKUP_FLASH_MS;
         if (typeof ElementStatusEffectSystem !== "undefined") {
           ElementStatusEffectSystem.setStatusText(
             fighter,
