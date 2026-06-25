@@ -122,6 +122,9 @@ class HeroSkillType {
 
   /** 医疗球：触碰队友治疗；仅双队团战模式可选 */
   static MEDICAL = "medical";
+
+  /** 武器球：每 3 秒向敌人释放随机武器箱武器 */
+  static WEAPON_BALL = "weapon_ball";
 }
 
 /**
@@ -378,6 +381,18 @@ class HeroRoster {
         CycloneMechaConstants.MELEE_INTERVAL_MS
       ),
       HeroRoster.createMedicalBallTemplate(),
+      new HeroBallTemplate(
+        "weapon_ball",
+        "武器球",
+        "#495057",
+        "#868e96",
+        BallHealthResolver.resolve(98),
+        9,
+        1.0,
+        HeroSkillType.WEAPON_BALL,
+        16,
+        WeaponBallConstants.SKILL_INTERVAL_MS
+      ),
     ];
   }
 
@@ -959,6 +974,17 @@ class HeroPickPreviewRenderer {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("医", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.WEAPON_BALL) {
+      ctx.fillStyle = "#fff";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("武", cx, cy);
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       return;
@@ -1612,6 +1638,10 @@ class HeroBallFighter {
       MedicalSkillSystem.initFighter(this);
     }
 
+    if (WeaponBallSkillSystem.isWeaponBallFighter(this)) {
+      WeaponBallSkillSystem.initFighter(this);
+    }
+
     if (SpikeReflectSystem.isSpikeFighter(this)) {
       SpikeReflectSystem.initFighter(this);
     }
@@ -1874,6 +1904,10 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.MEDICAL) {
       MedicalSkillSystem.draw(ctx, this);
+    }
+
+    if (this.template.skillType === HeroSkillType.WEAPON_BALL) {
+      WeaponBallSkillSystem.draw(ctx, this);
     }
 
     if (typeof BallTouchBonusSystem !== "undefined") {
@@ -2212,6 +2246,18 @@ class HeroAutoSkillSystem {
     }
 
     if (template.skillType === HeroSkillType.MEDICAL) {
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.WEAPON_BALL) {
+      WeaponBallSkillSystem.tickSkill(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius,
+        game,
+        now
+      );
       return;
     }
 
@@ -4041,6 +4087,12 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
   if (fighter.template.skillType === HeroSkillType.MEDICAL) {
     return `${baseLabel}·触身治疗`;
   }
+  if (fighter.template.skillType === HeroSkillType.WEAPON_BALL) {
+    const weaponLabel = fighter.weaponBallLastWeaponType
+      ? WeaponType.getLabel(fighter.weaponBallLastWeaponType)
+      : "待发射";
+    return `${baseLabel}·${weaponLabel}`;
+  }
   return baseLabel;
 };
 
@@ -4104,6 +4156,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.MEDICAL) {
     return "触身治疗队友(仅团战)";
+  }
+  if (skillType === HeroSkillType.WEAPON_BALL) {
+    return "每3秒随机武器射击";
   }
   return "技能";
 };

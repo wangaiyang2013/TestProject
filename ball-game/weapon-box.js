@@ -79,6 +79,18 @@ class WeaponType {
     return weaponType === WeaponType.BLOOD_POUCH;
   }
 
+  /** 可向敌人释放的武器类型（排除血袋等消耗品） */
+  static getCombatWeaponTypes() {
+    return WeaponType.getAll().filter(
+      (weaponType) => !WeaponType.isConsumableOnPickup(weaponType)
+    );
+  }
+
+  static rollRandomCombatWeapon() {
+    const types = WeaponType.getCombatWeaponTypes();
+    return types[Math.floor(Math.random() * types.length)];
+  }
+
   static rollRandom() {
     const types = WeaponType.getAll();
     return types[Math.floor(Math.random() * types.length)];
@@ -466,6 +478,26 @@ class WeaponBoxCombatSystem {
       ElementStatusEffectSystem.setStatusText(fighter, charge.label);
     }
     return true;
+  }
+
+  static fireWeaponByType(
+    fighter,
+    opponent,
+    projectiles,
+    projectileRadius,
+    weaponType,
+    game
+  ) {
+    const charge = new FighterWeaponCharge(weaponType);
+    WeaponBoxCombatSystem.fireWeapon(
+      fighter,
+      opponent,
+      projectiles,
+      projectileRadius,
+      charge,
+      game
+    );
+    return weaponType;
   }
 
   static fireWeapon(fighter, opponent, projectiles, projectileRadius, charge, game) {

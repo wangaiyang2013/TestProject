@@ -105,6 +105,13 @@ class CustomSkillTypeParser {
     ) {
       return HeroSkillType.MEDICAL;
     }
+    if (
+      text.includes("武器球") ||
+      text.includes("weapon ball") ||
+      text.includes("weapon_ball")
+    ) {
+      return HeroSkillType.WEAPON_BALL;
+    }
     if (text.includes("尖刺") || text.includes("反伤") || text.includes("spike")) {
       return HeroSkillType.SPIKE;
     }
