@@ -125,6 +125,9 @@ class HeroSkillType {
 
   /** 武器球：每 3 秒向敌人释放随机武器箱武器 */
   static WEAPON_BALL = "weapon_ball";
+
+  /** 白玉球：极速射击，击杀召唤随机球 */
+  static WHITE_JADE = "white_jade";
 }
 
 /**
@@ -392,6 +395,18 @@ class HeroRoster {
         HeroSkillType.WEAPON_BALL,
         16,
         WeaponBallConstants.SKILL_INTERVAL_MS
+      ),
+      new HeroBallTemplate(
+        "white_jade",
+        "白玉球",
+        "#f8f9fa",
+        "#96f2d7",
+        BallHealthResolver.resolve(90),
+        9.5,
+        0.95,
+        HeroSkillType.WHITE_JADE,
+        10,
+        WhiteJadeBallConstants.FIRE_INTERVAL_MS
       ),
     ];
   }
@@ -989,6 +1004,17 @@ class HeroPickPreviewRenderer {
       ctx.textBaseline = "alphabetic";
       return;
     }
+
+    if (hero.skillType === HeroSkillType.WHITE_JADE) {
+      ctx.fillStyle = "#212529";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("玉", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
   }
 }
 
@@ -1008,13 +1034,7 @@ class ContactMeleeHelper {
   }
 
   static getContactOpponents(fighter, allFighters, game) {
-    let opponents = HeroBattleArenaHelper.getAliveOpponents(fighter, allFighters);
-    if (game && typeof game.isTeamBattle === "function" && game.isTeamBattle()) {
-      opponents = opponents.filter((opponent) =>
-        HeroTeamRegistry.areEnemies(fighter.playerId, opponent.playerId)
-      );
-    }
-    return opponents;
+    return HeroBattleArenaHelper.getAliveOpponents(fighter, allFighters, game);
   }
 
   static isTouchingAnyOpponent(fighter, allFighters, game) {
@@ -1642,6 +1662,10 @@ class HeroBallFighter {
       WeaponBallSkillSystem.initFighter(this);
     }
 
+    if (WhiteJadeBallSkillSystem.isWhiteJadeFighter(this)) {
+      WhiteJadeBallSkillSystem.initFighter(this);
+    }
+
     if (SpikeReflectSystem.isSpikeFighter(this)) {
       SpikeReflectSystem.initFighter(this);
     }
@@ -1725,8 +1749,17 @@ class HeroBallFighter {
         attacker
       );
     }
+    const wasAlive = this.isAlive();
     this.health = Math.max(0, this.health - finalAmount);
     SpikeReflectSystem.tryReflect(this, attacker, skipReflect);
+    if (
+      wasAlive &&
+      !this.isAlive() &&
+      attacker &&
+      typeof WhiteJadeBallSkillSystem !== "undefined"
+    ) {
+      WhiteJadeBallSkillSystem.onEnemyKilled(attacker, this);
+    }
   }
 
   isAlive() {
@@ -1908,6 +1941,14 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.WEAPON_BALL) {
       WeaponBallSkillSystem.draw(ctx, this);
+    }
+
+    if (this.template.skillType === HeroSkillType.WHITE_JADE) {
+      WhiteJadeBallSkillSystem.draw(ctx, this);
+    }
+
+    if (this.isWhiteJadeSummon) {
+      WhiteJadeBallSkillSystem.drawSummon(ctx, this);
     }
 
     if (typeof BallTouchBonusSystem !== "undefined") {
@@ -2258,6 +2299,10 @@ class HeroAutoSkillSystem {
         game,
         now
       );
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.WHITE_JADE) {
       return;
     }
 
@@ -2627,7 +2672,7 @@ class HeroAutoSkillSystem {
     );
   }
 
-  static fireShot(fighter, opponent, projectiles, radius, damage) {
+  static fireShot(fighter, opponent, projectiles, radius, damage, bulletColor) {
     const dx = opponent.x - fighter.x;
     const dy = opponent.y - fighter.y;
     const dist = Math.hypot(dx, dy);
@@ -2645,7 +2690,7 @@ class HeroAutoSkillSystem {
         dirY,
         radius,
         fighter.playerId,
-        fighter.color,
+        bulletColor || fighter.color,
         damage
       )
     );
@@ -2704,10 +2749,33 @@ class PickTimer {
  * 英雄战场辅助：多目标寻敌与碰撞
  */
 class HeroBattleArenaHelper {
-  static getAliveOpponents(fighter, allFighters) {
-    return allFighters.filter(
-      (other) => other.playerId !== fighter.playerId && other.isAlive()
-    );
+  static getEffectivePlayerId(fighter) {
+    if (!fighter) {
+      return null;
+    }
+    return fighter.summonOwnerPlayerId || fighter.playerId;
+  }
+
+  static areAllies(fighterA, fighterB, game) {
+    const idA = HeroBattleArenaHelper.getEffectivePlayerId(fighterA);
+    const idB = HeroBattleArenaHelper.getEffectivePlayerId(fighterB);
+    if (
+      game &&
+      typeof game.isTeamBattle === "function" &&
+      game.isTeamBattle()
+    ) {
+      return !HeroTeamRegistry.areEnemies(idA, idB);
+    }
+    return idA === idB;
+  }
+
+  static getAliveOpponents(fighter, allFighters, game) {
+    return allFighters.filter((other) => {
+      if (!other.isAlive()) {
+        return false;
+      }
+      return !HeroBattleArenaHelper.areAllies(fighter, other, game);
+    });
   }
 
   static getNearestOpponent(fighter, allFighters, game) {
@@ -3185,6 +3253,9 @@ class LittleBallHeroGame {
     }
     this.phase = "battle";
     this.projectiles = [];
+    if (typeof WhiteJadeBallSkillSystem !== "undefined") {
+      WhiteJadeBallSkillSystem.initBattle(this);
+    }
     if (typeof WeaponBoxSpawnSystem !== "undefined") {
       WeaponBoxSpawnSystem.initBattle(this);
     }
@@ -3209,10 +3280,7 @@ class LittleBallHeroGame {
     if (!attacker || !target) {
       return true;
     }
-    if (
-      this.isTeamBattle() &&
-      !HeroTeamRegistry.areEnemies(attacker.playerId, target.playerId)
-    ) {
+    if (HeroBattleArenaHelper.areAllies(attacker, target, this)) {
       return false;
     }
     return true;
@@ -3484,6 +3552,15 @@ class LittleBallHeroGame {
         typeof ElementStatusEffectSystem === "undefined" ||
         !ElementStatusEffectSystem.isAttackBlocked(fighter)
       ) {
+        if (WhiteJadeBallSkillSystem.isWhiteJadeFighter(fighter)) {
+          WhiteJadeBallSkillSystem.tickFire(
+            fighter,
+            opponent,
+            this.projectiles,
+            this.getProjectileRadius(),
+            now
+          );
+        }
         HeroAutoSkillSystem.tryUseSkill(
           fighter,
           opponent,
@@ -3512,6 +3589,10 @@ class LittleBallHeroGame {
       WeaponBoxSpawnSystem.tick(this, now);
     }
 
+    if (typeof WhiteJadeBallSkillSystem !== "undefined") {
+      WhiteJadeBallSkillSystem.processPendingSummons(fighters, this);
+    }
+
     this.updateProjectiles();
     this.checkBattleOutcome();
   }
@@ -3523,19 +3604,31 @@ class LittleBallHeroGame {
     }
 
     const aliveFighters = this.fighters.filter((fighter) => fighter.isAlive());
-    if (aliveFighters.length === 1) {
-      this.endGame(aliveFighters[0].playerId);
+    const aliveSides = new Set(
+      aliveFighters.map((fighter) =>
+        HeroBattleArenaHelper.getEffectivePlayerId(fighter)
+      )
+    );
+    if (aliveSides.size <= 1 && aliveFighters.length > 0) {
+      const winner = aliveFighters[0];
+      this.endGame(winner.summonOwnerPlayerId || winner.playerId);
     }
   }
 
   checkTeamBattleOutcome() {
     const redBlueAlive = this.fighters.filter(
       (fighter) =>
-        fighter.isAlive() && HeroTeamRegistry.isRedBlueTeam(fighter.playerId)
+        fighter.isAlive() &&
+        HeroTeamRegistry.isRedBlueTeam(
+          fighter.summonOwnerPlayerId || fighter.playerId
+        )
     );
     const greenPurpleAlive = this.fighters.filter(
       (fighter) =>
-        fighter.isAlive() && HeroTeamRegistry.isGreenPurpleTeam(fighter.playerId)
+        fighter.isAlive() &&
+        HeroTeamRegistry.isGreenPurpleTeam(
+          fighter.summonOwnerPlayerId || fighter.playerId
+        )
     );
 
     if (redBlueAlive.length > 0 && greenPurpleAlive.length > 0) {
@@ -4093,6 +4186,9 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
       : "待发射";
     return `${baseLabel}·${weaponLabel}`;
   }
+  if (fighter.template.skillType === HeroSkillType.WHITE_JADE) {
+    return `${baseLabel}·极速弹`;
+  }
   return baseLabel;
 };
 
@@ -4159,6 +4255,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.WEAPON_BALL) {
     return "每3秒随机武器射击";
+  }
+  if (skillType === HeroSkillType.WHITE_JADE) {
+    return "0.001秒极速弹/击杀召唤随机球";
   }
   return "技能";
 };

@@ -63,12 +63,11 @@ class BallTouchBonusSystem {
   }
 
   static getTouchingOpponents(fighter, allFighters, game) {
-    let opponents = HeroBattleArenaHelper.getAliveOpponents(fighter, allFighters);
-    if (game && typeof game.isTeamBattle === "function" && game.isTeamBattle()) {
-      opponents = opponents.filter((opponent) =>
-        HeroTeamRegistry.areEnemies(fighter.playerId, opponent.playerId)
-      );
-    }
+    const opponents = HeroBattleArenaHelper.getAliveOpponents(
+      fighter,
+      allFighters,
+      game
+    );
     return opponents.filter((opponent) =>
       BallTouchBonusSystem.isOverlapping(fighter, opponent)
     );

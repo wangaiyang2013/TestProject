@@ -189,9 +189,18 @@ class DefenseBallSkillSystem {
   }
 
   static applyBodyDamage(fighter, amount, attacker, skipReflect, isTrueDamage) {
+    const wasAlive = fighter.isAlive();
     fighter.health = Math.max(0, fighter.health - amount);
     if (!skipReflect) {
       SpikeReflectSystem.tryReflect(fighter, attacker, skipReflect);
+    }
+    if (
+      wasAlive &&
+      !fighter.isAlive() &&
+      attacker &&
+      typeof WhiteJadeBallSkillSystem !== "undefined"
+    ) {
+      WhiteJadeBallSkillSystem.onEnemyKilled(attacker, fighter);
     }
   }
 

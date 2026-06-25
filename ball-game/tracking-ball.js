@@ -90,13 +90,7 @@ class TrackingBallSkillSystem {
   }
 
   static getContactOpponents(fighter, allFighters, game) {
-    let opponents = HeroBattleArenaHelper.getAliveOpponents(fighter, allFighters);
-    if (game && typeof game.isTeamBattle === "function" && game.isTeamBattle()) {
-      opponents = opponents.filter((opponent) =>
-        HeroTeamRegistry.areEnemies(fighter.playerId, opponent.playerId)
-      );
-    }
-    return opponents;
+    return HeroBattleArenaHelper.getAliveOpponents(fighter, allFighters, game);
   }
 
   static tickContact(fighter, allFighters, game, now) {

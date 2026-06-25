@@ -112,6 +112,14 @@ class CustomSkillTypeParser {
     ) {
       return HeroSkillType.WEAPON_BALL;
     }
+    if (
+      text.includes("白玉") ||
+      text.includes("白玉球") ||
+      text.includes("white jade") ||
+      text.includes("white_jade")
+    ) {
+      return HeroSkillType.WHITE_JADE;
+    }
     if (text.includes("尖刺") || text.includes("反伤") || text.includes("spike")) {
       return HeroSkillType.SPIKE;
     }
