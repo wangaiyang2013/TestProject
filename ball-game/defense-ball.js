@@ -189,12 +189,7 @@ class DefenseBallSkillSystem {
   }
 
   static applyBodyDamage(fighter, amount, attacker, skipReflect, isTrueDamage) {
-    let finalAmount = amount;
-    if (!isTrueDamage && IronWallSkillSystem.isIronWallFighter(fighter)) {
-      finalAmount = IronWallSkillSystem.applyDamageReduction(amount);
-      IronWallSkillSystem.markShieldHit(fighter);
-    }
-    fighter.health = Math.max(0, fighter.health - finalAmount);
+    fighter.health = Math.max(0, fighter.health - amount);
     if (!skipReflect) {
       SpikeReflectSystem.tryReflect(fighter, attacker, skipReflect);
     }

@@ -31,10 +31,10 @@ const LittleBallHeroConstants = {
   FLAMETHROWER_PROC_CHANCE: 0.8,
   FLAMETHROWER_PROJECTILE_LIFETIME_MS: 750,
   FLAMETHROWER_BURST_FLASH_MS: 260,
-  IRON_WALL_DAMAGE_REDUCTION: 0.9,
-  /** 铁壁丸出击伤害（已削弱：由 80 降至 30） */
+  /** 铁壁丸生命值上限 */
+  IRON_WALL_MAX_HEALTH: 1000,
+  /** 铁壁丸出击伤害 */
   IRON_WALL_STRIKE_DAMAGE: 30,
-  IRON_WALL_SHIELD_FLASH_MS: 300,
   IRON_WALL_CRIT_FLASH_MS: 320,
   AI_PICK_DELAY_MS: 500,
   PICK_GRID_COLUMNS: 4,
@@ -73,7 +73,7 @@ class HeroSkillType {
 
   static PULSE = "pulse";
 
-  /** 铁壁丸专属：受击减伤 90%，攻击必定暴击 */
+  /** 铁壁丸专属：高生命值，出击固定伤害 */
   static IRON_WALL = "iron_wall";
 
   static BUMP = "bump";
@@ -190,7 +190,7 @@ class HeroRoster {
         "铁壁丸",
         "#868e96",
         "#ced4da",
-        BallHealthResolver.resolve(130),
+        BallHealthResolver.resolve(LittleBallHeroConstants.IRON_WALL_MAX_HEALTH),
         8,
         1.4,
         HeroSkillType.IRON_WALL,
@@ -1139,16 +1139,11 @@ class BrokenBladeSkillSystem {
 }
 
 /**
- * 铁壁丸技能：受击减免 90% 伤害，出击必定暴击
+ * 铁壁丸技能：出击固定伤害
  */
 class IronWallSkillSystem {
   static isIronWallFighter(fighter) {
     return fighter && fighter.template.skillType === HeroSkillType.IRON_WALL;
-  }
-
-  static applyDamageReduction(amount) {
-    const ratio = 1 - LittleBallHeroConstants.IRON_WALL_DAMAGE_REDUCTION;
-    return Math.max(1, Math.ceil(amount * ratio));
   }
 
   static getStrikeDamage() {
@@ -1157,11 +1152,6 @@ class IronWallSkillSystem {
 
   static applyCriticalDamage(baseDamage, fighter) {
     return IronWallSkillSystem.getStrikeDamage();
-  }
-
-  static markShieldHit(fighter) {
-    fighter.ironShieldFlashUntil =
-      Date.now() + LittleBallHeroConstants.IRON_WALL_SHIELD_FLASH_MS;
   }
 
   static markCriticalStrike(fighter, opponent) {
@@ -1698,10 +1688,6 @@ class HeroBallFighter {
         attacker
       );
     }
-    if (!isTrueDamage && IronWallSkillSystem.isIronWallFighter(this)) {
-      finalAmount = IronWallSkillSystem.applyDamageReduction(finalAmount);
-      IronWallSkillSystem.markShieldHit(this);
-    }
     this.health = Math.max(0, this.health - finalAmount);
     SpikeReflectSystem.tryReflect(this, attacker, skipReflect);
   }
@@ -1969,13 +1955,6 @@ class HeroBallFighter {
   }
 
   drawIronWallEffect(ctx) {
-    if (Date.now() < this.ironShieldFlashUntil) {
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.radius + 10, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(206, 212, 218, 0.85)";
-      ctx.lineWidth = 4;
-      ctx.stroke();
-    }
     if (Date.now() < this.ironCritFlashUntil) {
       ctx.fillStyle = "#ffd43b";
       ctx.font = "bold 10px system-ui, sans-serif";
@@ -4069,7 +4048,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "震荡";
   }
   if (skillType === HeroSkillType.IRON_WALL) {
-    return `减伤90%+出击${LittleBallHeroConstants.IRON_WALL_STRIKE_DAMAGE}`;
+    return `生命${LittleBallHeroConstants.IRON_WALL_MAX_HEALTH}+出击${LittleBallHeroConstants.IRON_WALL_STRIKE_DAMAGE}`;
   }
   if (skillType === HeroSkillType.BUMP) {
     return "冲击";
