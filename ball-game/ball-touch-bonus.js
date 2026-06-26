@@ -39,6 +39,9 @@ class BallTouchBonusSystem {
     if (MedicalSkillSystem.isMedicalFighter(fighter)) {
       return false;
     }
+    if (FactionBallSkillSystem.isFactionFighter(fighter)) {
+      return false;
+    }
     if (fighter.template.skillType === HeroSkillType.BOXING) {
       return false;
     }

@@ -106,6 +106,13 @@ class CustomSkillTypeParser {
       return HeroSkillType.MEDICAL;
     }
     if (
+      text.includes("阵营球") ||
+      text.includes("阵营") ||
+      text.includes("faction")
+    ) {
+      return HeroSkillType.FACTION;
+    }
+    if (
       text.includes("武器球") ||
       text.includes("weapon ball") ||
       text.includes("weapon_ball")

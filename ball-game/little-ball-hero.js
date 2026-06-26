@@ -128,6 +128,9 @@ class HeroSkillType {
 
   /** 白玉球：极速射击，击杀召唤随机球 */
   static WHITE_JADE = "white_jade";
+
+  /** 阵营球：触碰队友阵营共鸣；仅双队团战模式可选 */
+  static FACTION = "faction";
 }
 
 /**
@@ -384,6 +387,7 @@ class HeroRoster {
         CycloneMechaConstants.MELEE_INTERVAL_MS
       ),
       HeroRoster.createMedicalBallTemplate(),
+      HeroRoster.createFactionBallTemplate(),
       new HeroBallTemplate(
         "weapon_ball",
         "武器球",
@@ -427,6 +431,24 @@ class HeroRoster {
     medicalBall.teamBattleOnly = true;
     medicalBall.decoration = "医护";
     return medicalBall;
+  }
+
+  static createFactionBallTemplate() {
+    const factionBall = new HeroBallTemplate(
+      "faction",
+      "阵营球",
+      "#4c6ef5",
+      "#748ffc",
+      BallHealthResolver.resolve(96),
+      8.8,
+      1.0,
+      HeroSkillType.FACTION,
+      14,
+      FactionBallConstants.RESONANCE_INTERVAL_MS
+    );
+    factionBall.teamBattleOnly = true;
+    factionBall.decoration = "阵营";
+    return factionBall;
   }
 
   static isHeroAvailableInSubMode(hero, subMode) {
@@ -1011,6 +1033,17 @@ class HeroPickPreviewRenderer {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("玉", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.FACTION) {
+      ctx.fillStyle = "#fff";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("阵", cx, cy);
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       return;
@@ -1666,6 +1699,10 @@ class HeroBallFighter {
       WhiteJadeBallSkillSystem.initFighter(this);
     }
 
+    if (FactionBallSkillSystem.isFactionFighter(this)) {
+      FactionBallSkillSystem.initFighter(this);
+    }
+
     if (SpikeReflectSystem.isSpikeFighter(this)) {
       SpikeReflectSystem.initFighter(this);
     }
@@ -1790,10 +1827,13 @@ class HeroBallFighter {
   }
 
   getSkillDamage(baseDamage) {
-    const damage =
+    let damage =
       baseDamage !== undefined ? baseDamage : this.template.skillDamage;
     if (typeof CrazyFightSkillSystem !== "undefined") {
-      return CrazyFightSkillSystem.getSkillDamage(this, damage);
+      damage = CrazyFightSkillSystem.getSkillDamage(this, damage);
+    }
+    if (typeof FactionBallSkillSystem !== "undefined") {
+      damage = FactionBallSkillSystem.applyDamageBonus(this, damage);
     }
     return damage;
   }
@@ -1945,6 +1985,14 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.WHITE_JADE) {
       WhiteJadeBallSkillSystem.draw(ctx, this);
+    }
+
+    if (this.template.skillType === HeroSkillType.FACTION) {
+      FactionBallSkillSystem.drawFactionBall(ctx, this);
+    }
+
+    if (typeof FactionBallSkillSystem !== "undefined") {
+      FactionBallSkillSystem.drawResonanceAura(ctx, this);
     }
 
     if (this.isWhiteJadeSummon) {
@@ -2144,8 +2192,13 @@ class HeroBallFighter {
 class ContinuousBouncePhysics {
   static maintainSpeed(ball) {
     const speed = ball.getSpeed();
-    const minSpeed = LittleBallHeroConstants.MIN_BOUNCE_SPEED;
-    const maxSpeed = LittleBallHeroConstants.MAX_BOUNCE_SPEED;
+    let minSpeed = LittleBallHeroConstants.MIN_BOUNCE_SPEED;
+    let maxSpeed = LittleBallHeroConstants.MAX_BOUNCE_SPEED;
+    if (typeof FactionBallSkillSystem !== "undefined") {
+      const moveMultiplier = FactionBallSkillSystem.getMoveSpeedMultiplier(ball);
+      minSpeed *= moveMultiplier;
+      maxSpeed *= moveMultiplier;
+    }
     const angle = ball.getMoveAngle();
 
     if (speed < minSpeed) {
@@ -2287,6 +2340,10 @@ class HeroAutoSkillSystem {
     }
 
     if (template.skillType === HeroSkillType.MEDICAL) {
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.FACTION) {
       return;
     }
 
@@ -3508,6 +3565,9 @@ class LittleBallHeroGame {
       if (MedicalSkillSystem.isMedicalFighter(fighter)) {
         MedicalSkillSystem.tickHeal(fighter, fighters, this, now);
       }
+      if (FactionBallSkillSystem.isFactionFighter(fighter)) {
+        FactionBallSkillSystem.tickResonance(fighter, fighters, this, now);
+      }
     }
 
     for (let i = 0; i < fighters.length; i += 1) {
@@ -4180,6 +4240,11 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
   if (fighter.template.skillType === HeroSkillType.MEDICAL) {
     return `${baseLabel}·触身治疗`;
   }
+  if (fighter.template.skillType === HeroSkillType.FACTION) {
+    return FactionBallSkillSystem.hasResonance(fighter)
+      ? `${baseLabel}·阵营共鸣中`
+      : `${baseLabel}·触身共鸣`;
+  }
   if (fighter.template.skillType === HeroSkillType.WEAPON_BALL) {
     const weaponLabel = fighter.weaponBallLastWeaponType
       ? WeaponType.getLabel(fighter.weaponBallLastWeaponType)
@@ -4252,6 +4317,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.MEDICAL) {
     return "触身治疗队友(仅团战)";
+  }
+  if (skillType === HeroSkillType.FACTION) {
+    return "触身阵营共鸣/伤害+移速(仅团战)";
   }
   if (skillType === HeroSkillType.WEAPON_BALL) {
     return "每3秒随机武器射击";
