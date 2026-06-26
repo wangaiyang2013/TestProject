@@ -51,6 +51,9 @@ class BallTouchBonusSystem {
     if (fighter.template.skillType === HeroSkillType.SWORD_BLADE) {
       return false;
     }
+    if (GiantTeethSkillSystem.isGiantTeethFighter(fighter)) {
+      return false;
+    }
     return true;
   }
 

@@ -127,6 +127,14 @@ class CustomSkillTypeParser {
     ) {
       return HeroSkillType.WHITE_JADE;
     }
+    if (
+      text.includes("巨齿") ||
+      text.includes("巨齿球") ||
+      text.includes("giant teeth") ||
+      text.includes("giant_teeth")
+    ) {
+      return HeroSkillType.GIANT_TEETH;
+    }
     if (text.includes("尖刺") || text.includes("反伤") || text.includes("spike")) {
       return HeroSkillType.SPIKE;
     }

@@ -23,6 +23,9 @@ const ElementBurstConstants = {
   CRIT_MULTIPLIER: 2.0,
   LIFESTEAL_RATIO: 0.5,
   TOUCH_BASE_DAMAGE: 8,
+  BLEED_TICK_MS: 800,
+  BLEED_DURATION_MS: 4000,
+  BLEED_TICK_DAMAGE: 5,
 };
 
 /**
@@ -120,6 +123,8 @@ class ElementStatusEffectSystem {
     fighter.iceRotHitCount = 0;
     fighter.iceRotSlowUntil = 0;
     fighter.iceRotSlowRatio = 1;
+    fighter.bleedUntil = 0;
+    fighter.bleedNextTickAt = 0;
   }
 
   static isSkillBlocked(fighter) {
@@ -176,6 +181,17 @@ class ElementStatusEffectSystem {
     ElementStatusEffectSystem.setStatusText(fighter, "沉默");
   }
 
+  static applyBleed(fighter) {
+    const now = Date.now();
+    fighter.bleedUntil = now + ElementBurstConstants.BLEED_DURATION_MS;
+    fighter.bleedNextTickAt = now + ElementBurstConstants.BLEED_TICK_MS;
+    ElementStatusEffectSystem.setStatusText(fighter, "流血");
+  }
+
+  static isBleeding(fighter) {
+    return fighter && Date.now() < fighter.bleedUntil;
+  }
+
   static tickFighter(fighter, now) {
     if (!fighter || !fighter.isAlive()) {
       return;
@@ -195,6 +211,13 @@ class ElementStatusEffectSystem {
       fighter.poisonNextTickAt = now + ElementBurstConstants.POISON_TICK_MS;
     }
 
+    if (now >= fighter.bleedUntil) {
+      fighter.bleedUntil = 0;
+    } else if (now >= fighter.bleedNextTickAt) {
+      fighter.takeDamage(ElementBurstConstants.BLEED_TICK_DAMAGE, null, true);
+      fighter.bleedNextTickAt = now + ElementBurstConstants.BLEED_TICK_MS;
+    }
+
     if (ElementStatusEffectSystem.isFrozen(fighter)) {
       fighter.vx = 0;
       fighter.vy = 0;
@@ -205,7 +228,8 @@ class ElementStatusEffectSystem {
     if (Date.now() >= fighter.elementStatusUntil || !fighter.elementStatusText) {
       return;
     }
-    ctx.fillStyle = "#e599f7";
+    const isBleeding = ElementStatusEffectSystem.isBleeding(fighter);
+    ctx.fillStyle = isBleeding ? "#fa5252" : "#e599f7";
     ctx.font = "bold 10px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(fighter.elementStatusText, fighter.x, fighter.y - fighter.radius - 24);
