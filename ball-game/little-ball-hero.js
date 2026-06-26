@@ -137,6 +137,9 @@ class HeroSkillType {
 
   /** 装逼球：初始 5 秒普攻，每次攻击减 0.1 秒间隔，最低 0.1 秒 */
   static SHOW_OFF = "show_off";
+
+  /** 魅魔球：每秒牵引魅惑敌人，叠满 5 层后转为舔狗攻击原队友 */
+  static SUCCUBUS = "succubus";
 }
 
 /**
@@ -441,6 +444,18 @@ class HeroRoster {
         HeroSkillType.SHOW_OFF,
         ShowOffBallConstants.ATTACK_DAMAGE,
         ShowOffBallConstants.START_ATTACK_INTERVAL_MS
+      ),
+      new HeroBallTemplate(
+        "succubus",
+        "魅魔球",
+        "#e64980",
+        "#faa2c1",
+        BallHealthResolver.resolve(94),
+        8.2,
+        0.95,
+        HeroSkillType.SUCCUBUS,
+        SuccubusBallConstants.SEDUCE_TOUCH_DAMAGE,
+        SuccubusBallConstants.SEDUCE_INTERVAL_MS
       ),
     ];
   }
@@ -1096,6 +1111,17 @@ class HeroPickPreviewRenderer {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("装", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.SUCCUBUS) {
+      ctx.fillStyle = "#fff";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("魅", cx, cy);
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       return;
@@ -1763,6 +1789,14 @@ class HeroBallFighter {
       ShowOffBallSkillSystem.initFighter(this);
     }
 
+    if (typeof SuccubusBallSkillSystem !== "undefined") {
+      SuccubusBallSkillSystem.initCharmState(this);
+    }
+
+    if (SuccubusBallSkillSystem.isSuccubusFighter(this)) {
+      SuccubusBallSkillSystem.initFighter(this);
+    }
+
     if (SpikeReflectSystem.isSpikeFighter(this)) {
       SpikeReflectSystem.initFighter(this);
     }
@@ -1881,6 +1915,14 @@ class HeroBallFighter {
       interval = Math.max(
         400,
         Math.round(interval * BallTouchBonusSystem.getSkillIntervalRatio(this))
+      );
+    }
+    if (typeof SuccubusBallSkillSystem !== "undefined") {
+      interval = Math.max(
+        100,
+        Math.round(
+          interval * SuccubusBallSkillSystem.getCharmAttackIntervalRatio(this)
+        )
       );
     }
     return now - this.lastSkillTime >= interval;
@@ -2057,6 +2099,15 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.SHOW_OFF) {
       ShowOffBallSkillSystem.draw(ctx, this);
+    }
+
+    if (this.template.skillType === HeroSkillType.SUCCUBUS) {
+      SuccubusBallSkillSystem.draw(ctx, this);
+    }
+
+    if (typeof SuccubusBallSkillSystem !== "undefined") {
+      SuccubusBallSkillSystem.drawCharmAura(ctx, this);
+      SuccubusBallSkillSystem.drawSeductionMark(ctx, this);
     }
 
     if (typeof FactionBallSkillSystem !== "undefined") {
@@ -2442,6 +2493,10 @@ class HeroAutoSkillSystem {
         projectileRadius,
         now
       );
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.SUCCUBUS) {
       return;
     }
 
@@ -2908,6 +2963,9 @@ class HeroBattleArenaHelper {
     if (!fighter) {
       return null;
     }
+    if (fighter.succubusCharmOwnerPlayerId) {
+      return fighter.succubusCharmOwnerPlayerId;
+    }
     return fighter.summonOwnerPlayerId || fighter.playerId;
   }
 
@@ -2934,13 +2992,29 @@ class HeroBattleArenaHelper {
   }
 
   static getNearestOpponent(fighter, allFighters, game) {
+    if (
+      typeof SuccubusBallSkillSystem !== "undefined" &&
+      SuccubusBallSkillSystem.isCharmed(fighter)
+    ) {
+      return SuccubusBallSkillSystem.getCharmedAttackTarget(
+        fighter,
+        allFighters,
+        game
+      );
+    }
+
     let opponents = HeroBattleArenaHelper.getAliveOpponents(
       fighter,
-      allFighters
+      allFighters,
+      game
     );
     if (game && typeof game.isTeamBattle === "function" && game.isTeamBattle()) {
+      const effectiveId = HeroBattleArenaHelper.getEffectivePlayerId(fighter);
       opponents = opponents.filter((opponent) =>
-        HeroTeamRegistry.areEnemies(fighter.playerId, opponent.playerId)
+        HeroTeamRegistry.areEnemies(
+          effectiveId,
+          HeroBattleArenaHelper.getEffectivePlayerId(opponent)
+        )
       );
     }
     let nearest = null;
@@ -3600,6 +3674,16 @@ class LittleBallHeroGame {
       }
       if (!ElementStatusEffectSystem.isFrozen(fighter)) {
         if (
+          typeof SuccubusBallSkillSystem !== "undefined" &&
+          SuccubusBallSkillSystem.isCharmed(fighter)
+        ) {
+          SuccubusBallSkillSystem.updateCharmedMovement(
+            fighter,
+            fighters,
+            this,
+            this.arena
+          );
+        } else if (
           typeof TrackingBallSkillSystem !== "undefined" &&
           TrackingBallSkillSystem.isTrackingFighter(fighter)
         ) {
@@ -3620,6 +3704,10 @@ class LittleBallHeroGame {
     }
 
     HeroBattleArenaHelper.resolveAllBallCollisions(fighters, this);
+
+    if (typeof SuccubusBallSkillSystem !== "undefined") {
+      SuccubusBallSkillSystem.tickCharmMaintenance(fighters);
+    }
 
     const now = Date.now();
     for (const fighter of fighters) {
@@ -3668,6 +3756,9 @@ class LittleBallHeroGame {
       }
       if (GiantTeethSkillSystem.isGiantTeethFighter(fighter)) {
         GiantTeethSkillSystem.tick(fighter, fighters, this, now);
+      }
+      if (SuccubusBallSkillSystem.isSuccubusFighter(fighter)) {
+        SuccubusBallSkillSystem.tickSeduce(fighter, fighters, this, now);
       }
     }
 
@@ -3772,7 +3863,7 @@ class LittleBallHeroGame {
     );
     if (aliveSides.size <= 1 && aliveFighters.length > 0) {
       const winner = aliveFighters[0];
-      this.endGame(winner.summonOwnerPlayerId || winner.playerId);
+      this.endGame(HeroBattleArenaHelper.getEffectivePlayerId(winner));
     }
   }
 
@@ -3781,14 +3872,14 @@ class LittleBallHeroGame {
       (fighter) =>
         fighter.isAlive() &&
         HeroTeamRegistry.isRedBlueTeam(
-          fighter.summonOwnerPlayerId || fighter.playerId
+          HeroBattleArenaHelper.getEffectivePlayerId(fighter)
         )
     );
     const greenPurpleAlive = this.fighters.filter(
       (fighter) =>
         fighter.isAlive() &&
         HeroTeamRegistry.isGreenPurpleTeam(
-          fighter.summonOwnerPlayerId || fighter.playerId
+          HeroBattleArenaHelper.getEffectivePlayerId(fighter)
         )
     );
 
@@ -4361,6 +4452,10 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
   if (fighter.template.skillType === HeroSkillType.SHOW_OFF) {
     return `${baseLabel}·攻速${ShowOffBallSkillSystem.getIntervalDisplaySec(fighter)}s`;
   }
+  if (fighter.template.skillType === HeroSkillType.SUCCUBUS) {
+    const charmedCount = fighter.succubusCharmedCount || 0;
+    return `${baseLabel}·舔狗${charmedCount}`;
+  }
   return baseLabel;
 };
 
@@ -4439,6 +4534,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.SHOW_OFF) {
     return `生命${ShowOffBallConstants.MAX_HEALTH}/伤害${ShowOffBallConstants.ATTACK_DAMAGE}/攻速5s→0.1s`;
+  }
+  if (skillType === HeroSkillType.SUCCUBUS) {
+    return "每秒牵引魅惑/5层变舔狗攻击队友";
   }
   return "技能";
 };

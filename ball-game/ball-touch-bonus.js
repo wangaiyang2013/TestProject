@@ -54,6 +54,9 @@ class BallTouchBonusSystem {
     if (GiantTeethSkillSystem.isGiantTeethFighter(fighter)) {
       return false;
     }
+    if (SuccubusBallSkillSystem.isSuccubusFighter(fighter)) {
+      return false;
+    }
     return true;
   }
 
