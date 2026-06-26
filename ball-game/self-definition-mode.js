@@ -151,6 +151,13 @@ class CustomSkillTypeParser {
     ) {
       return HeroSkillType.SUCCUBUS;
     }
+    if (
+      text.includes("黑帮") ||
+      text.includes("黑帮球") ||
+      text.includes("gangster")
+    ) {
+      return HeroSkillType.GANGSTER;
+    }
     if (text.includes("尖刺") || text.includes("反伤") || text.includes("spike")) {
       return HeroSkillType.SPIKE;
     }

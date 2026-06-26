@@ -140,6 +140,9 @@ class HeroSkillType {
 
   /** 魅魔球：每秒牵引魅惑敌人，叠满 5 层后转为舔狗攻击原队友 */
   static SUCCUBUS = "succubus";
+
+  /** 黑帮球：在场触发黑帮事件，周期入侵打手 */
+  static GANGSTER = "gangster";
 }
 
 /**
@@ -456,6 +459,18 @@ class HeroRoster {
         HeroSkillType.SUCCUBUS,
         SuccubusBallConstants.SEDUCE_TOUCH_DAMAGE,
         SuccubusBallConstants.SEDUCE_INTERVAL_MS
+      ),
+      new HeroBallTemplate(
+        "gangster",
+        "黑帮球",
+        "#212529",
+        "#868e96",
+        BallHealthResolver.resolve(102),
+        8,
+        1.05,
+        HeroSkillType.GANGSTER,
+        14,
+        GangsterBallConstants.WAVE_INTERVAL_MS
       ),
     ];
   }
@@ -1122,6 +1137,17 @@ class HeroPickPreviewRenderer {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("魅", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.GANGSTER) {
+      ctx.fillStyle = "#f8f9fa";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("黑", cx, cy);
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       return;
@@ -1797,6 +1823,10 @@ class HeroBallFighter {
       SuccubusBallSkillSystem.initFighter(this);
     }
 
+    if (GangsterBallSkillSystem.isGangsterBoss(this)) {
+      GangsterBallSkillSystem.initFighter(this);
+    }
+
     if (SpikeReflectSystem.isSpikeFighter(this)) {
       SpikeReflectSystem.initFighter(this);
     }
@@ -2108,6 +2138,11 @@ class HeroBallFighter {
     if (typeof SuccubusBallSkillSystem !== "undefined") {
       SuccubusBallSkillSystem.drawCharmAura(ctx, this);
       SuccubusBallSkillSystem.drawSeductionMark(ctx, this);
+    }
+
+    if (typeof GangsterBallSkillSystem !== "undefined") {
+      GangsterBallSkillSystem.drawBoss(ctx, this);
+      GangsterBallSkillSystem.drawMinion(ctx, this);
     }
 
     if (typeof FactionBallSkillSystem !== "undefined") {
@@ -2497,6 +2532,10 @@ class HeroAutoSkillSystem {
     }
 
     if (template.skillType === HeroSkillType.SUCCUBUS) {
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.GANGSTER) {
       return;
     }
 
@@ -3485,6 +3524,9 @@ class LittleBallHeroGame {
     if (typeof WhiteJadeBallSkillSystem !== "undefined") {
       WhiteJadeBallSkillSystem.initBattle(this);
     }
+    if (typeof GangsterBallSkillSystem !== "undefined") {
+      GangsterBallSkillSystem.initBattle(this);
+    }
     if (typeof WeaponBoxSpawnSystem !== "undefined") {
       WeaponBoxSpawnSystem.initBattle(this);
     }
@@ -3508,6 +3550,12 @@ class LittleBallHeroGame {
   canFighterDamageTarget(attacker, target) {
     if (!attacker || !target) {
       return true;
+    }
+    if (
+      typeof GangsterBallSkillSystem !== "undefined" &&
+      !GangsterBallSkillSystem.canDamage(attacker, target)
+    ) {
+      return false;
     }
     if (HeroBattleArenaHelper.areAllies(attacker, target, this)) {
       return false;
@@ -3684,6 +3732,16 @@ class LittleBallHeroGame {
             this.arena
           );
         } else if (
+          typeof GangsterBallSkillSystem !== "undefined" &&
+          GangsterBallSkillSystem.isGangMinion(fighter)
+        ) {
+          GangsterBallSkillSystem.updateMinionMovement(
+            fighter,
+            fighters,
+            this,
+            this.arena
+          );
+        } else if (
           typeof TrackingBallSkillSystem !== "undefined" &&
           TrackingBallSkillSystem.isTrackingFighter(fighter)
         ) {
@@ -3762,6 +3820,10 @@ class LittleBallHeroGame {
       }
     }
 
+    if (typeof GangsterBallSkillSystem !== "undefined") {
+      GangsterBallSkillSystem.tick(this, fighters, now);
+    }
+
     for (let i = 0; i < fighters.length; i += 1) {
       for (let j = i + 1; j < fighters.length; j += 1) {
         const fighterA = fighters[i];
@@ -3789,6 +3851,12 @@ class LittleBallHeroGame {
 
     for (const fighter of fighters) {
       if (!fighter.isAlive()) {
+        continue;
+      }
+      if (
+        typeof GangsterBallSkillSystem !== "undefined" &&
+        GangsterBallSkillSystem.isGangMinion(fighter)
+      ) {
         continue;
       }
       const opponent = HeroBattleArenaHelper.getNearestOpponent(
@@ -3855,7 +3923,14 @@ class LittleBallHeroGame {
       return;
     }
 
-    const aliveFighters = this.fighters.filter((fighter) => fighter.isAlive());
+    const aliveFighters = this.fighters.filter(
+      (fighter) =>
+        fighter.isAlive() &&
+        !(
+          typeof GangsterBallSkillSystem !== "undefined" &&
+          GangsterBallSkillSystem.isGangMinion(fighter)
+        )
+    );
     const aliveSides = new Set(
       aliveFighters.map((fighter) =>
         HeroBattleArenaHelper.getEffectivePlayerId(fighter)
@@ -3871,6 +3946,10 @@ class LittleBallHeroGame {
     const redBlueAlive = this.fighters.filter(
       (fighter) =>
         fighter.isAlive() &&
+        !(
+          typeof GangsterBallSkillSystem !== "undefined" &&
+          GangsterBallSkillSystem.isGangMinion(fighter)
+        ) &&
         HeroTeamRegistry.isRedBlueTeam(
           HeroBattleArenaHelper.getEffectivePlayerId(fighter)
         )
@@ -3878,6 +3957,10 @@ class LittleBallHeroGame {
     const greenPurpleAlive = this.fighters.filter(
       (fighter) =>
         fighter.isAlive() &&
+        !(
+          typeof GangsterBallSkillSystem !== "undefined" &&
+          GangsterBallSkillSystem.isGangMinion(fighter)
+        ) &&
         HeroTeamRegistry.isGreenPurpleTeam(
           HeroBattleArenaHelper.getEffectivePlayerId(fighter)
         )
@@ -4285,6 +4368,10 @@ class LittleBallHeroGame {
       proj.draw(this.ctx);
     }
 
+    if (typeof GangsterBallSkillSystem !== "undefined") {
+      GangsterBallSkillSystem.drawEventBanner(this.ctx, this);
+    }
+
     this.ctx.fillStyle = "rgba(255, 212, 59, 0.85)";
     this.ctx.font = "13px system-ui, sans-serif";
     this.ctx.textAlign = "center";
@@ -4456,6 +4543,10 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
     const charmedCount = fighter.succubusCharmedCount || 0;
     return `${baseLabel}·舔狗${charmedCount}`;
   }
+  if (fighter.template.skillType === HeroSkillType.GANGSTER) {
+    const minionCount = fighter.gangActiveMinionCount || 0;
+    return `${baseLabel}·黑帮事件·打手${minionCount}`;
+  }
   return baseLabel;
 };
 
@@ -4537,6 +4628,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.SUCCUBUS) {
     return "每秒牵引魅惑/5层变舔狗攻击队友";
+  }
+  if (skillType === HeroSkillType.GANGSTER) {
+    return "黑帮事件/每5秒4打手入侵/击杀本体结束";
   }
   return "技能";
 };

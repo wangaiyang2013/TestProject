@@ -57,6 +57,12 @@ class BallTouchBonusSystem {
     if (SuccubusBallSkillSystem.isSuccubusFighter(fighter)) {
       return false;
     }
+    if (GangsterBallSkillSystem.isGangsterBoss(fighter)) {
+      return false;
+    }
+    if (GangsterBallSkillSystem.isGangMinion(fighter)) {
+      return false;
+    }
     return true;
   }
 
