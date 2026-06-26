@@ -146,13 +146,21 @@ class TrackingBallSkillSystem {
     const dist = Math.hypot(dx, dy);
     const minDist = fighterA.radius + fighterB.radius;
 
-    if (dist >= minDist || dist < 0.001) {
+    if (dist >= minDist) {
       return true;
     }
 
-    const nx = dx / dist;
-    const ny = dy / dist;
-    const overlap = minDist - dist;
+    let nx = 0;
+    let ny = 0;
+    if (dist < 0.001) {
+      nx = 1;
+      ny = 0;
+    } else {
+      nx = dx / dist;
+      ny = dy / dist;
+    }
+
+    const overlap = minDist - (dist < 0.001 ? 0 : dist);
     const totalMass = fighterA.mass + fighterB.mass;
 
     fighterA.x -= (nx * overlap * fighterB.mass) / totalMass;

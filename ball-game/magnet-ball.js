@@ -164,9 +164,7 @@ class MagnetHeadThrowProjectile {
       return;
     }
 
-    const targetX = this.isReturning
-      ? target.x
-      : target.x;
+    const targetX = target.x;
     const targetY = this.isReturning
       ? target.y - target.radius - 10
       : target.y;
@@ -174,6 +172,8 @@ class MagnetHeadThrowProjectile {
     const dy = targetY - this.y;
     const dist = Math.hypot(dx, dy);
     if (dist < 0.001) {
+      this.dirX = 0;
+      this.dirY = this.isReturning ? -1 : 1;
       return;
     }
     this.dirX = dx / dist;
@@ -213,6 +213,23 @@ class MagnetHeadThrowProjectile {
           Date.now() + MagnetBallConstants.HEAD_THROW_HIT_FLASH_MS;
         this.hasHit = true;
         this.isReturning = true;
+        MagnetSkillSystem.separateFighters(this.owner, this.opponent);
+        const awayDx = this.x - this.opponent.x;
+        const awayDy = this.y - this.opponent.y;
+        const awayDist = Math.hypot(awayDx, awayDy);
+        if (awayDist < 0.001) {
+          this.x = this.opponent.x + this.opponent.radius + this.radius + 4;
+          this.y = this.opponent.y;
+        } else {
+          const awayNx = awayDx / awayDist;
+          const awayNy = awayDy / awayDist;
+          this.x =
+            this.opponent.x +
+            awayNx * (this.opponent.radius + this.radius + 4);
+          this.y =
+            this.opponent.y +
+            awayNy * (this.opponent.radius + this.radius + 4);
+        }
       }
       return;
     }
@@ -395,8 +412,13 @@ class MagnetSkillSystem {
 
     fighter.magnetHeadProjectile.update();
     if (!fighter.magnetHeadProjectile.alive) {
+      const hadHeadActive = fighter.magnetHeadThrown;
       fighter.magnetHeadProjectile = null;
       fighter.magnetHeadThrown = false;
+      if (hadHeadActive) {
+        fighter.magnetSkillLockedUntil =
+          Date.now() + MagnetBallConstants.SKILL_LOCKOUT_MS;
+      }
     }
   }
 
@@ -569,6 +591,46 @@ class MagnetSkillSystem {
     return dist < a.radius + b.radius;
   }
 
+  /**
+   * 将重叠球体推开，避免近战命中后 dist≈0 导致碰撞解算失效而卡死
+   */
+  static separateFighters(fighterA, fighterB) {
+    if (!fighterA || !fighterB) {
+      return;
+    }
+
+    const dx = fighterB.x - fighterA.x;
+    const dy = fighterB.y - fighterA.y;
+    let dist = Math.hypot(dx, dy);
+    let nx = 1;
+    let ny = 0;
+    if (dist >= 0.001) {
+      nx = dx / dist;
+      ny = dy / dist;
+    } else {
+      dist = 0;
+    }
+
+    const minDist = fighterA.radius + fighterB.radius;
+    const overlap = Math.max(0, minDist - dist);
+    const totalMass = fighterA.mass + fighterB.mass;
+    const pushStrength = Math.max(2, overlap * 0.35);
+
+    if (overlap > 0) {
+      fighterA.x -= (nx * overlap * fighterB.mass) / totalMass;
+      fighterA.y -= (ny * overlap * fighterB.mass) / totalMass;
+      fighterB.x += (nx * overlap * fighterA.mass) / totalMass;
+      fighterB.y += (ny * overlap * fighterA.mass) / totalMass;
+    }
+
+    fighterA.vx -= nx * pushStrength;
+    fighterA.vy -= ny * pushStrength;
+    fighterB.vx += nx * pushStrength;
+    fighterB.vy += ny * pushStrength;
+    ContinuousBouncePhysics.maintainSpeed(fighterA);
+    ContinuousBouncePhysics.maintainSpeed(fighterB);
+  }
+
   static onBallContact(magnetFighter, otherFighter, allFighters, now) {
     if (!MagnetSkillSystem.isMagnetFighter(magnetFighter)) {
       return;
@@ -598,6 +660,7 @@ class MagnetSkillSystem {
     magnetFighter.magnetModeUntil = 0;
     magnetFighter.magnetContactFlashUntil =
       now + MagnetBallConstants.CONTACT_FLASH_MS;
+    MagnetSkillSystem.separateFighters(magnetFighter, otherFighter);
   }
 
   static releaseBurstRing(fighter, now) {

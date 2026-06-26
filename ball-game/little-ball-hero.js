@@ -2253,13 +2253,21 @@ class ContinuousBouncePhysics {
     const dist = Math.hypot(dx, dy);
     const minDist = a.radius + b.radius;
 
-    if (dist >= minDist || dist < 0.001) {
+    if (dist >= minDist) {
       return;
     }
 
-    const nx = dx / dist;
-    const ny = dy / dist;
-    const overlap = minDist - dist;
+    let nx = 0;
+    let ny = 0;
+    if (dist < 0.001) {
+      nx = 1;
+      ny = 0;
+    } else {
+      nx = dx / dist;
+      ny = dy / dist;
+    }
+
+    const overlap = minDist - (dist < 0.001 ? 0 : dist);
     const totalMass = a.mass + b.mass;
 
     a.x -= (nx * overlap * b.mass) / totalMass;
@@ -2271,6 +2279,13 @@ class ContinuousBouncePhysics {
     const dvy = a.vy - b.vy;
     const impact = dvx * nx + dvy * ny;
     if (impact <= 0) {
+      const repulse = 1.8;
+      a.vx -= nx * repulse;
+      a.vy -= ny * repulse;
+      b.vx += nx * repulse;
+      b.vy += ny * repulse;
+      ContinuousBouncePhysics.maintainSpeed(a);
+      ContinuousBouncePhysics.maintainSpeed(b);
       return;
     }
 
