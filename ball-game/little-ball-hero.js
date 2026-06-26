@@ -134,6 +134,9 @@ class HeroSkillType {
 
   /** 巨齿球：周身巨齿环绕，触碰高额伤害并流血 */
   static GIANT_TEETH = "giant_teeth";
+
+  /** 装逼球：初始 5 秒普攻，每次攻击减 0.1 秒间隔，最低 0.1 秒 */
+  static SHOW_OFF = "show_off";
 }
 
 /**
@@ -426,6 +429,18 @@ class HeroRoster {
         HeroSkillType.GIANT_TEETH,
         GiantTeethBallConstants.DEFAULT_SKILL_DAMAGE,
         GiantTeethBallConstants.HIT_INTERVAL_MS
+      ),
+      new HeroBallTemplate(
+        "show_off",
+        "装逼球",
+        "#f59f00",
+        "#ffe066",
+        ShowOffBallConstants.MAX_HEALTH,
+        8,
+        1.0,
+        HeroSkillType.SHOW_OFF,
+        ShowOffBallConstants.ATTACK_DAMAGE,
+        ShowOffBallConstants.START_ATTACK_INTERVAL_MS
       ),
     ];
   }
@@ -1070,6 +1085,17 @@ class HeroPickPreviewRenderer {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("齿", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
+
+    if (hero.skillType === HeroSkillType.SHOW_OFF) {
+      ctx.fillStyle = "#212529";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("装", cx, cy);
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       return;
@@ -1733,6 +1759,10 @@ class HeroBallFighter {
       GiantTeethSkillSystem.initFighter(this);
     }
 
+    if (ShowOffBallSkillSystem.isShowOffFighter(this)) {
+      ShowOffBallSkillSystem.initFighter(this);
+    }
+
     if (SpikeReflectSystem.isSpikeFighter(this)) {
       SpikeReflectSystem.initFighter(this);
     }
@@ -2023,6 +2053,10 @@ class HeroBallFighter {
 
     if (this.template.skillType === HeroSkillType.GIANT_TEETH) {
       GiantTeethSkillSystem.draw(ctx, this);
+    }
+
+    if (this.template.skillType === HeroSkillType.SHOW_OFF) {
+      ShowOffBallSkillSystem.draw(ctx, this);
     }
 
     if (typeof FactionBallSkillSystem !== "undefined") {
@@ -2397,6 +2431,17 @@ class HeroAutoSkillSystem {
     }
 
     if (template.skillType === HeroSkillType.GIANT_TEETH) {
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.SHOW_OFF) {
+      ShowOffBallSkillSystem.tryAttack(
+        fighter,
+        opponent,
+        projectiles,
+        projectileRadius,
+        now
+      );
       return;
     }
 
@@ -4313,6 +4358,9 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
   if (fighter.template.skillType === HeroSkillType.GIANT_TEETH) {
     return `${baseLabel}·巨齿环绕`;
   }
+  if (fighter.template.skillType === HeroSkillType.SHOW_OFF) {
+    return `${baseLabel}·攻速${ShowOffBallSkillSystem.getIntervalDisplaySec(fighter)}s`;
+  }
   return baseLabel;
 };
 
@@ -4388,6 +4436,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.GIANT_TEETH) {
     return "周身巨齿/触碰高额伤害+流血";
+  }
+  if (skillType === HeroSkillType.SHOW_OFF) {
+    return `生命${ShowOffBallConstants.MAX_HEALTH}/伤害${ShowOffBallConstants.ATTACK_DAMAGE}/攻速5s→0.1s`;
   }
   return "技能";
 };

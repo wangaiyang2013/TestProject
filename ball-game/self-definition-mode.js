@@ -135,6 +135,14 @@ class CustomSkillTypeParser {
     ) {
       return HeroSkillType.GIANT_TEETH;
     }
+    if (
+      text.includes("装逼") ||
+      text.includes("装逼球") ||
+      text.includes("show off") ||
+      text.includes("show_off")
+    ) {
+      return HeroSkillType.SHOW_OFF;
+    }
     if (text.includes("尖刺") || text.includes("反伤") || text.includes("spike")) {
       return HeroSkillType.SPIKE;
     }
