@@ -515,7 +515,11 @@ class HeroRoster {
     if (!hero) {
       return false;
     }
-    if (hero.teamBattleOnly && subMode !== "team_battle") {
+    if (
+      hero.teamBattleOnly &&
+      subMode !== "team_battle" &&
+      subMode !== "simulation"
+    ) {
       return false;
     }
     return true;
@@ -2145,6 +2149,10 @@ class HeroBallFighter {
       GangsterBallSkillSystem.drawMinion(ctx, this);
     }
 
+    if (typeof HeroSimulationMode !== "undefined") {
+      HeroSimulationMode.drawDummyBadge(ctx, this);
+    }
+
     if (typeof FactionBallSkillSystem !== "undefined") {
       FactionBallSkillSystem.drawResonanceAura(ctx, this);
     }
@@ -3251,6 +3259,14 @@ class LittleBallHeroGame {
     return this.subMode === "crazy_fight";
   }
 
+  isTraining() {
+    return this.subMode === "training";
+  }
+
+  isSimulation() {
+    return this.subMode === "simulation";
+  }
+
   isMultiplayerFourBall() {
     return this.isFourPlayer() || this.isTeamBattle();
   }
@@ -3263,7 +3279,7 @@ class LittleBallHeroGame {
   }
 
   getHumanPickCount() {
-    if (this.subMode === "training") {
+    if (this.subMode === "training" || this.subMode === "simulation") {
       return 1;
     }
     if (this.subMode === "four_player" || this.subMode === "team_battle") {
@@ -3378,6 +3394,9 @@ class LittleBallHeroGame {
   }
 
   areAllBattleHeroesSelected() {
+    if (this.isSimulation()) {
+      return Boolean(this.p1HeroId);
+    }
     const playerCount = this.getBattlePlayerCount();
     for (let step = 1; step <= playerCount; step += 1) {
       if (!this.getHeroIdForPickStep(step)) {
@@ -3473,6 +3492,10 @@ class LittleBallHeroGame {
   }
 
   spawnBattleFighters() {
+    if (this.isSimulation()) {
+      return HeroSimulationMode.spawnFighters(this);
+    }
+
     const r = this.getBallRadius();
     const playerCount = this.getBattlePlayerCount();
     const spawnPoints = ArenaSpawnLayout.getPoints(
@@ -3526,6 +3549,9 @@ class LittleBallHeroGame {
     }
     if (typeof GangsterBallSkillSystem !== "undefined") {
       GangsterBallSkillSystem.initBattle(this);
+    }
+    if (typeof HeroSimulationMode !== "undefined") {
+      HeroSimulationMode.initBattle(this);
     }
     if (typeof WeaponBoxSpawnSystem !== "undefined") {
       WeaponBoxSpawnSystem.initBattle(this);
@@ -3605,11 +3631,15 @@ class LittleBallHeroGame {
       if (
         this.phase === "pick" &&
         this.pickStep > 1 &&
-        this.subMode === "training"
+        this.subMode === "training" ||
+        this.subMode === "simulation"
       ) {
         return {
           ok: false,
-          message: "训练场仅红队手动选球，请使用「双人模式」或「四人模式」",
+          message:
+            this.subMode === "simulation"
+              ? "模拟场仅试球一次选球，请重新开局换球"
+              : "训练场仅红队手动选球，请使用「双人模式」或「四人模式」",
         };
       }
       return {
@@ -3824,6 +3854,10 @@ class LittleBallHeroGame {
       GangsterBallSkillSystem.tick(this, fighters, now);
     }
 
+    if (typeof HeroSimulationMode !== "undefined") {
+      HeroSimulationMode.tick(this, now);
+    }
+
     for (let i = 0; i < fighters.length; i += 1) {
       for (let j = i + 1; j < fighters.length; j += 1) {
         const fighterA = fighters[i];
@@ -3856,6 +3890,12 @@ class LittleBallHeroGame {
       if (
         typeof GangsterBallSkillSystem !== "undefined" &&
         GangsterBallSkillSystem.isGangMinion(fighter)
+      ) {
+        continue;
+      }
+      if (
+        typeof HeroSimulationMode !== "undefined" &&
+        HeroSimulationMode.isSimulationDummy(fighter)
       ) {
         continue;
       }
@@ -3918,6 +3958,9 @@ class LittleBallHeroGame {
   }
 
   checkBattleOutcome() {
+    if (this.isSimulation()) {
+      return;
+    }
     if (this.isTeamBattle()) {
       this.checkTeamBattleOutcome();
       return;
@@ -4372,11 +4415,17 @@ class LittleBallHeroGame {
       GangsterBallSkillSystem.drawEventBanner(this.ctx, this);
     }
 
+    if (typeof HeroSimulationMode !== "undefined") {
+      HeroSimulationMode.drawArenaHint(this.ctx, this);
+    }
+
     this.ctx.fillStyle = "rgba(255, 212, 59, 0.85)";
     this.ctx.font = "13px system-ui, sans-serif";
     this.ctx.textAlign = "center";
     this.ctx.fillText(
-      this.isTeamBattle()
+      this.isSimulation()
+        ? "模拟试球 · 中央试球 · 周围 9 颗红靶 · 无胜负可反复测试技能"
+        : this.isTeamBattle()
         ? "双队团战 · 红蓝 vs 绿紫 · 30回合 · 每回合重选球 · 团灭对方获胜"
         : this.isCrazyFight()
           ? "疯狂对战 · 全场球体超强 · 寒冰狂暴仍发射冰弹"
@@ -4407,6 +4456,9 @@ class LittleBallHeroGame {
   }
 
   getModeLabel() {
+    if (this.isSimulation()) {
+      return "小球英雄 · 模拟试球";
+    }
     if (this.subMode === "training") {
       return "小球英雄 · 训练场";
     }

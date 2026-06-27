@@ -1204,6 +1204,7 @@ class GameUI {
     this.heroPickMatch = document.getElementById("hero-pick-match");
     this.heroPickPanelKey = "";
     this.heroModeBtn = document.getElementById("hero-mode-btn");
+    this.heroSimulationBtn = document.getElementById("hero-simulation-btn");
     this.heroTrainingBtn = document.getElementById("hero-training-btn");
     this.heroVersusBtn = document.getElementById("hero-versus-btn");
     this.heroFourPlayerBtn = document.getElementById("hero-four-player-btn");
@@ -1474,6 +1475,9 @@ class GameUI {
       const profile = PlayerSlotRegistry.getProfile(winnerId);
       const winnerName = profile ? profile.displayName : `玩家${winnerId}`;
       let msg;
+      if (this.littleBallHero.subMode === "simulation") {
+        return;
+      }
       if (this.littleBallHero.subMode === "training") {
         msg =
           winnerId === 1
@@ -1502,7 +1506,7 @@ class GameUI {
   }
 
   getHeroHumanPickCount(subMode) {
-    if (subMode === "training") {
+    if (subMode === "training" || subMode === "simulation") {
       return 1;
     }
     if (subMode === "four_player" || subMode === "team_battle") {
@@ -1583,6 +1587,9 @@ class GameUI {
     this.groupSetupBack.addEventListener("click", () => this.showMainMenu());
     this.heroTrainingBtn.addEventListener("click", () =>
       this.beginLittleBallHero("training")
+    );
+    this.heroSimulationBtn.addEventListener("click", () =>
+      this.beginLittleBallHero("simulation")
     );
     this.heroVersusBtn.addEventListener("click", () =>
       this.beginLittleBallHero("versus")
@@ -1847,7 +1854,9 @@ class GameUI {
     }
     this.modeBadge.classList.remove("hidden");
     this.modeBadge.textContent =
-      subMode === "team_battle"
+      subMode === "simulation"
+        ? "小球英雄 · 模拟试球"
+        : subMode === "team_battle"
         ? "小球英雄 · 双队团战"
         : subMode === "crazy_fight"
           ? "小球英雄 · 疯狂对战"
@@ -1856,7 +1865,12 @@ class GameUI {
             : "小球英雄";
 
     this.p1HudLabel.textContent = "红队";
-    this.p2Label.textContent = subMode === "training" ? "AI" : "蓝队";
+    this.p2Label.textContent =
+      subMode === "simulation"
+        ? "9红靶"
+        : subMode === "training"
+          ? "AI"
+          : "蓝队";
     if (this.p3Label) {
       this.p3Label.textContent = "绿队";
     }
@@ -1883,7 +1897,9 @@ class GameUI {
     if (liveSnap.phase === "pick") {
       const sec = Math.ceil(liveSnap.pickRemainingMs / 1000);
       const teamLabel = this.getHeroTeamLabel(liveSnap.pickStep);
-      if (liveSnap.subMode === "team_battle") {
+      if (liveSnap.subMode === "simulation") {
+        this.heroPhaseText.textContent = `模拟试球 · 选择要测试的球 · 剩余 ${sec} 秒`;
+      } else if (liveSnap.subMode === "team_battle") {
         const alliance =
           liveSnap.pickStep <= 2 ? "（红蓝队阵营）" : "（绿紫队阵营）";
         const scoreLine = liveSnap.teamBattle
@@ -1954,7 +1970,18 @@ class GameUI {
     }
 
     if (liveSnap.phase === "battle") {
-      if (liveSnap.subMode === "team_battle" && liveSnap.teamBattle) {
+      if (liveSnap.subMode === "simulation") {
+        const aliveDummies =
+          typeof HeroSimulationMode !== "undefined"
+            ? HeroSimulationMode.countAliveDummies(
+                this.littleBallHero.fighters || []
+              )
+            : 0;
+        this.heroPhaseText.textContent = `模拟试球 · 中央测试技能 · 红靶 ${aliveDummies}/9`;
+        if (this.heroP2Info) {
+          this.heroP2Info.textContent = `红靶 · 存活 ${aliveDummies}/9`;
+        }
+      } else if (liveSnap.subMode === "team_battle" && liveSnap.teamBattle) {
         const score = liveSnap.teamBattle;
         this.heroPhaseText.textContent = `第 ${score.roundNumber}/${score.maxRounds} 回合 · 红蓝 ${score.redBlueWins} : ${score.greenPurpleWins} 绿紫`;
       } else {
