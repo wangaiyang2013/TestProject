@@ -12,6 +12,22 @@
 
     <div id="coin-hud" class="coin-hud">金币：0</div>
 
+    <div id="game-session-controls" class="game-session-controls hidden">
+      <button id="game-pause-btn" type="button" class="btn-session">暂停</button>
+      <button id="game-exit-btn" type="button" class="btn-session btn-session-exit">退出</button>
+    </div>
+
+    <div id="game-pause-overlay" class="game-pause-overlay hidden">
+      <div class="game-pause-panel">
+        <h2>游戏已暂停</h2>
+        <p class="setup-hint">按 <kbd>Esc</kbd> 可继续游戏</p>
+        <div class="menu-buttons">
+          <button id="game-resume-btn" type="button" class="btn-primary">继续游戏</button>
+          <button id="game-exit-menu-btn" type="button" class="btn-secondary">退出到主菜单</button>
+        </div>
+      </div>
+    </div>
+
     <div id="overlay" class="overlay visible">
       <h1>双球对战</h1>
       <p id="match-coin-reward" class="match-coin-reward hidden"></p>
@@ -260,6 +276,7 @@
       <div id="gb-phase" class="gb-phase">清剿怪物中...</div>
     </div>
   </div>
+  <script src="game-pause-controls.js"></script>
   <script src="game.js"></script>
   <script src="group-battle.js"></script>
   <script src="hero-team-battle.js"></script>

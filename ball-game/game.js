@@ -795,6 +795,7 @@ class DualBallGame {
     this.arena = null;
     this.winnerId = null;
     this.animationId = null;
+    this.isPaused = false;
     this.onGameOver = null;
     this.resize();
     window.addEventListener("resize", () => this.resize());
@@ -845,6 +846,11 @@ class DualBallGame {
     this.state = "playing";
     this.winnerId = null;
     this.projectiles = [];
+    if (typeof GameSessionControls !== "undefined") {
+      GameSessionControls.prepareGame(this);
+    } else {
+      this.isPaused = false;
+    }
 
     const r = this.getBallRadius();
     const isTraining = this.gameMode === GameMode.TRAINING;
@@ -1064,7 +1070,12 @@ class DualBallGame {
   }
 
   loop() {
-    this.update();
+    if (
+      typeof GameSessionControls === "undefined" ||
+      !GameSessionControls.shouldSkipUpdate(this)
+    ) {
+      this.update();
+    }
     this.draw();
 
     if (this.state === "playing") {
@@ -1127,6 +1138,12 @@ class GameUI {
     this.economy = GameEconomyService.getInstance();
     this.coinHud = document.getElementById("coin-hud");
     this.matchCoinReward = document.getElementById("match-coin-reward");
+    this.sessionControls = document.getElementById("game-session-controls");
+    this.pauseOverlay = document.getElementById("game-pause-overlay");
+    this.pauseBtn = document.getElementById("game-pause-btn");
+    this.exitBtn = document.getElementById("game-exit-btn");
+    this.resumeBtn = document.getElementById("game-resume-btn");
+    this.exitMenuBtn = document.getElementById("game-exit-menu-btn");
     this.shopOverlay = document.getElementById("shop-overlay");
     this.shopBtn = document.getElementById("shop-btn");
     this.shopPanel = new ShopPanel(
@@ -1220,8 +1237,24 @@ class GameUI {
     this.bindSelfDefinitionGame();
     this.bindHeroPickPanel();
     this.bindMenuButtons();
+    this.bindSessionControls();
 
     window.addEventListener("keydown", (e) => {
+      const activeGame = this.getActivePlayingGame();
+      if (
+        e.code === GameSessionControlConstants.PAUSE_KEY &&
+        activeGame &&
+        !this.isHeroPickInputFocused()
+      ) {
+        e.preventDefault();
+        if (activeGame.isPaused) {
+          this.resumeActiveGame();
+        } else {
+          this.pauseActiveGame();
+        }
+        return;
+      }
+
       const playing =
         this.game.state === "playing" ||
         this.groupBattle.state === "playing" ||
@@ -1665,12 +1698,113 @@ class GameUI {
       if (game === activeGame || game.state !== "playing") {
         continue;
       }
-      game.state = "idle";
-      if (game.animationId !== null) {
-        cancelAnimationFrame(game.animationId);
-        game.animationId = null;
+      if (typeof GameSessionControls !== "undefined") {
+        GameSessionControls.exit(game);
+      } else {
+        game.state = "idle";
+        if (game.animationId !== null) {
+          cancelAnimationFrame(game.animationId);
+          game.animationId = null;
+        }
       }
     }
+  }
+
+  bindSessionControls() {
+    this.pauseBtn.addEventListener("click", () => this.pauseActiveGame());
+    this.exitBtn.addEventListener("click", () => this.exitActiveGameToMenu());
+    this.resumeBtn.addEventListener("click", () => this.resumeActiveGame());
+    this.exitMenuBtn.addEventListener("click", () => this.exitActiveGameToMenu());
+  }
+
+  isHeroPickInputFocused() {
+    return (
+      this.heroPickPanel &&
+      !this.heroPickPanel.classList.contains("hidden") &&
+      document.activeElement === this.heroPickInput
+    );
+  }
+
+  getAllManagedGames() {
+    return [
+      this.game,
+      this.groupBattle,
+      this.littleBallHero,
+      this.westBulldog,
+      this.numberTeacher,
+      this.selfDefinition,
+    ];
+  }
+
+  getActivePlayingGame() {
+    for (const game of this.getAllManagedGames()) {
+      if (game && game.state === "playing") {
+        return game;
+      }
+    }
+    return null;
+  }
+
+  updateSessionControlsVisibility() {
+    const activeGame = this.getActivePlayingGame();
+    const visible = activeGame !== null;
+    this.sessionControls.classList.toggle("hidden", !visible);
+    if (!visible) {
+      this.hidePauseOverlay();
+    }
+  }
+
+  hidePauseOverlay() {
+    this.pauseOverlay.classList.add("hidden");
+  }
+
+  showPauseOverlay() {
+    this.pauseOverlay.classList.remove("hidden");
+  }
+
+  pauseActiveGame() {
+    const activeGame = this.getActivePlayingGame();
+    if (
+      !activeGame ||
+      typeof GameSessionControls === "undefined" ||
+      !GameSessionControls.pause(activeGame)
+    ) {
+      return;
+    }
+    this.showPauseOverlay();
+  }
+
+  resumeActiveGame() {
+    const activeGame = this.getActivePlayingGame();
+    if (
+      !activeGame ||
+      typeof GameSessionControls === "undefined" ||
+      !GameSessionControls.resume(activeGame)
+    ) {
+      return;
+    }
+    this.hidePauseOverlay();
+  }
+
+  exitAllGames() {
+    for (const game of this.getAllManagedGames()) {
+      if (typeof GameSessionControls !== "undefined") {
+        GameSessionControls.exit(game);
+      } else if (game) {
+        game.state = "idle";
+        if (game.animationId !== null) {
+          cancelAnimationFrame(game.animationId);
+          game.animationId = null;
+        }
+      }
+    }
+    this.hidePauseOverlay();
+    this.updateSessionControlsVisibility();
+  }
+
+  exitActiveGameToMenu() {
+    this.exitAllGames();
+    this.showMainMenu();
   }
 
   showNumberTeacherSetup() {
@@ -1709,6 +1843,7 @@ class GameUI {
 
     this.selfDefinition.startWithCustomRoster(subMode, templates);
     this.trackSelfDefHealth();
+    this.updateSessionControlsVisibility();
   }
 
   updateSelfDefHud(snap) {
@@ -1780,6 +1915,7 @@ class GameUI {
 
     this.numberTeacher.start(subMode);
     this.trackNumberTeacherHealth();
+    this.updateSessionControlsVisibility();
   }
 
   trackNumberTeacherHealth() {
@@ -1818,6 +1954,7 @@ class GameUI {
 
     this.westBulldog.start();
     this.trackWestHealth();
+    this.updateSessionControlsVisibility();
   }
 
   trackWestHealth() {
@@ -1880,6 +2017,7 @@ class GameUI {
 
     this.littleBallHero.start(subMode);
     this.trackHeroHealth(isMultiFour);
+    this.updateSessionControlsVisibility();
   }
 
   updateHeroHud(snap) {
@@ -2014,6 +2152,7 @@ class GameUI {
   }
 
   showMainMenu() {
+    this.exitAllGames();
     this.hideHeroPickPanel();
     this.hideAllOverlays();
     this.matchCoinReward.classList.add("hidden");
@@ -2096,6 +2235,7 @@ class GameUI {
 
     this.game.start(mode, playerCount);
     this.trackArenaHealth(playerCount);
+    this.updateSessionControlsVisibility();
   }
 
   beginGroupBattle(playerCount) {
@@ -2120,6 +2260,7 @@ class GameUI {
 
     this.groupBattle.start(playerCount);
     this.trackGroupHealth();
+    this.updateSessionControlsVisibility();
   }
 
   updateGroupHud(snap) {

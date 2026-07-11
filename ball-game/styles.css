@@ -40,6 +40,80 @@ body {
   pointer-events: none;
 }
 
+.game-session-controls {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 14;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.game-session-controls.hidden {
+  display: none;
+}
+
+.btn-session {
+  padding: 0.4rem 0.85rem;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(26, 26, 46, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.btn-session:hover {
+  transform: translateY(-1px);
+  background: rgba(40, 40, 70, 0.92);
+}
+
+.btn-session-exit {
+  color: #ffc9c9;
+  border-color: rgba(255, 107, 107, 0.35);
+}
+
+.game-pause-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 20, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.game-pause-overlay.hidden {
+  display: none;
+}
+
+.game-pause-panel {
+  min-width: 260px;
+  padding: 1.5rem 1.75rem;
+  border-radius: 14px;
+  background: rgba(26, 26, 46, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.game-pause-panel h2 {
+  margin: 0 0 0.75rem;
+  color: #ffd43b;
+  font-size: 1.35rem;
+}
+
+.game-pause-panel .menu-buttons {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
 .match-coin-reward {
   color: #ffd43b;
   font-size: 1rem;

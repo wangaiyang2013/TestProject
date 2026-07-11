@@ -2987,9 +2987,14 @@ class PickTimer {
   constructor(limitMs) {
     this.limitMs = limitMs;
     this.startTime = Date.now();
+    this.isPaused = false;
+    this.frozenRemainingMs = limitMs;
   }
 
   getRemainingMs() {
+    if (this.isPaused) {
+      return this.frozenRemainingMs;
+    }
     return Math.max(0, this.limitMs - (Date.now() - this.startTime));
   }
 
@@ -2998,7 +3003,25 @@ class PickTimer {
   }
 
   reset() {
+    this.isPaused = false;
     this.startTime = Date.now();
+    this.frozenRemainingMs = this.limitMs;
+  }
+
+  pause() {
+    if (this.isPaused) {
+      return;
+    }
+    this.frozenRemainingMs = this.getRemainingMs();
+    this.isPaused = true;
+  }
+
+  resume() {
+    if (!this.isPaused) {
+      return;
+    }
+    this.startTime = Date.now() - (this.limitMs - this.frozenRemainingMs);
+    this.isPaused = false;
   }
 }
 
@@ -3207,6 +3230,11 @@ class LittleBallHeroGame {
   start(subMode) {
     this.subMode = subMode;
     this.state = "playing";
+    if (typeof GameSessionControls !== "undefined") {
+      GameSessionControls.prepareGame(this);
+    } else {
+      this.isPaused = false;
+    }
     this.phase = "pick";
     this.pickStep = 1;
     this.p1HeroId = null;
@@ -4430,7 +4458,12 @@ class LittleBallHeroGame {
   }
 
   loop() {
-    this.update();
+    if (
+      typeof GameSessionControls === "undefined" ||
+      !GameSessionControls.shouldSkipUpdate(this)
+    ) {
+      this.update();
+    }
     this.draw();
 
     if (this.state === "playing") {

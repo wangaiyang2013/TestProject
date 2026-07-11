@@ -485,6 +485,11 @@ class GroupBattleGame {
     this.projectiles = [];
     this.monsters = [];
     this.phase = "monsters";
+    if (typeof GameSessionControls !== "undefined") {
+      GameSessionControls.prepareGame(this);
+    } else {
+      this.isPaused = false;
+    }
 
     const r = this.getBallRadius();
     const centerY = (this.arena.top + this.arena.bottom) / 2;
@@ -805,7 +810,12 @@ class GroupBattleGame {
   }
 
   loop() {
-    this.update();
+    if (
+      typeof GameSessionControls === "undefined" ||
+      !GameSessionControls.shouldSkipUpdate(this)
+    ) {
+      this.update();
+    }
     this.draw();
 
     if (this.state === "playing") {

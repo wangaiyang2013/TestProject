@@ -425,6 +425,11 @@ class WestBulldogGame {
   start() {
     this.state = "playing";
     this.bullets = [];
+    if (typeof GameSessionControls !== "undefined") {
+      GameSessionControls.prepareGame(this);
+    } else {
+      this.isPaused = false;
+    }
     const r = this.getBallRadius();
     const cy = (this.arena.top + this.arena.bottom) / 2;
 
@@ -681,7 +686,12 @@ class WestBulldogGame {
   }
 
   loop() {
-    this.update();
+    if (
+      typeof GameSessionControls === "undefined" ||
+      !GameSessionControls.shouldSkipUpdate(this)
+    ) {
+      this.update();
+    }
     this.draw();
 
     if (this.state === "playing") {
