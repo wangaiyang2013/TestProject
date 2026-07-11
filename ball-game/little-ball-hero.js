@@ -1162,15 +1162,15 @@ class HeroPickPreviewRenderer {
     }
 
     if (hero.skillType === HeroSkillType.TEAM_COLLECT) {
-      const savedNumber =
-        typeof TeamCollectPickRegistry !== "undefined"
-          ? TeamCollectPickRegistry.getNumber(hero.collectorTeamId)
-          : hero.collectSavedNumber || 0;
       ctx.fillStyle = "#fff";
       ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(String(savedNumber), cx, cy);
+      ctx.fillText(
+        CollectorTeamId.getShortLabel(hero.collectorTeamId),
+        cx,
+        cy
+      );
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       return;
@@ -3252,11 +3252,7 @@ class LittleBallHeroGame {
 
   getHeroes() {
     const heroes = this.customRoster || HeroRoster.getAll();
-    const filtered = HeroRoster.filterHeroesForSubMode(heroes, this.subMode);
-    if (typeof TeamCollectPickRegistry !== "undefined") {
-      TeamCollectPickRegistry.syncCollectTemplateLabels(filtered);
-    }
-    return filtered;
+    return HeroRoster.filterHeroesForSubMode(heroes, this.subMode);
   }
 
   getHeroById(id) {
@@ -4461,9 +4457,25 @@ class LittleBallHeroGame {
     );
 
     const slots = HeroPickScreenLayout.computeSlots(heroes.length, this.arena);
+    const highlightPickNumber =
+      typeof TeamCollectPickUiSystem !== "undefined"
+        ? TeamCollectPickUiSystem.getActiveHighlightPickNumber(Date.now())
+        : 0;
     heroes.forEach((hero, i) => {
       const slot = slots[i];
       const taken = this.takenHeroIds.has(hero.id);
+
+      if (
+        typeof TeamCollectPickUiSystem !== "undefined" &&
+        highlightPickNumber > 0
+      ) {
+        TeamCollectPickUiSystem.drawSavedBallHighlight(
+          this.ctx,
+          slot,
+          highlightPickNumber,
+          i
+        );
+      }
 
       HeroPickPreviewRenderer.draw(
         this.ctx,
@@ -4822,7 +4834,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "黑帮事件/每5秒4打手入侵/击杀本体结束";
   }
   if (skillType === HeroSkillType.TEAM_COLLECT) {
-    return "收集保存/设收藏数/选球按1-4快选/战斗按1-4查看";
+    return "收集保存/收编号/长按1-4显示/战斗中收集数字";
   }
   return "技能";
 };

@@ -14,11 +14,13 @@ const TeamCollectBallConstants = {
   /** 被动射击伤害（收集时顺带攻击） */
   COLLECT_SHOT_DAMAGE: 6,
   DISPLAY_FLASH_MS: 320,
-  /** 选球界面快捷键展示持续时间 */
-  PICK_DISPLAY_DURATION_MS: 3200,
-  /** 收藏数输入下限 */
+  /** 选球界面长按展示持续时间 */
+  PICK_DISPLAY_DURATION_MS: 5200,
+  /** 长按快捷键触发时间（毫秒） */
+  LONG_PRESS_MS: 3000,
+  /** 选球保存编号下限 */
   MIN_SAVED_NUMBER: 1,
-  /** 收藏数输入上限 */
+  /** 选球保存编号上限 */
   MAX_SAVED_NUMBER: 999,
 };
 
@@ -156,9 +158,10 @@ class TeamCollectBallTemplateFactory {
 }
 
 /**
- * 四队收藏数登记（选球时可输入，快捷键可查看）
+ * 四队选球编号登记（收集保存：记住常用球的列表编号，长按快捷键在选球盘显示）
  */
 class TeamCollectPickRegistry {
+  /** 默认保存的对弈编号示例（红25=魅魔球等，可按实际列表调整） */
   static DEFAULT_NUMBERS = {
     [CollectorTeamId.RED]: 25,
     [CollectorTeamId.BLUE]: 11,
@@ -207,7 +210,7 @@ class TeamCollectPickRegistry {
     if (!teamId) {
       return {
         ok: false,
-        message: "未知队伍，无法设置收藏数",
+        message: "未知队伍，无法保存球编号",
       };
     }
     const nextValue = TeamCollectPickRegistry.clampNumber(value);
@@ -216,38 +219,33 @@ class TeamCollectPickRegistry {
       ok: true,
       teamId,
       value: nextValue,
-      message: `${CollectorTeamId.getLabel(teamId)}收藏数已设为 ${nextValue}`,
+      message: `${CollectorTeamId.getLabel(teamId)}已保存球编号 ${nextValue}，可直接输入该编号选球`,
     };
   }
 
-  static syncCollectTemplateLabels(heroes) {
-    if (!heroes) {
-      return;
+  static resolveSavedBall(game, teamId) {
+    const pickNumber = TeamCollectPickRegistry.getNumber(teamId);
+    if (!game || typeof game.getHeroes !== "function") {
+      return {
+        pickNumber,
+        hero: null,
+        heroName: "",
+      };
     }
-    for (const hero of heroes) {
-      if (hero.skillType !== HeroSkillType.TEAM_COLLECT) {
-        continue;
-      }
-      const teamId = hero.collectorTeamId;
-      const savedNumber = TeamCollectPickRegistry.getNumber(teamId);
-      hero.name = `${CollectorTeamId.getLabel(teamId)}收集球·${savedNumber}`;
-      hero.decoration = String(savedNumber);
-      hero.collectSavedNumber = savedNumber;
+    const heroes = game.getHeroes();
+    const index = pickNumber - 1;
+    if (index < 0 || index >= heroes.length) {
+      return {
+        pickNumber,
+        hero: null,
+        heroName: "",
+      };
     }
-  }
-
-  static findCollectHero(heroes, teamId, availableHeroes) {
-    const source = availableHeroes || heroes;
-    if (!source) {
-      return null;
-    }
-    return (
-      source.find(
-        (hero) =>
-          hero.skillType === HeroSkillType.TEAM_COLLECT &&
-          hero.collectorTeamId === teamId
-      ) || null
-    );
+    return {
+      pickNumber,
+      hero: heroes[index],
+      heroName: heroes[index].name,
+    };
   }
 
   static getAllNumberSummary() {
@@ -255,14 +253,14 @@ class TeamCollectPickRegistry {
       .map((teamId) => {
         const number = TeamCollectPickRegistry.getNumber(teamId);
         const keyHint = CollectorTeamId.getDisplayKeyHint(teamId);
-        return `${CollectorTeamId.getShortLabel(teamId)}:${number}(${keyHint})`;
+        return `${CollectorTeamId.getShortLabel(teamId)}:#${number}(长按${keyHint})`;
       })
       .join(" · ");
   }
 }
 
 /**
- * 选球输入：设置各队收藏数（如 收25、红收25）
+ * 选球输入：保存各队常用球编号（如 收25、红收25）
  */
 class TeamCollectPickInputParser {
   static TEAM_NAME_TO_ID = {
@@ -285,7 +283,7 @@ class TeamCollectPickInputParser {
         return {
           handled: true,
           ok: false,
-          message: "当前步骤无法设置收藏数",
+          message: "当前步骤无法保存球编号",
         };
       }
       const result = TeamCollectPickRegistry.setNumber(
@@ -320,7 +318,7 @@ class TeamCollectPickInputParser {
 }
 
 /**
- * 选球界面快捷键与收藏数展示
+ * 选球界面：长按快捷键在选球盘显示已保存的球编号
  */
 class TeamCollectPickUiSystem {
   static teamShowUntil = {
@@ -330,15 +328,51 @@ class TeamCollectPickUiSystem {
     [CollectorTeamId.PURPLE]: 0,
   };
 
+  static teamHighlightPickNumber = {
+    [CollectorTeamId.RED]: 0,
+    [CollectorTeamId.BLUE]: 0,
+    [CollectorTeamId.GREEN]: 0,
+    [CollectorTeamId.PURPLE]: 0,
+  };
+
+  static keyHoldStartByTeam = {
+    [CollectorTeamId.RED]: 0,
+    [CollectorTeamId.BLUE]: 0,
+    [CollectorTeamId.GREEN]: 0,
+    [CollectorTeamId.PURPLE]: 0,
+  };
+
+  static longPressTriggeredByTeam = {
+    [CollectorTeamId.RED]: false,
+    [CollectorTeamId.BLUE]: false,
+    [CollectorTeamId.GREEN]: false,
+    [CollectorTeamId.PURPLE]: false,
+  };
+
   static lastPickMessage = "";
 
-  static showTeamNumber(teamId, now) {
+  static isTeamKeyHeld(input, teamId) {
+    const codes = CollectorTeamId.getDisplayKeyCodes(teamId);
+    return codes.some((code) => input.isDown(code));
+  }
+
+  static showTeamSavedBall(teamId, game, now) {
+    const savedBall = TeamCollectPickRegistry.resolveSavedBall(game, teamId);
     TeamCollectPickUiSystem.teamShowUntil[teamId] =
       now + TeamCollectBallConstants.PICK_DISPLAY_DURATION_MS;
+    TeamCollectPickUiSystem.teamHighlightPickNumber[teamId] =
+      savedBall.pickNumber;
+
+    const ballLabel = savedBall.heroName
+      ? `${savedBall.heroName}`
+      : "（编号超出当前列表）";
+    TeamCollectPickUiSystem.lastPickMessage = `${CollectorTeamId.getLabel(
+      teamId
+    )}已保存编号 ${savedBall.pickNumber} · ${ballLabel}`;
   }
 
   static getPickHint() {
-    return `收集保存 · 输入「收25」设收藏数 · 快捷键查看/快选：${TeamCollectPickRegistry.getAllNumberSummary()}`;
+    return `收集保存 · 输入「收25」保存球编号 · 长按1-4（3秒）在选球盘显示：${TeamCollectPickRegistry.getAllNumberSummary()}`;
   }
 
   static tickPickKeyboard(input, game, now) {
@@ -347,44 +381,45 @@ class TeamCollectPickUiSystem {
     }
 
     for (const teamId of CollectorTeamId.getAll()) {
-      if (!TeamCollectSkillSystem.wasDisplayKeyPressed(input, teamId)) {
+      if (TeamCollectPickUiSystem.isTeamKeyHeld(input, teamId)) {
+        if (!TeamCollectPickUiSystem.keyHoldStartByTeam[teamId]) {
+          TeamCollectPickUiSystem.keyHoldStartByTeam[teamId] = now;
+          TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId] = false;
+        }
+
+        const heldMs = now - TeamCollectPickUiSystem.keyHoldStartByTeam[teamId];
+        if (
+          heldMs >= TeamCollectBallConstants.LONG_PRESS_MS &&
+          !TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId]
+        ) {
+          TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId] = true;
+          TeamCollectPickUiSystem.showTeamSavedBall(teamId, game, now);
+        }
         continue;
       }
 
-      const savedNumber = TeamCollectPickRegistry.getNumber(teamId);
-      TeamCollectPickUiSystem.showTeamNumber(teamId, now);
-      TeamCollectPickUiSystem.lastPickMessage = `${CollectorTeamId.getLabel(
-        teamId
-      )}收藏数：${savedNumber}`;
-
-      const pickStep = CollectorTeamId.getPickStep(teamId);
-      if (game.pickStep !== pickStep || !game.canPlayerPickNow()) {
-        continue;
-      }
-
-      const collectHero = TeamCollectPickRegistry.findCollectHero(
-        game.getHeroes(),
-        teamId,
-        game.getAvailableHeroes()
-      );
-      if (!collectHero) {
-        TeamCollectPickUiSystem.lastPickMessage = `${CollectorTeamId.getLabel(
-          teamId
-        )}收集球·${savedNumber} 已被选走`;
-        continue;
-      }
-
-      if (game.tryPickHero(collectHero.id)) {
-        TeamCollectPickUiSystem.lastPickMessage = `已选 ${collectHero.name}（快捷键 ${CollectorTeamId.getDisplayKeyHint(
-          teamId
-        )}）`;
-        return {
-          ok: true,
-          message: TeamCollectPickUiSystem.lastPickMessage,
-        };
-      }
+      TeamCollectPickUiSystem.keyHoldStartByTeam[teamId] = 0;
+      TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId] = false;
     }
 
+    return null;
+  }
+
+  static getActiveHighlightPickNumber(now) {
+    for (const teamId of CollectorTeamId.getAll()) {
+      if (now < TeamCollectPickUiSystem.teamShowUntil[teamId]) {
+        return TeamCollectPickUiSystem.teamHighlightPickNumber[teamId] || 0;
+      }
+    }
+    return 0;
+  }
+
+  static getActiveTeamId(now) {
+    for (const teamId of CollectorTeamId.getAll()) {
+      if (now < TeamCollectPickUiSystem.teamShowUntil[teamId]) {
+        return teamId;
+      }
+    }
     return null;
   }
 
@@ -398,28 +433,27 @@ class TeamCollectPickUiSystem {
     const panelY = arena.bottom - 118;
 
     ctx.fillStyle = "rgba(26, 26, 46, 0.82)";
-    ctx.fillRect(panelX, panelY, 250, 96);
+    ctx.fillRect(panelX, panelY, 268, 96);
     ctx.strokeStyle = "rgba(255, 212, 59, 0.45)";
     ctx.lineWidth = 1;
-    ctx.strokeRect(panelX, panelY, 250, 96);
+    ctx.strokeRect(panelX, panelY, 268, 96);
 
     ctx.fillStyle = "#ffd43b";
     ctx.font = "bold 12px system-ui, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText("收集保存 · 各队收藏数", panelX + 10, panelY + 18);
+    ctx.fillText("收集保存 · 各队已存球编号", panelX + 10, panelY + 18);
 
     let rowY = panelY + 36;
     for (const teamId of CollectorTeamId.getAll()) {
-      const savedNumber = TeamCollectPickRegistry.getNumber(teamId);
+      const savedBall = TeamCollectPickRegistry.resolveSavedBall(game, teamId);
       const isActive = now < TeamCollectPickUiSystem.teamShowUntil[teamId];
       ctx.fillStyle = isActive
         ? CollectorTeamId.getGlow(teamId)
         : CollectorTeamId.getColor(teamId);
       ctx.font = isActive ? "bold 13px system-ui, sans-serif" : "12px system-ui, sans-serif";
+      const ballName = savedBall.heroName ? savedBall.heroName : "未知球";
       ctx.fillText(
-        `${CollectorTeamId.getLabel(teamId)} ${savedNumber} · ${CollectorTeamId.getDisplayKeyHint(
-          teamId
-        )}`,
+        `${CollectorTeamId.getLabel(teamId)} #${savedBall.pickNumber} ${ballName}`,
         panelX + 10,
         rowY
       );
@@ -428,7 +462,7 @@ class TeamCollectPickUiSystem {
 
     ctx.fillStyle = "#adb5bd";
     ctx.font = "11px system-ui, sans-serif";
-    ctx.fillText("轮到你时按对应键可快选该队收集球", panelX + 10, panelY + 86);
+    ctx.fillText("长按 1-4 共 3 秒，在选球盘高亮已存编号", panelX + 10, panelY + 86);
     ctx.textAlign = "left";
   }
 
@@ -438,37 +472,58 @@ class TeamCollectPickUiSystem {
     }
 
     const now = Date.now();
-    let activeTeamId = null;
-    for (const teamId of CollectorTeamId.getAll()) {
-      if (now < TeamCollectPickUiSystem.teamShowUntil[teamId]) {
-        activeTeamId = teamId;
-        break;
-      }
-    }
+    const activeTeamId = TeamCollectPickUiSystem.getActiveTeamId(now);
     if (!activeTeamId) {
       return;
     }
 
-    const savedNumber = TeamCollectPickRegistry.getNumber(activeTeamId);
+    const savedBall = TeamCollectPickRegistry.resolveSavedBall(
+      game,
+      activeTeamId
+    );
     const centerX = (arena.left + arena.right) / 2;
     const centerY = arena.top + 92;
 
     ctx.fillStyle = "rgba(26, 26, 46, 0.9)";
-    ctx.fillRect(centerX - 120, centerY - 28, 240, 56);
+    ctx.fillRect(centerX - 148, centerY - 34, 296, 68);
     ctx.strokeStyle = CollectorTeamId.getGlow(activeTeamId);
     ctx.lineWidth = 2;
-    ctx.strokeRect(centerX - 120, centerY - 28, 240, 56);
+    ctx.strokeRect(centerX - 148, centerY - 34, 296, 68);
 
     ctx.textAlign = "center";
     ctx.fillStyle = CollectorTeamId.getGlow(activeTeamId);
-    ctx.font = "bold 16px system-ui, sans-serif";
+    ctx.font = "bold 15px system-ui, sans-serif";
     ctx.fillText(
-      `${CollectorTeamId.getLabel(activeTeamId)}收藏数`,
+      `${CollectorTeamId.getLabel(activeTeamId)}已保存球编号`,
       centerX,
-      centerY - 6
+      centerY - 10
     );
-    ctx.font = "bold 28px system-ui, sans-serif";
-    ctx.fillText(String(savedNumber), centerX, centerY + 22);
+    ctx.font = "bold 30px system-ui, sans-serif";
+    ctx.fillText(String(savedBall.pickNumber), centerX, centerY + 24);
+
+    if (savedBall.heroName) {
+      ctx.font = "12px system-ui, sans-serif";
+      ctx.fillStyle = "#dee2e6";
+      ctx.fillText(savedBall.heroName, centerX, centerY + 44);
+    }
+    ctx.textAlign = "left";
+  }
+
+  static drawSavedBallHighlight(ctx, slot, pickNumber, heroIndex) {
+    if (pickNumber !== heroIndex + 1) {
+      return;
+    }
+
+    ctx.beginPath();
+    ctx.arc(slot.cx, slot.cy, slot.ballRadius + 10, 0, Math.PI * 2);
+    ctx.strokeStyle = "#ffd43b";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffd43b";
+    ctx.font = "bold 13px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(`已存 #${pickNumber}`, slot.cx, slot.cy - slot.ballRadius - 16);
     ctx.textAlign = "left";
   }
 
@@ -495,12 +550,7 @@ class TeamCollectSkillSystem {
   }
 
   static initFighter(fighter) {
-    const teamId = TeamCollectSkillSystem.getCollectorTeamId(fighter);
-    const presetNumber =
-      typeof TeamCollectPickRegistry !== "undefined"
-        ? TeamCollectPickRegistry.getNumber(teamId)
-        : 0;
-    fighter.teamCollectSavedNumber = presetNumber;
+    fighter.teamCollectSavedNumber = 0;
     fighter.teamCollectLastTickTime = 0;
     fighter.teamCollectShowUntil = 0;
     fighter.teamCollectFlashUntil = 0;
