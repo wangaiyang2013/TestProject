@@ -3654,6 +3654,9 @@ class LittleBallHeroGame {
         this,
         Date.now()
       );
+      if (TeamCollectPickUiSystem.isWheelOpen()) {
+        return;
+      }
     }
     if (this.canAutoPickByTimer()) {
       this.autoPickForCurrentStep();
@@ -4459,7 +4462,7 @@ class LittleBallHeroGame {
     const slots = HeroPickScreenLayout.computeSlots(heroes.length, this.arena);
     const highlightPickNumber =
       typeof TeamCollectPickUiSystem !== "undefined"
-        ? TeamCollectPickUiSystem.getActiveHighlightPickNumber(Date.now())
+        ? TeamCollectPickUiSystem.getActiveHighlightPickNumber()
         : 0;
     heroes.forEach((hero, i) => {
       const slot = slots[i];
@@ -4507,7 +4510,7 @@ class LittleBallHeroGame {
 
     if (typeof TeamCollectPickUiSystem !== "undefined") {
       TeamCollectPickUiSystem.drawPickOverlay(this.ctx, this, this.arena);
-      TeamCollectPickUiSystem.drawActiveNumberPopup(this.ctx, this, this.arena);
+      TeamCollectPickUiSystem.drawWheel(this.ctx, this, this.arena);
     }
 
     this.ctx.textAlign = "left";
@@ -4834,7 +4837,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "黑帮事件/每5秒4打手入侵/击杀本体结束";
   }
   if (skillType === HeroSkillType.TEAM_COLLECT) {
-    return "收集保存/收编号/长按1-4显示/战斗中收集数字";
+    return "收集保存/按1-4开轮盘/输入编号快选";
   }
   return "技能";
 };

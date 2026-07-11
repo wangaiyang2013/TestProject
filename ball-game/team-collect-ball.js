@@ -14,10 +14,10 @@ const TeamCollectBallConstants = {
   /** 被动射击伤害（收集时顺带攻击） */
   COLLECT_SHOT_DAMAGE: 6,
   DISPLAY_FLASH_MS: 320,
-  /** 选球界面长按展示持续时间 */
-  PICK_DISPLAY_DURATION_MS: 5200,
-  /** 长按快捷键触发时间（毫秒） */
-  LONG_PRESS_MS: 3000,
+  /** 选球数字轮盘半径 */
+  WHEEL_RADIUS: 92,
+  /** 轮盘输入最大位数 */
+  WHEEL_MAX_DRAFT_DIGITS: 3,
   /** 选球保存编号下限 */
   MIN_SAVED_NUMBER: 1,
   /** 选球保存编号上限 */
@@ -161,27 +161,11 @@ class TeamCollectBallTemplateFactory {
  * 四队选球编号登记（收集保存：记住常用球的列表编号，长按快捷键在选球盘显示）
  */
 class TeamCollectPickRegistry {
-  /** 默认保存的对弈编号示例（红25=魅魔球等，可按实际列表调整） */
-  static DEFAULT_NUMBERS = {
-    [CollectorTeamId.RED]: 25,
-    [CollectorTeamId.BLUE]: 11,
-    [CollectorTeamId.GREEN]: 9,
-    [CollectorTeamId.PURPLE]: 15,
-  };
-
   static teamNumbers = {
-    [CollectorTeamId.RED]: TeamCollectPickRegistry.DEFAULT_NUMBERS[
-      CollectorTeamId.RED
-    ],
-    [CollectorTeamId.BLUE]: TeamCollectPickRegistry.DEFAULT_NUMBERS[
-      CollectorTeamId.BLUE
-    ],
-    [CollectorTeamId.GREEN]: TeamCollectPickRegistry.DEFAULT_NUMBERS[
-      CollectorTeamId.GREEN
-    ],
-    [CollectorTeamId.PURPLE]: TeamCollectPickRegistry.DEFAULT_NUMBERS[
-      CollectorTeamId.PURPLE
-    ],
+    [CollectorTeamId.RED]: null,
+    [CollectorTeamId.BLUE]: null,
+    [CollectorTeamId.GREEN]: null,
+    [CollectorTeamId.PURPLE]: null,
   };
 
   static clampNumber(value) {
@@ -195,15 +179,15 @@ class TeamCollectPickRegistry {
     );
   }
 
+  static hasNumber(teamId) {
+    return typeof TeamCollectPickRegistry.teamNumbers[teamId] === "number";
+  }
+
   static getNumber(teamId) {
-    if (!teamId) {
+    if (!teamId || !TeamCollectPickRegistry.hasNumber(teamId)) {
       return 0;
     }
-    const stored = TeamCollectPickRegistry.teamNumbers[teamId];
-    if (typeof stored !== "number") {
-      return TeamCollectPickRegistry.DEFAULT_NUMBERS[teamId] || 0;
-    }
-    return stored;
+    return TeamCollectPickRegistry.teamNumbers[teamId];
   }
 
   static setNumber(teamId, value) {
@@ -219,13 +203,12 @@ class TeamCollectPickRegistry {
       ok: true,
       teamId,
       value: nextValue,
-      message: `${CollectorTeamId.getLabel(teamId)}已保存球编号 ${nextValue}，可直接输入该编号选球`,
+      message: `${CollectorTeamId.getLabel(teamId)}轮盘已保存 #${nextValue}`,
     };
   }
 
-  static resolveSavedBall(game, teamId) {
-    const pickNumber = TeamCollectPickRegistry.getNumber(teamId);
-    if (!game || typeof game.getHeroes !== "function") {
+  static resolveBallByPickNumber(game, pickNumber) {
+    if (!game || typeof game.getHeroes !== "function" || pickNumber <= 0) {
       return {
         pickNumber,
         hero: null,
@@ -248,12 +231,20 @@ class TeamCollectPickRegistry {
     };
   }
 
+  static resolveSavedBall(game, teamId) {
+    const pickNumber = TeamCollectPickRegistry.getNumber(teamId);
+    return TeamCollectPickRegistry.resolveBallByPickNumber(game, pickNumber);
+  }
+
   static getAllNumberSummary() {
     return CollectorTeamId.getAll()
       .map((teamId) => {
-        const number = TeamCollectPickRegistry.getNumber(teamId);
         const keyHint = CollectorTeamId.getDisplayKeyHint(teamId);
-        return `${CollectorTeamId.getShortLabel(teamId)}:#${number}(长按${keyHint})`;
+        if (!TeamCollectPickRegistry.hasNumber(teamId)) {
+          return `${CollectorTeamId.getShortLabel(teamId)}:空(按${keyHint})`;
+        }
+        const number = TeamCollectPickRegistry.getNumber(teamId);
+        return `${CollectorTeamId.getShortLabel(teamId)}:#${number}(按${keyHint})`;
       })
       .join(" · ");
   }
@@ -318,61 +309,175 @@ class TeamCollectPickInputParser {
 }
 
 /**
- * 选球界面：长按快捷键在选球盘显示已保存的球编号
+ * 选球界面：四队数字轮盘（按1-4打开，输入编号后 Enter 保存并快选）
  */
 class TeamCollectPickUiSystem {
-  static teamShowUntil = {
-    [CollectorTeamId.RED]: 0,
-    [CollectorTeamId.BLUE]: 0,
-    [CollectorTeamId.GREEN]: 0,
-    [CollectorTeamId.PURPLE]: 0,
-  };
+  static openTeamId = null;
 
-  static teamHighlightPickNumber = {
-    [CollectorTeamId.RED]: 0,
-    [CollectorTeamId.BLUE]: 0,
-    [CollectorTeamId.GREEN]: 0,
-    [CollectorTeamId.PURPLE]: 0,
-  };
-
-  static keyHoldStartByTeam = {
-    [CollectorTeamId.RED]: 0,
-    [CollectorTeamId.BLUE]: 0,
-    [CollectorTeamId.GREEN]: 0,
-    [CollectorTeamId.PURPLE]: 0,
-  };
-
-  static longPressTriggeredByTeam = {
-    [CollectorTeamId.RED]: false,
-    [CollectorTeamId.BLUE]: false,
-    [CollectorTeamId.GREEN]: false,
-    [CollectorTeamId.PURPLE]: false,
-  };
+  static draftText = "";
 
   static lastPickMessage = "";
 
-  static isTeamKeyHeld(input, teamId) {
+  static DIGIT_KEY_CODES = {
+    Digit0: "0",
+    Digit1: "1",
+    Digit2: "2",
+    Digit3: "3",
+    Digit4: "4",
+    Digit5: "5",
+    Digit6: "6",
+    Digit7: "7",
+    Digit8: "8",
+    Digit9: "9",
+    Numpad0: "0",
+    Numpad1: "1",
+    Numpad2: "2",
+    Numpad3: "3",
+    Numpad4: "4",
+    Numpad5: "5",
+    Numpad6: "6",
+    Numpad7: "7",
+    Numpad8: "8",
+    Numpad9: "9",
+  };
+
+  static wasTeamKeyPressed(input, teamId) {
     const codes = CollectorTeamId.getDisplayKeyCodes(teamId);
-    return codes.some((code) => input.isDown(code));
+    return codes.some((code) => input.wasPressed(code));
   }
 
-  static showTeamSavedBall(teamId, game, now) {
-    const savedBall = TeamCollectPickRegistry.resolveSavedBall(game, teamId);
-    TeamCollectPickUiSystem.teamShowUntil[teamId] =
-      now + TeamCollectBallConstants.PICK_DISPLAY_DURATION_MS;
-    TeamCollectPickUiSystem.teamHighlightPickNumber[teamId] =
-      savedBall.pickNumber;
+  static isWheelOpen() {
+    return Boolean(TeamCollectPickUiSystem.openTeamId);
+  }
 
-    const ballLabel = savedBall.heroName
-      ? `${savedBall.heroName}`
-      : "（编号超出当前列表）";
-    TeamCollectPickUiSystem.lastPickMessage = `${CollectorTeamId.getLabel(
-      teamId
-    )}已保存编号 ${savedBall.pickNumber} · ${ballLabel}`;
+  static openWheel(teamId) {
+    TeamCollectPickUiSystem.openTeamId = teamId;
+    const savedNumber = TeamCollectPickRegistry.getNumber(teamId);
+    TeamCollectPickUiSystem.draftText =
+      savedNumber > 0 ? String(savedNumber) : "";
+  }
+
+  static closeWheel() {
+    TeamCollectPickUiSystem.openTeamId = null;
+    TeamCollectPickUiSystem.draftText = "";
+  }
+
+  static getDraftPickNumber() {
+    const parsed = parseInt(TeamCollectPickUiSystem.draftText, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 0;
+    }
+    return TeamCollectPickRegistry.clampNumber(parsed);
+  }
+
+  static appendDraftDigit(digit) {
+    if (!digit) {
+      return;
+    }
+    const nextText = `${TeamCollectPickUiSystem.draftText}${digit}`;
+    if (nextText.length > TeamCollectBallConstants.WHEEL_MAX_DRAFT_DIGITS) {
+      return;
+    }
+    TeamCollectPickUiSystem.draftText = nextText;
+  }
+
+  static backspaceDraft() {
+    TeamCollectPickUiSystem.draftText = TeamCollectPickUiSystem.draftText.slice(
+      0,
+      -1
+    );
+  }
+
+  static adjustDraft(delta) {
+    const current = TeamCollectPickUiSystem.getDraftPickNumber();
+    const heroCount =
+      TeamCollectPickUiSystem._draftHeroCount ||
+      TeamCollectBallConstants.MAX_SAVED_NUMBER;
+    const base = current > 0 ? current : 1;
+    const next = TeamCollectPickRegistry.clampNumber(base + delta);
+    const capped = Math.min(next, heroCount);
+    TeamCollectPickUiSystem.draftText = String(Math.max(1, capped));
+  }
+
+  static collectPressedDigit(input) {
+    for (const [code, digit] of Object.entries(
+      TeamCollectPickUiSystem.DIGIT_KEY_CODES
+    )) {
+      if (input.wasPressed(code)) {
+        return digit;
+      }
+    }
+    return null;
+  }
+
+  static confirmWheel(game) {
+    const teamId = TeamCollectPickUiSystem.openTeamId;
+    const pickNumber = TeamCollectPickUiSystem.getDraftPickNumber();
+    if (!teamId || pickNumber <= 0) {
+      TeamCollectPickUiSystem.lastPickMessage = "请在轮盘上输入有效编号";
+      return null;
+    }
+
+    const saveResult = TeamCollectPickRegistry.setNumber(teamId, pickNumber);
+    const ballInfo = TeamCollectPickRegistry.resolveBallByPickNumber(
+      game,
+      pickNumber
+    );
+    const pickStep = CollectorTeamId.getPickStep(teamId);
+
+    if (
+      game &&
+      game.pickStep === pickStep &&
+      game.canPlayerPickNow() &&
+      ballInfo.hero &&
+      !game.takenHeroIds.has(ballInfo.hero.id) &&
+      game.tryPickHero(ballInfo.hero.id)
+    ) {
+      TeamCollectPickUiSystem.lastPickMessage = `已选 ${ballInfo.heroName}（#${pickNumber}）`;
+      TeamCollectPickUiSystem.closeWheel();
+      return { ok: true, message: TeamCollectPickUiSystem.lastPickMessage };
+    }
+
+    const ballLabel = ballInfo.heroName || "编号超出当前列表";
+    TeamCollectPickUiSystem.lastPickMessage = `${saveResult.message} · ${ballLabel}`;
+    return { ok: true, message: TeamCollectPickUiSystem.lastPickMessage };
+  }
+
+  static handleWheelEditing(input, game) {
+    if (input.wasPressed("Escape")) {
+      TeamCollectPickUiSystem.closeWheel();
+      TeamCollectPickUiSystem.lastPickMessage = "已关闭编号轮盘";
+      return;
+    }
+
+    if (input.wasPressed("Backspace")) {
+      TeamCollectPickUiSystem.backspaceDraft();
+      return;
+    }
+
+    if (input.wasPressed("ArrowUp")) {
+      TeamCollectPickUiSystem.adjustDraft(1);
+      return;
+    }
+
+    if (input.wasPressed("ArrowDown")) {
+      TeamCollectPickUiSystem.adjustDraft(-1);
+      return;
+    }
+
+    if (input.wasPressed("Enter") || input.wasPressed("NumpadEnter")) {
+      TeamCollectPickUiSystem.confirmWheel(game);
+      return;
+    }
+
+    const digit = TeamCollectPickUiSystem.collectPressedDigit(input);
+    if (digit) {
+      TeamCollectPickUiSystem.appendDraftDigit(digit);
+    }
   }
 
   static getPickHint() {
-    return `收集保存 · 输入「收25」保存球编号 · 长按1-4（3秒）在选球盘显示：${TeamCollectPickRegistry.getAllNumberSummary()}`;
+    return `收集保存 · 按1-4打开编号轮盘 · Enter确认 · ${TeamCollectPickRegistry.getAllNumberSummary()}`;
   }
 
   static tickPickKeyboard(input, game, now) {
@@ -380,47 +485,31 @@ class TeamCollectPickUiSystem {
       return null;
     }
 
+    TeamCollectPickUiSystem._draftHeroCount = game.getHeroes().length;
+
+    if (TeamCollectPickUiSystem.isWheelOpen()) {
+      TeamCollectPickUiSystem.handleWheelEditing(input, game);
+      return null;
+    }
+
     for (const teamId of CollectorTeamId.getAll()) {
-      if (TeamCollectPickUiSystem.isTeamKeyHeld(input, teamId)) {
-        if (!TeamCollectPickUiSystem.keyHoldStartByTeam[teamId]) {
-          TeamCollectPickUiSystem.keyHoldStartByTeam[teamId] = now;
-          TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId] = false;
-        }
-
-        const heldMs = now - TeamCollectPickUiSystem.keyHoldStartByTeam[teamId];
-        if (
-          heldMs >= TeamCollectBallConstants.LONG_PRESS_MS &&
-          !TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId]
-        ) {
-          TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId] = true;
-          TeamCollectPickUiSystem.showTeamSavedBall(teamId, game, now);
-        }
-        continue;
+      if (TeamCollectPickUiSystem.wasTeamKeyPressed(input, teamId)) {
+        TeamCollectPickUiSystem.openWheel(teamId);
+        TeamCollectPickUiSystem.lastPickMessage = `${CollectorTeamId.getLabel(
+          teamId
+        )}编号轮盘已打开，请输入编号`;
+        return null;
       }
-
-      TeamCollectPickUiSystem.keyHoldStartByTeam[teamId] = 0;
-      TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId] = false;
     }
 
     return null;
   }
 
-  static getActiveHighlightPickNumber(now) {
-    for (const teamId of CollectorTeamId.getAll()) {
-      if (now < TeamCollectPickUiSystem.teamShowUntil[teamId]) {
-        return TeamCollectPickUiSystem.teamHighlightPickNumber[teamId] || 0;
-      }
+  static getActiveHighlightPickNumber() {
+    if (!TeamCollectPickUiSystem.isWheelOpen()) {
+      return 0;
     }
-    return 0;
-  }
-
-  static getActiveTeamId(now) {
-    for (const teamId of CollectorTeamId.getAll()) {
-      if (now < TeamCollectPickUiSystem.teamShowUntil[teamId]) {
-        return teamId;
-      }
-    }
-    return null;
+    return TeamCollectPickUiSystem.getDraftPickNumber();
   }
 
   static drawPickOverlay(ctx, game, arena) {
@@ -428,32 +517,40 @@ class TeamCollectPickUiSystem {
       return;
     }
 
-    const now = Date.now();
     const panelX = arena.left + 12;
     const panelY = arena.bottom - 118;
 
     ctx.fillStyle = "rgba(26, 26, 46, 0.82)";
-    ctx.fillRect(panelX, panelY, 268, 96);
+    ctx.fillRect(panelX, panelY, 280, 96);
     ctx.strokeStyle = "rgba(255, 212, 59, 0.45)";
     ctx.lineWidth = 1;
-    ctx.strokeRect(panelX, panelY, 268, 96);
+    ctx.strokeRect(panelX, panelY, 280, 96);
 
     ctx.fillStyle = "#ffd43b";
     ctx.font = "bold 12px system-ui, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText("收集保存 · 各队已存球编号", panelX + 10, panelY + 18);
+    ctx.fillText("收集保存 · 四队编号轮盘", panelX + 10, panelY + 18);
 
     let rowY = panelY + 36;
     for (const teamId of CollectorTeamId.getAll()) {
-      const savedBall = TeamCollectPickRegistry.resolveSavedBall(game, teamId);
-      const isActive = now < TeamCollectPickUiSystem.teamShowUntil[teamId];
-      ctx.fillStyle = isActive
+      const isOpen = TeamCollectPickUiSystem.openTeamId === teamId;
+      const hasSaved = TeamCollectPickRegistry.hasNumber(teamId);
+      const savedNumber = TeamCollectPickRegistry.getNumber(teamId);
+      const savedBall = hasSaved
+        ? TeamCollectPickRegistry.resolveSavedBall(game, teamId)
+        : null;
+
+      ctx.fillStyle = isOpen
         ? CollectorTeamId.getGlow(teamId)
         : CollectorTeamId.getColor(teamId);
-      ctx.font = isActive ? "bold 13px system-ui, sans-serif" : "12px system-ui, sans-serif";
-      const ballName = savedBall.heroName ? savedBall.heroName : "未知球";
+      ctx.font = isOpen ? "bold 13px system-ui, sans-serif" : "12px system-ui, sans-serif";
+
+      const numberLabel = hasSaved ? `#${savedNumber}` : "空";
+      const ballLabel = savedBall && savedBall.heroName ? savedBall.heroName : "未设置";
       ctx.fillText(
-        `${CollectorTeamId.getLabel(teamId)} #${savedBall.pickNumber} ${ballName}`,
+        `${CollectorTeamId.getLabel(teamId)} ${numberLabel} ${ballLabel} · 按${CollectorTeamId.getDisplayKeyHint(
+          teamId
+        )}`,
         panelX + 10,
         rowY
       );
@@ -462,50 +559,104 @@ class TeamCollectPickUiSystem {
 
     ctx.fillStyle = "#adb5bd";
     ctx.font = "11px system-ui, sans-serif";
-    ctx.fillText("长按 1-4 共 3 秒，在选球盘高亮已存编号", panelX + 10, panelY + 86);
+    ctx.fillText("按1-4开轮盘 · 数字键输入 · Enter确认选球", panelX + 10, panelY + 86);
     ctx.textAlign = "left";
   }
 
-  static drawActiveNumberPopup(ctx, game, arena) {
-    if (!game || game.phase !== "pick") {
+  static drawWheel(ctx, game, arena) {
+    if (!game || game.phase !== "pick" || !TeamCollectPickUiSystem.isWheelOpen()) {
       return;
     }
 
-    const now = Date.now();
-    const activeTeamId = TeamCollectPickUiSystem.getActiveTeamId(now);
-    if (!activeTeamId) {
-      return;
-    }
-
-    const savedBall = TeamCollectPickRegistry.resolveSavedBall(
-      game,
-      activeTeamId
-    );
+    const teamId = TeamCollectPickUiSystem.openTeamId;
     const centerX = (arena.left + arena.right) / 2;
-    const centerY = arena.top + 92;
+    const centerY = (arena.top + arena.bottom) / 2 + 8;
+    const radius = TeamCollectBallConstants.WHEEL_RADIUS;
+    const pickNumber = TeamCollectPickUiSystem.getDraftPickNumber();
+    const ballInfo = TeamCollectPickRegistry.resolveBallByPickNumber(
+      game,
+      pickNumber
+    );
 
-    ctx.fillStyle = "rgba(26, 26, 46, 0.9)";
-    ctx.fillRect(centerX - 148, centerY - 34, 296, 68);
-    ctx.strokeStyle = CollectorTeamId.getGlow(activeTeamId);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+    ctx.fillRect(arena.left, arena.top, arena.right - arena.left, arena.bottom - arena.top);
+
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius + 16, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(26, 26, 46, 0.94)";
+    ctx.fill();
+    ctx.strokeStyle = CollectorTeamId.getGlow(teamId);
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    const segmentCount = 12;
+    for (let index = 0; index < segmentCount; index += 1) {
+      const angle = (Math.PI * 2 * index) / segmentCount - Math.PI / 2;
+      const innerR = radius + 2;
+      const outerR = radius + 14;
+      ctx.beginPath();
+      ctx.moveTo(
+        centerX + Math.cos(angle) * innerR,
+        centerY + Math.sin(angle) * innerR
+      );
+      ctx.lineTo(
+        centerX + Math.cos(angle) * outerR,
+        centerY + Math.sin(angle) * outerR
+      );
+      ctx.strokeStyle =
+        index % 3 === 0
+          ? `${CollectorTeamId.getGlow(teamId)}cc`
+          : "rgba(255,255,255,0.18)";
+      ctx.lineWidth = index % 3 === 0 ? 3 : 1;
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius - 8, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    ctx.fill();
+    ctx.strokeStyle = `${CollectorTeamId.getColor(teamId)}88`;
     ctx.lineWidth = 2;
-    ctx.strokeRect(centerX - 148, centerY - 34, 296, 68);
+    ctx.stroke();
 
     ctx.textAlign = "center";
-    ctx.fillStyle = CollectorTeamId.getGlow(activeTeamId);
-    ctx.font = "bold 15px system-ui, sans-serif";
+    ctx.fillStyle = CollectorTeamId.getGlow(teamId);
+    ctx.font = "bold 14px system-ui, sans-serif";
     ctx.fillText(
-      `${CollectorTeamId.getLabel(activeTeamId)}已保存球编号`,
+      `${CollectorTeamId.getLabel(teamId)}编号轮盘`,
       centerX,
-      centerY - 10
+      centerY - radius - 28
     );
-    ctx.font = "bold 30px system-ui, sans-serif";
-    ctx.fillText(String(savedBall.pickNumber), centerX, centerY + 24);
 
-    if (savedBall.heroName) {
-      ctx.font = "12px system-ui, sans-serif";
+    const displayNumber =
+      TeamCollectPickUiSystem.draftText.length > 0
+        ? TeamCollectPickUiSystem.draftText
+        : "---";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 42px system-ui, sans-serif";
+    ctx.fillText(displayNumber, centerX, centerY + 12);
+
+    if (pickNumber > 0 && ballInfo.heroName) {
       ctx.fillStyle = "#dee2e6";
-      ctx.fillText(savedBall.heroName, centerX, centerY + 44);
+      ctx.font = "13px system-ui, sans-serif";
+      ctx.fillText(ballInfo.heroName, centerX, centerY + 38);
+    } else if (TeamCollectPickUiSystem.draftText.length === 0) {
+      ctx.fillStyle = "#adb5bd";
+      ctx.font = "13px system-ui, sans-serif";
+      ctx.fillText("轮盘为空，请输入编号", centerX, centerY + 38);
+    } else {
+      ctx.fillStyle = "#ff8787";
+      ctx.font = "13px system-ui, sans-serif";
+      ctx.fillText("编号超出当前列表", centerX, centerY + 38);
     }
+
+    ctx.fillStyle = "#ced4da";
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.fillText(
+      "数字键输入 · ↑↓微调 · Enter确认 · Esc关闭 · 再按队伍键切换",
+      centerX,
+      centerY + radius + 34
+    );
     ctx.textAlign = "left";
   }
 
@@ -523,7 +674,7 @@ class TeamCollectPickUiSystem {
     ctx.fillStyle = "#ffd43b";
     ctx.font = "bold 13px system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(`已存 #${pickNumber}`, slot.cx, slot.cy - slot.ballRadius - 16);
+    ctx.fillText(`轮盘 #${pickNumber}`, slot.cx, slot.cy - slot.ballRadius - 16);
     ctx.textAlign = "left";
   }
 
