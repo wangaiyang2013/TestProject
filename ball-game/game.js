@@ -102,8 +102,8 @@ class InputManager {
   constructor() {
     this.keys = new Set();
     this.justPressed = new Set();
-    window.addEventListener("keydown", (e) => this.onKeyDown(e));
-    window.addEventListener("keyup", (e) => this.onKeyUp(e));
+    window.addEventListener("keydown", (e) => this.onKeyDown(e), true);
+    window.addEventListener("keyup", (e) => this.onKeyUp(e), true);
   }
 
   onKeyDown(event) {
@@ -1356,12 +1356,70 @@ class GameUI {
     });
 
     this.heroPickInput.addEventListener("keydown", (event) => {
-      event.stopPropagation();
       if (event.key === "Enter") {
         event.preventDefault();
         this.submitHeroPick();
       }
     });
+
+    this.bindPickPhaseWheelKeyCapture();
+  }
+
+  bindPickPhaseWheelKeyCapture() {
+    if (this.pickPhaseWheelKeyCaptureBound) {
+      return;
+    }
+    this.pickPhaseWheelKeyCaptureBound = true;
+
+    document.addEventListener(
+      "keydown",
+      (event) => {
+        const game = this.getActiveHeroPickGame();
+        if (!game || game.phase !== "pick") {
+          return;
+        }
+        if (typeof TeamCollectPickUiSystem === "undefined") {
+          return;
+        }
+
+        const code = event.code;
+
+        if (TeamCollectPickUiSystem.isWheelOpen()) {
+          if (TeamCollectPickUiSystem.shouldBlockInputDuringWheel(code)) {
+            event.preventDefault();
+            if (
+              this.heroPickInput &&
+              document.activeElement === this.heroPickInput
+            ) {
+              this.heroPickInput.blur();
+            }
+          }
+          return;
+        }
+
+        if (!TeamCollectPickUiSystem.isTeamHotkeyCode(code)) {
+          return;
+        }
+
+        const inputFocused =
+          this.heroPickInput &&
+          document.activeElement === this.heroPickInput;
+
+        if (event.repeat) {
+          event.preventDefault();
+          return;
+        }
+
+        if (inputFocused) {
+          return;
+        }
+
+        if (TeamCollectPickUiSystem.isAnyTeamKeyHeld(game.input)) {
+          event.preventDefault();
+        }
+      },
+      true
+    );
   }
 
   getActiveHeroPickGame() {
@@ -1380,7 +1438,6 @@ class GameUI {
     const teamLabel = game.getCurrentPickerTeamLabel();
     this.heroPickInput.placeholder = `${teamLabel}：输入角色名或编号（1-${heroCount}）`;
     this.heroPickConfirm.textContent = `确认选球（${teamLabel}）`;
-    this.heroPickInput.focus();
   }
 
   hideHeroPickPanel() {
@@ -1493,6 +1550,12 @@ class GameUI {
         this.updateHeroPickPreview();
         if (typeof game.refreshPickTimer === "function") {
           game.refreshPickTimer();
+        }
+      }
+
+      if (typeof game.consumeWheelOpenedFlag === "function" && game.consumeWheelOpenedFlag()) {
+        if (this.heroPickInput) {
+          this.heroPickInput.blur();
         }
       }
 

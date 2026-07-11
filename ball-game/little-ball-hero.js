@@ -3208,6 +3208,7 @@ class LittleBallHeroGame {
     this.animationId = null;
     this.onPhaseChange = null;
     this.onGameOver = null;
+    this.wheelOpenedFlag = false;
     this.resize();
     window.addEventListener("resize", () => this.resize());
   }
@@ -3661,6 +3662,16 @@ class LittleBallHeroGame {
 
   getCurrentPickerTeamLabel() {
     return this.getTeamLabelForStep(this.pickStep);
+  }
+
+  markWheelOpened() {
+    this.wheelOpenedFlag = true;
+  }
+
+  consumeWheelOpenedFlag() {
+    const opened = this.wheelOpenedFlag;
+    this.wheelOpenedFlag = false;
+    return opened;
   }
 
   getPickInputContext() {

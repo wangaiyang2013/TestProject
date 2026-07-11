@@ -406,13 +406,61 @@ class TeamCollectPickUiSystem {
     return Math.max(1, TeamCollectPickUiSystem._draftHeroCount || 1);
   }
 
-  static openWheel(teamId) {
+  static ALL_TEAM_HOTKEY_CODES = CollectorTeamId.getAll().flatMap((teamId) =>
+    CollectorTeamId.getDisplayKeyCodes(teamId)
+  );
+
+  static WHEEL_EDITING_KEY_CODES = [
+    "Backspace",
+    "ArrowUp",
+    "ArrowDown",
+    "Enter",
+    "NumpadEnter",
+    "Escape",
+    "Digit0",
+    "Digit1",
+    "Digit2",
+    "Digit3",
+    "Digit4",
+    "Digit5",
+    "Digit6",
+    "Digit7",
+    "Digit8",
+    "Digit9",
+    "Numpad0",
+    "Numpad1",
+    "Numpad2",
+    "Numpad3",
+    "Numpad4",
+    "Numpad5",
+    "Numpad6",
+    "Numpad7",
+    "Numpad8",
+    "Numpad9",
+  ];
+
+  static isTeamHotkeyCode(code) {
+    return TeamCollectPickUiSystem.ALL_TEAM_HOTKEY_CODES.includes(code);
+  }
+
+  static shouldBlockInputDuringWheel(code) {
+    return TeamCollectPickUiSystem.WHEEL_EDITING_KEY_CODES.includes(code);
+  }
+
+  static notifyWheelOpened(game) {
+    if (game && typeof game.markWheelOpened === "function") {
+      game.markWheelOpened();
+    }
+  }
+
+  static openWheel(teamId, game) {
     TeamCollectPickUiSystem.openTeamId = teamId;
     const savedNumber = TeamCollectPickRegistry.getNumber(teamId);
     TeamCollectPickUiSystem.draftText =
       savedNumber > 0 ? String(savedNumber) : "";
     TeamCollectPickUiSystem.activeHoldTeamId = null;
     TeamCollectPickUiSystem.activeHoldProgress = 0;
+    TeamCollectPickUiSystem.notifyWheelOpened(game);
   }
 
   static closeWheel() {
@@ -589,7 +637,7 @@ class TeamCollectPickUiSystem {
           !TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId]
         ) {
           TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId] = true;
-          TeamCollectPickUiSystem.openWheel(teamId);
+          TeamCollectPickUiSystem.openWheel(teamId, game);
           TeamCollectPickUiSystem.lastPickMessage = `${CollectorTeamId.getLabel(
             teamId
           )}编号轮盘已打开（编号范围 1-${TeamCollectPickUiSystem.getHeroCountLimit()}）`;
@@ -693,7 +741,7 @@ class TeamCollectPickUiSystem {
       ctx.fillStyle = "#adb5bd";
       ctx.font = "11px system-ui, sans-serif";
       ctx.fillText(
-        "长按1-4共3秒开轮盘 · Enter填入编号 · 再点确认选球",
+        "长按1-4共3秒开轮盘（勿点输入框）· Enter填入编号",
         panelX + 10,
         panelY + 86
       );
