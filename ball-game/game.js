@@ -1533,6 +1533,9 @@ class GameUI {
     const panelKey = this.buildHeroPickPanelKey(snap);
     if (this.heroPickPanelKey !== panelKey) {
       this.heroPickPanelKey = panelKey;
+      if (typeof TeamCollectPickUiSystem !== "undefined") {
+        TeamCollectPickUiSystem.pendingPickInputValue = "";
+      }
       this.resetHeroPickInputForStep(snap, game);
       if (typeof game.refreshPickTimer === "function") {
         game.refreshPickTimer();

@@ -783,10 +783,17 @@ class HeroPickInputResolver {
     const hero = fullHeroes[index];
     const isAvailable = availableHeroes.some((item) => item.id === hero.id);
     if (!isAvailable) {
+      const ownerLabel =
+        (options.heroOwners && options.heroOwners[hero.id]) ||
+        options.blockedByTeam ||
+        "其他队伍";
       return {
         hero: null,
         pickNumber,
-        message: HeroPickInputResolver.buildTakenMessage(hero.name, options),
+        message: HeroPickInputResolver.buildTakenMessage(hero.name, {
+          ...options,
+          blockedByTeam: ownerLabel,
+        }),
       };
     }
 
@@ -807,10 +814,17 @@ class HeroPickInputResolver {
         lowerText
       );
       if (takenHero) {
+        const ownerLabel =
+          (options.heroOwners && options.heroOwners[takenHero.id]) ||
+          options.blockedByTeam ||
+          "其他队伍";
         return {
           hero: null,
           pickNumber: 0,
-          message: HeroPickInputResolver.buildTakenMessage(takenHero.name, options),
+          message: HeroPickInputResolver.buildTakenMessage(takenHero.name, {
+            ...options,
+            blockedByTeam: ownerLabel,
+          }),
         };
       }
       return { hero: null, pickNumber: 0, message: "未找到匹配角色" };
@@ -3677,9 +3691,10 @@ class LittleBallHeroGame {
   getPickInputContext() {
     const context = {
       emptyHint: "输入角色名或编号，下方显示对弈编号",
-      blockedByTeam: "对方",
+      blockedByTeam: "其他队伍",
       pickStep: this.pickStep,
       currentPickerLabel: this.getTeamLabelForStep(this.pickStep),
+      heroOwners: {},
     };
 
     const previousPicks = [];
@@ -3687,7 +3702,9 @@ class LittleBallHeroGame {
       const heroId = this.getHeroIdForPickStep(step);
       if (heroId) {
         const hero = this.getHeroById(heroId);
-        previousPicks.push(`${this.getTeamLabelForStep(step)}【${hero.name}】`);
+        const ownerLabel = this.getTeamLabelForStep(step);
+        context.heroOwners[heroId] = ownerLabel;
+        previousPicks.push(`${ownerLabel}【${hero.name}】`);
       }
     }
 
@@ -3695,7 +3712,6 @@ class LittleBallHeroGame {
       context.emptyHint = `已选：${previousPicks.join("、")}；${this.getTeamLabelForStep(
         this.pickStep
       )}请输入其他角色名或编号`;
-      context.blockedByTeam = this.getTeamLabelForStep(1);
     }
 
     if (typeof TeamCollectPickUiSystem !== "undefined") {
@@ -3737,7 +3753,7 @@ class LittleBallHeroGame {
 
     const collectInput =
       typeof TeamCollectPickInputParser !== "undefined"
-        ? TeamCollectPickInputParser.tryParse(rawInput, this.pickStep)
+        ? TeamCollectPickInputParser.tryParse(rawInput, this.pickStep, this)
         : null;
     if (collectInput && collectInput.handled) {
       return {
@@ -3776,7 +3792,7 @@ class LittleBallHeroGame {
 
     const collectInput =
       typeof TeamCollectPickInputParser !== "undefined"
-        ? TeamCollectPickInputParser.tryParse(rawInput, this.pickStep)
+        ? TeamCollectPickInputParser.tryParse(rawInput, this.pickStep, this)
         : null;
     if (collectInput && collectInput.handled) {
       return collectInput.message;
