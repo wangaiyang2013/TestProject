@@ -143,6 +143,9 @@ class HeroSkillType {
 
   /** 黑帮球：在场触发黑帮事件，周期入侵打手 */
   static GANGSTER = "gangster";
+
+  /** 收集保存球：四队收集球，按外围数字键显示收藏数 */
+  static TEAM_COLLECT = "team_collect";
 }
 
 /**
@@ -472,6 +475,7 @@ class HeroRoster {
         14,
         GangsterBallConstants.WAVE_INTERVAL_MS
       ),
+      ...TeamCollectBallTemplateFactory.createAll(),
     ];
   }
 
@@ -1156,6 +1160,21 @@ class HeroPickPreviewRenderer {
       ctx.textBaseline = "alphabetic";
       return;
     }
+
+    if (hero.skillType === HeroSkillType.TEAM_COLLECT) {
+      ctx.fillStyle = "#fff";
+      ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(
+        CollectorTeamId.getShortLabel(hero.collectorTeamId),
+        cx,
+        cy
+      );
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      return;
+    }
   }
 }
 
@@ -1831,6 +1850,10 @@ class HeroBallFighter {
       GangsterBallSkillSystem.initFighter(this);
     }
 
+    if (TeamCollectSkillSystem.isCollectFighter(this)) {
+      TeamCollectSkillSystem.initFighter(this);
+    }
+
     if (SpikeReflectSystem.isSpikeFighter(this)) {
       SpikeReflectSystem.initFighter(this);
     }
@@ -1916,6 +1939,13 @@ class HeroBallFighter {
     }
     const wasAlive = this.isAlive();
     this.health = Math.max(0, this.health - finalAmount);
+    if (
+      attacker &&
+      typeof TeamCollectSkillSystem !== "undefined" &&
+      finalAmount > 0
+    ) {
+      TeamCollectSkillSystem.onDealDamage(attacker, finalAmount, Date.now());
+    }
     SpikeReflectSystem.tryReflect(this, attacker, skipReflect);
     if (
       wasAlive &&
@@ -2147,6 +2177,10 @@ class HeroBallFighter {
     if (typeof GangsterBallSkillSystem !== "undefined") {
       GangsterBallSkillSystem.drawBoss(ctx, this);
       GangsterBallSkillSystem.drawMinion(ctx, this);
+    }
+
+    if (typeof TeamCollectSkillSystem !== "undefined") {
+      TeamCollectSkillSystem.draw(ctx, this);
     }
 
     if (typeof HeroSimulationMode !== "undefined") {
@@ -2544,6 +2578,10 @@ class HeroAutoSkillSystem {
     }
 
     if (template.skillType === HeroSkillType.GANGSTER) {
+      return;
+    }
+
+    if (template.skillType === HeroSkillType.TEAM_COLLECT) {
       return;
     }
 
@@ -3867,6 +3905,20 @@ class LittleBallHeroGame {
       if (SuccubusBallSkillSystem.isSuccubusFighter(fighter)) {
         SuccubusBallSkillSystem.tickSeduce(fighter, fighters, this, now);
       }
+      if (TeamCollectSkillSystem.isCollectFighter(fighter)) {
+        const opponent = HeroBattleArenaHelper.getNearestOpponent(
+          fighter,
+          fighters,
+          this
+        );
+        TeamCollectSkillSystem.tickCollect(
+          fighter,
+          opponent,
+          this.projectiles,
+          this.getProjectileRadius(),
+          now
+        );
+      }
     }
 
     if (typeof GangsterBallSkillSystem !== "undefined") {
@@ -4307,6 +4359,16 @@ class LittleBallHeroGame {
     const phaseAtFrameStart = this.phase;
     if (phaseAtFrameStart === "battle") {
       this.updateBattle();
+      if (
+        typeof TeamCollectSkillSystem !== "undefined" &&
+        !this.isPaused
+      ) {
+        TeamCollectSkillSystem.tickKeyboardInput(
+          this.input,
+          this.fighters,
+          Date.now()
+        );
+      }
       if (this.phase === "pick") {
         this.updatePickPhase();
       }
@@ -4441,19 +4503,22 @@ class LittleBallHeroGame {
     this.ctx.fillStyle = "rgba(255, 212, 59, 0.85)";
     this.ctx.font = "13px system-ui, sans-serif";
     this.ctx.textAlign = "center";
-    this.ctx.fillText(
-      this.isSimulation()
-        ? "模拟试球 · 中央试球 · 周围 9 颗红靶 · 无胜负可反复测试技能"
-        : this.isTeamBattle()
+    let footerHint = this.isSimulation()
+      ? "模拟试球 · 中央试球 · 周围 9 颗红靶 · 无胜负可反复测试技能"
+      : this.isTeamBattle()
         ? "双队团战 · 红蓝 vs 绿紫 · 30回合 · 每回合重选球 · 团灭对方获胜"
         : this.isCrazyFight()
           ? "疯狂对战 · 全场球体超强 · 寒冰狂暴仍发射冰弹"
           : this.isFourPlayer()
             ? "四球自动反弹混战 · 武器箱含匕首(3击共3伤)"
-            : "双球自动反弹对打 · 武器箱含匕首(3击共3伤)",
-      this.width / 2,
-      this.arena.bottom + 28
-    );
+            : "双球自动反弹对打 · 武器箱含匕首(3击共3伤)";
+    if (typeof TeamCollectSkillSystem !== "undefined") {
+      const collectHint = TeamCollectSkillSystem.getBattleHint(this.fighters);
+      if (collectHint) {
+        footerHint = `${footerHint} · ${collectHint}`;
+      }
+    }
+    this.ctx.fillText(footerHint, this.width / 2, this.arena.bottom + 28);
     this.ctx.textAlign = "left";
   }
 
@@ -4623,6 +4688,11 @@ HeroAutoSkillSystem.getFighterSkillLabel = function getFighterSkillLabel(fighter
     const minionCount = fighter.gangActiveMinionCount || 0;
     return `${baseLabel}·黑帮事件·打手${minionCount}`;
   }
+  if (fighter.template.skillType === HeroSkillType.TEAM_COLLECT) {
+    const teamLabel = CollectorTeamId.getLabel(fighter.template.collectorTeamId);
+    const saved = fighter.teamCollectSavedNumber || 0;
+    return `${baseLabel}·${teamLabel}·收藏${saved}`;
+  }
   return baseLabel;
 };
 
@@ -4707,6 +4777,9 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
   }
   if (skillType === HeroSkillType.GANGSTER) {
     return "黑帮事件/每5秒4打手入侵/击杀本体结束";
+  }
+  if (skillType === HeroSkillType.TEAM_COLLECT) {
+    return "收集保存/每秒+1/伤害+1/外围数字键查看";
   }
   return "技能";
 };

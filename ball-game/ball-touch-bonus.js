@@ -63,6 +63,9 @@ class BallTouchBonusSystem {
     if (GangsterBallSkillSystem.isGangMinion(fighter)) {
       return false;
     }
+    if (fighter.template.skillType === HeroSkillType.TEAM_COLLECT) {
+      return false;
+    }
     if (HeroSimulationMode.isSimulationDummy(fighter)) {
       return false;
     }

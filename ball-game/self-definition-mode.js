@@ -158,6 +158,17 @@ class CustomSkillTypeParser {
     ) {
       return HeroSkillType.GANGSTER;
     }
+    if (
+      text.includes("收集保存") ||
+      text.includes("收集球") ||
+      text.includes("team collect") ||
+      text.includes("team_collect")
+    ) {
+      return HeroSkillType.TEAM_COLLECT;
+    }
+    if (text.includes("红队收集") || text.includes("红收集")) {
+      return HeroSkillType.TEAM_COLLECT;
+    }
     if (text.includes("尖刺") || text.includes("反伤") || text.includes("spike")) {
       return HeroSkillType.SPIKE;
     }
