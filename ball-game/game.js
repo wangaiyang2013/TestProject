@@ -1397,7 +1397,15 @@ class GameUI {
           return;
         }
 
-        if (TeamCollectPickUiSystem.isTeamPickKeyCode(code)) {
+        if (TeamCollectPickUiSystem.isEditWheelKeyCode(code)) {
+          event.preventDefault();
+          if (event.repeat) {
+            return;
+          }
+          return;
+        }
+
+        if (TeamCollectPickUiSystem.isFillKeyCode(code)) {
           const pickInput = document.getElementById("hero-pick-input");
           const inputFocused =
             pickInput && document.activeElement === pickInput;

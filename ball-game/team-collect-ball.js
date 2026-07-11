@@ -65,8 +65,8 @@ class CollectorTeamId {
     return labels[teamId] || "?";
   }
 
-  /** 红/蓝/绿/紫 对应按键 1/2/3/4，长按 3 秒操作 */
-  static getTeamKeyCodes(teamId) {
+  /** 1/2/3/4：长按3秒首次设编号或填入已存编号到输入栏 */
+  static getFillKeyCodes(teamId) {
     const mapping = {
       [CollectorTeamId.RED]: ["Numpad1", "Digit1"],
       [CollectorTeamId.BLUE]: ["Numpad2", "Digit2"],
@@ -76,7 +76,7 @@ class CollectorTeamId {
     return mapping[teamId] || [];
   }
 
-  static getTeamKeyHint(teamId) {
+  static getFillKeyHint(teamId) {
     const hints = {
       [CollectorTeamId.RED]: "1",
       [CollectorTeamId.BLUE]: "2",
@@ -86,29 +86,51 @@ class CollectorTeamId {
     return hints[teamId] || "";
   }
 
-  static getTeamIdByKeyCode(code) {
+  /** F1/F2/F3/F4：长按3秒打开轮盘修改已存编号 */
+  static getEditWheelKeyCodes(teamId) {
+    const mapping = {
+      [CollectorTeamId.RED]: ["F1"],
+      [CollectorTeamId.BLUE]: ["F2"],
+      [CollectorTeamId.GREEN]: ["F3"],
+      [CollectorTeamId.PURPLE]: ["F4"],
+    };
+    return mapping[teamId] || [];
+  }
+
+  static getEditWheelKeyHint(teamId) {
+    const hints = {
+      [CollectorTeamId.RED]: "F1",
+      [CollectorTeamId.BLUE]: "F2",
+      [CollectorTeamId.GREEN]: "F3",
+      [CollectorTeamId.PURPLE]: "F4",
+    };
+    return hints[teamId] || "";
+  }
+
+  static getTeamIdByFillCode(code) {
     for (const teamId of CollectorTeamId.getAll()) {
-      if (CollectorTeamId.getTeamKeyCodes(teamId).includes(code)) {
+      if (CollectorTeamId.getFillKeyCodes(teamId).includes(code)) {
         return teamId;
       }
     }
     return null;
   }
 
-  static getWheelKeyCodes(teamId) {
-    return CollectorTeamId.getTeamKeyCodes(teamId);
-  }
-
-  static getWheelKeyHint(teamId) {
-    return CollectorTeamId.getTeamKeyHint(teamId);
+  static getTeamIdByEditCode(code) {
+    for (const teamId of CollectorTeamId.getAll()) {
+      if (CollectorTeamId.getEditWheelKeyCodes(teamId).includes(code)) {
+        return teamId;
+      }
+    }
+    return null;
   }
 
   static getDisplayKeyCodes(teamId) {
-    return CollectorTeamId.getTeamKeyCodes(teamId);
+    return CollectorTeamId.getFillKeyCodes(teamId);
   }
 
   static getDisplayKeyHint(teamId) {
-    return CollectorTeamId.getTeamKeyHint(teamId);
+    return CollectorTeamId.getFillKeyHint(teamId);
   }
 
   static getColor(teamId) {
@@ -274,12 +296,13 @@ class TeamCollectPickRegistry {
   static getAllNumberSummary() {
     return CollectorTeamId.getAll()
       .map((teamId) => {
-        const wheelHint = CollectorTeamId.getWheelKeyHint(teamId);
+        const fillHint = CollectorTeamId.getFillKeyHint(teamId);
+        const editHint = CollectorTeamId.getEditWheelKeyHint(teamId);
         if (!TeamCollectPickRegistry.hasNumber(teamId)) {
-          return `${CollectorTeamId.getShortLabel(teamId)}:空(长按${wheelHint}·3秒)`;
+          return `${CollectorTeamId.getShortLabel(teamId)}:空(长按${fillHint}设/长按${editHint}改)`;
         }
         const number = TeamCollectPickRegistry.getNumber(teamId);
-        return `${CollectorTeamId.getShortLabel(teamId)}:#${number}(长按${wheelHint}·3秒)`;
+        return `${CollectorTeamId.getShortLabel(teamId)}:#${number}(长按${fillHint}填入/长按${editHint}改)`;
       })
       .join(" · ");
   }
@@ -348,7 +371,7 @@ class TeamCollectPickInputParser {
 }
 
 /**
- * 选球界面：1-4 长按 3 秒设编号或填入输入栏
+ * 选球：1-4 长按3秒设编号/填入；F1-F4 长按3秒修改编号
  */
 class TeamCollectPickUiSystem {
   static openTeamId = null;
@@ -361,14 +384,28 @@ class TeamCollectPickUiSystem {
 
   static _draftHeroCount = 0;
 
-  static keyHoldStartByTeam = {
+  static keyHoldStartByFillTeam = {
     [CollectorTeamId.RED]: 0,
     [CollectorTeamId.BLUE]: 0,
     [CollectorTeamId.GREEN]: 0,
     [CollectorTeamId.PURPLE]: 0,
   };
 
-  static longPressTriggeredByTeam = {
+  static fillLongPressTriggeredByTeam = {
+    [CollectorTeamId.RED]: false,
+    [CollectorTeamId.BLUE]: false,
+    [CollectorTeamId.GREEN]: false,
+    [CollectorTeamId.PURPLE]: false,
+  };
+
+  static keyHoldStartByEditTeam = {
+    [CollectorTeamId.RED]: 0,
+    [CollectorTeamId.BLUE]: 0,
+    [CollectorTeamId.GREEN]: 0,
+    [CollectorTeamId.PURPLE]: 0,
+  };
+
+  static editLongPressTriggeredByTeam = {
     [CollectorTeamId.RED]: false,
     [CollectorTeamId.BLUE]: false,
     [CollectorTeamId.GREEN]: false,
@@ -377,14 +414,9 @@ class TeamCollectPickUiSystem {
 
   static activeHoldTeamId = null;
 
-  static activeHoldProgress = 0;
+  static activeHoldKind = null;
 
-  static lastLongPressActionByTeam = {
-    [CollectorTeamId.RED]: null,
-    [CollectorTeamId.BLUE]: null,
-    [CollectorTeamId.GREEN]: null,
-    [CollectorTeamId.PURPLE]: null,
-  };
+  static activeHoldProgress = 0;
 
   static DIGIT_KEY_CODES = {
     Digit0: "0",
@@ -409,17 +441,31 @@ class TeamCollectPickUiSystem {
     Numpad9: "9",
   };
 
-  static isTeamKeyHeld(input, teamId) {
-    const codes = CollectorTeamId.getTeamKeyCodes(teamId);
+  static isFillKeyHeld(input, teamId) {
+    const codes = CollectorTeamId.getFillKeyCodes(teamId);
     return codes.some((code) => input.isDown(code));
   }
 
-  static isAnyTeamKeyHeld(input) {
+  static isEditKeyHeld(input, teamId) {
+    const codes = CollectorTeamId.getEditWheelKeyCodes(teamId);
+    return codes.some((code) => input.isDown(code));
+  }
+
+  static isAnyFillKeyHeld(input) {
     if (!input) {
       return false;
     }
     return CollectorTeamId.getAll().some((teamId) =>
-      TeamCollectPickUiSystem.isTeamKeyHeld(input, teamId)
+      TeamCollectPickUiSystem.isFillKeyHeld(input, teamId)
+    );
+  }
+
+  static isAnyEditKeyHeld(input) {
+    if (!input) {
+      return false;
+    }
+    return CollectorTeamId.getAll().some((teamId) =>
+      TeamCollectPickUiSystem.isEditKeyHeld(input, teamId)
     );
   }
 
@@ -430,7 +476,8 @@ class TeamCollectPickUiSystem {
   static isBlockingAutoPick(input) {
     return (
       TeamCollectPickUiSystem.isWheelOpen() ||
-      TeamCollectPickUiSystem.isAnyTeamKeyHeld(input)
+      TeamCollectPickUiSystem.isAnyFillKeyHeld(input) ||
+      TeamCollectPickUiSystem.isAnyEditKeyHeld(input)
     );
   }
 
@@ -438,8 +485,12 @@ class TeamCollectPickUiSystem {
     return Math.max(1, TeamCollectPickUiSystem._draftHeroCount || 1);
   }
 
-  static ALL_TEAM_KEY_CODES = CollectorTeamId.getAll().flatMap((teamId) =>
-    CollectorTeamId.getTeamKeyCodes(teamId)
+  static ALL_FILL_KEY_CODES = CollectorTeamId.getAll().flatMap((teamId) =>
+    CollectorTeamId.getFillKeyCodes(teamId)
+  );
+
+  static ALL_EDIT_KEY_CODES = CollectorTeamId.getAll().flatMap((teamId) =>
+    CollectorTeamId.getEditWheelKeyCodes(teamId)
   );
 
   static WHEEL_EDITING_KEY_CODES = [
@@ -471,8 +522,12 @@ class TeamCollectPickUiSystem {
     "Numpad9",
   ];
 
-  static isTeamPickKeyCode(code) {
-    return TeamCollectPickUiSystem.ALL_TEAM_KEY_CODES.includes(code);
+  static isFillKeyCode(code) {
+    return TeamCollectPickUiSystem.ALL_FILL_KEY_CODES.includes(code);
+  }
+
+  static isEditWheelKeyCode(code) {
+    return TeamCollectPickUiSystem.ALL_EDIT_KEY_CODES.includes(code);
   }
 
   static shouldBlockInputDuringWheel(code) {
@@ -483,7 +538,7 @@ class TeamCollectPickUiSystem {
     if (!TeamCollectPickRegistry.hasNumber(teamId)) {
       TeamCollectPickUiSystem.lastPickMessage = `${CollectorTeamId.getLabel(
         teamId
-      )}尚未保存编号，请长按 ${CollectorTeamId.getTeamKeyHint(teamId)} 共 3 秒打开轮盘设置`;
+      )}尚未保存编号，请长按 ${CollectorTeamId.getFillKeyHint(teamId)} 共 3 秒设置`;
       return false;
     }
 
@@ -496,25 +551,31 @@ class TeamCollectPickUiSystem {
     const ballLabel = ballInfo.heroName || "未知球";
     TeamCollectPickUiSystem.lastPickMessage = `${CollectorTeamId.getLabel(
       teamId
-    )} 长按 3 秒已填入 #${pickNumber} · ${ballLabel}，请点击「确认选球」`;
+    )} 长按 ${CollectorTeamId.getFillKeyHint(
+      teamId
+    )} 3 秒 · 已填入 #${pickNumber} · ${ballLabel}`;
     return true;
   }
 
-  static onTeamKeyLongPressComplete(teamId, game) {
-    const hasSaved = TeamCollectPickRegistry.hasNumber(teamId);
-    const lastAction = TeamCollectPickUiSystem.lastLongPressActionByTeam[teamId];
-
-    if (!hasSaved || lastAction === "fill") {
+  static onFillKeyLongPressComplete(teamId, game) {
+    if (!TeamCollectPickRegistry.hasNumber(teamId)) {
       TeamCollectPickUiSystem.openWheel(teamId, game);
-      TeamCollectPickUiSystem.lastLongPressActionByTeam[teamId] = "wheel";
       TeamCollectPickUiSystem.lastPickMessage = `${CollectorTeamId.getLabel(
         teamId
-      )}轮盘已打开（编号 1-${TeamCollectPickUiSystem.getHeroCountLimit()}，Enter 保存并填入）`;
+      )}轮盘已打开，请输入 1-${TeamCollectPickUiSystem.getHeroCountLimit()}，Enter 确认保存`;
       return;
     }
 
     TeamCollectPickUiSystem.applySavedToInput(teamId, game);
-    TeamCollectPickUiSystem.lastLongPressActionByTeam[teamId] = "fill";
+  }
+
+  static onEditKeyLongPressComplete(teamId, game) {
+    TeamCollectPickUiSystem.openWheel(teamId, game);
+    TeamCollectPickUiSystem.lastPickMessage = `${CollectorTeamId.getLabel(
+      teamId
+    )}修改轮盘已打开（长按 ${CollectorTeamId.getEditWheelKeyHint(
+      teamId
+    )}），Enter 保存新编号`;
   }
 
   static notifyWheelOpened(game) {
@@ -639,7 +700,6 @@ class TeamCollectPickUiSystem {
     );
     TeamCollectPickUiSystem.pendingPickInputValue = String(pickNumber);
     TeamCollectPickUiSystem.closeWheel();
-    TeamCollectPickUiSystem.lastLongPressActionByTeam[teamId] = "wheel";
 
     const ballLabel = ballInfo.heroName || "未知球";
     TeamCollectPickUiSystem.lastPickMessage = `${CollectorTeamId.getLabel(
@@ -687,44 +747,87 @@ class TeamCollectPickUiSystem {
     }
   }
 
-  static tickLongPress(input, game, now) {
-    TeamCollectPickUiSystem.activeHoldTeamId = null;
-    TeamCollectPickUiSystem.activeHoldProgress = 0;
-
+  static tickFillKeyLongPress(input, game, now) {
     for (const teamId of CollectorTeamId.getAll()) {
-      if (TeamCollectPickUiSystem.isTeamKeyHeld(input, teamId)) {
-        if (!TeamCollectPickUiSystem.keyHoldStartByTeam[teamId]) {
-          TeamCollectPickUiSystem.keyHoldStartByTeam[teamId] = now;
-          TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId] = false;
+      if (TeamCollectPickUiSystem.isFillKeyHeld(input, teamId)) {
+        if (!TeamCollectPickUiSystem.keyHoldStartByFillTeam[teamId]) {
+          TeamCollectPickUiSystem.keyHoldStartByFillTeam[teamId] = now;
+          TeamCollectPickUiSystem.fillLongPressTriggeredByTeam[teamId] = false;
         }
 
         const heldMs =
-          now - TeamCollectPickUiSystem.keyHoldStartByTeam[teamId];
+          now - TeamCollectPickUiSystem.keyHoldStartByFillTeam[teamId];
         const progress = Math.min(
           1,
           heldMs / TeamCollectBallConstants.LONG_PRESS_MS
         );
         TeamCollectPickUiSystem.activeHoldTeamId = teamId;
+        TeamCollectPickUiSystem.activeHoldKind = "fill";
         TeamCollectPickUiSystem.activeHoldProgress = progress;
 
         if (
           heldMs >= TeamCollectBallConstants.LONG_PRESS_MS &&
-          !TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId]
+          !TeamCollectPickUiSystem.fillLongPressTriggeredByTeam[teamId]
         ) {
-          TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId] = true;
-          TeamCollectPickUiSystem.onTeamKeyLongPressComplete(teamId, game);
+          TeamCollectPickUiSystem.fillLongPressTriggeredByTeam[teamId] = true;
+          TeamCollectPickUiSystem.onFillKeyLongPressComplete(teamId, game);
         }
-        continue;
+        return;
       }
 
-      TeamCollectPickUiSystem.keyHoldStartByTeam[teamId] = 0;
-      TeamCollectPickUiSystem.longPressTriggeredByTeam[teamId] = false;
+      TeamCollectPickUiSystem.keyHoldStartByFillTeam[teamId] = 0;
+      TeamCollectPickUiSystem.fillLongPressTriggeredByTeam[teamId] = false;
     }
+  }
+
+  static tickEditKeyLongPress(input, game, now) {
+    for (const teamId of CollectorTeamId.getAll()) {
+      if (TeamCollectPickUiSystem.isEditKeyHeld(input, teamId)) {
+        if (!TeamCollectPickUiSystem.keyHoldStartByEditTeam[teamId]) {
+          TeamCollectPickUiSystem.keyHoldStartByEditTeam[teamId] = now;
+          TeamCollectPickUiSystem.editLongPressTriggeredByTeam[teamId] = false;
+        }
+
+        const heldMs =
+          now - TeamCollectPickUiSystem.keyHoldStartByEditTeam[teamId];
+        const progress = Math.min(
+          1,
+          heldMs / TeamCollectBallConstants.LONG_PRESS_MS
+        );
+        TeamCollectPickUiSystem.activeHoldTeamId = teamId;
+        TeamCollectPickUiSystem.activeHoldKind = "edit";
+        TeamCollectPickUiSystem.activeHoldProgress = progress;
+
+        if (
+          heldMs >= TeamCollectBallConstants.LONG_PRESS_MS &&
+          !TeamCollectPickUiSystem.editLongPressTriggeredByTeam[teamId]
+        ) {
+          TeamCollectPickUiSystem.editLongPressTriggeredByTeam[teamId] = true;
+          TeamCollectPickUiSystem.onEditKeyLongPressComplete(teamId, game);
+        }
+        return;
+      }
+
+      TeamCollectPickUiSystem.keyHoldStartByEditTeam[teamId] = 0;
+      TeamCollectPickUiSystem.editLongPressTriggeredByTeam[teamId] = false;
+    }
+  }
+
+  static tickLongPress(input, game, now) {
+    TeamCollectPickUiSystem.activeHoldTeamId = null;
+    TeamCollectPickUiSystem.activeHoldKind = null;
+    TeamCollectPickUiSystem.activeHoldProgress = 0;
+
+    TeamCollectPickUiSystem.tickFillKeyLongPress(input, game, now);
+    if (TeamCollectPickUiSystem.activeHoldTeamId) {
+      return;
+    }
+    TeamCollectPickUiSystem.tickEditKeyLongPress(input, game, now);
   }
 
   static getPickHint() {
     const heroCount = TeamCollectPickUiSystem.getHeroCountLimit();
-    return `收集保存 · 长按1-4共3秒设编号/填入 · 编号1-${heroCount} · 再点确认选球`;
+    return `收集保存 · 长按1-4设/填入 · 长按F1-F4修改 · 编号1-${heroCount}`;
   }
 
   static tickPickKeyboard(input, game, now) {
@@ -788,9 +891,9 @@ class TeamCollectPickUiSystem {
       const numberLabel = hasSaved ? `#${savedNumber}` : "空";
       const ballLabel = savedBall && savedBall.heroName ? savedBall.heroName : "未设置";
       ctx.fillText(
-        `${CollectorTeamId.getLabel(teamId)} ${numberLabel} ${ballLabel} · 长按${CollectorTeamId.getTeamKeyHint(
+        `${CollectorTeamId.getLabel(teamId)} ${numberLabel} ${ballLabel} · 长按${CollectorTeamId.getFillKeyHint(
           teamId
-        )}·3秒`,
+        )}/F${CollectorTeamId.getPickStep(teamId)}`,
         panelX + 10,
         rowY
       );
@@ -802,10 +905,14 @@ class TeamCollectPickUiSystem {
       const progress = Math.round(
         TeamCollectPickUiSystem.activeHoldProgress * 100
       );
+      const keyLabel =
+        TeamCollectPickUiSystem.activeHoldKind === "edit"
+          ? CollectorTeamId.getEditWheelKeyHint(holdTeamId)
+          : CollectorTeamId.getFillKeyHint(holdTeamId);
       ctx.fillStyle = CollectorTeamId.getGlow(holdTeamId);
       ctx.font = "bold 12px system-ui, sans-serif";
       ctx.fillText(
-        `${CollectorTeamId.getLabel(holdTeamId)}长按中 ${progress}% / 3秒`,
+        `${CollectorTeamId.getLabel(holdTeamId)}长按 ${keyLabel} ${progress}%/3秒`,
         panelX + 10,
         panelY + 86
       );
@@ -813,7 +920,7 @@ class TeamCollectPickUiSystem {
       ctx.fillStyle = "#adb5bd";
       ctx.font = "11px system-ui, sans-serif";
       ctx.fillText(
-        "长按1-4共3秒：设编号/填入输入栏 · Enter保存",
+        "长按1-4设编号/填入 · 长按F1-F4修改 · Enter保存",
         panelX + 10,
         panelY + 86
       );
