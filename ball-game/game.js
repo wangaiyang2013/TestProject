@@ -1487,10 +1487,18 @@ class GameUI {
       typeof TeamCollectPickUiSystem !== "undefined" &&
       this.heroPickMatch
     ) {
+      const pendingInput = TeamCollectPickUiSystem.consumePendingPickInputValue();
+      if (pendingInput && this.heroPickInput) {
+        this.heroPickInput.value = pendingInput;
+        this.updateHeroPickPreview();
+        if (typeof game.refreshPickTimer === "function") {
+          game.refreshPickTimer();
+        }
+      }
+
       const keyboardMessage = TeamCollectPickUiSystem.consumeLastPickMessage();
       if (keyboardMessage) {
         this.heroPickMatch.textContent = keyboardMessage;
-        this.heroPickInput.value = "";
       }
     }
   }

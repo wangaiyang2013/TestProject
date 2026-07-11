@@ -475,7 +475,6 @@ class HeroRoster {
         14,
         GangsterBallConstants.WAVE_INTERVAL_MS
       ),
-      ...TeamCollectBallTemplateFactory.createAll(),
     ];
   }
 
@@ -3654,12 +3653,9 @@ class LittleBallHeroGame {
         this,
         Date.now()
       );
-      if (TeamCollectPickUiSystem.isWheelOpen()) {
-        return;
+      if (TeamCollectPickUiSystem.isBlockingAutoPick(this.input)) {
+        this.refreshPickTimer();
       }
-    }
-    if (this.canAutoPickByTimer()) {
-      this.autoPickForCurrentStep();
     }
   }
 
@@ -3724,6 +3720,10 @@ class LittleBallHeroGame {
       };
     }
 
+    if (typeof TeamCollectPickInputParser !== "undefined") {
+      TeamCollectPickInputParser._heroCount = this.getHeroes().length;
+    }
+
     const collectInput =
       typeof TeamCollectPickInputParser !== "undefined"
         ? TeamCollectPickInputParser.tryParse(rawInput, this.pickStep)
@@ -3759,6 +3759,10 @@ class LittleBallHeroGame {
   }
 
   getPickPreviewText(rawInput) {
+    if (typeof TeamCollectPickInputParser !== "undefined") {
+      TeamCollectPickInputParser._heroCount = this.getHeroes().length;
+    }
+
     const collectInput =
       typeof TeamCollectPickInputParser !== "undefined"
         ? TeamCollectPickInputParser.tryParse(rawInput, this.pickStep)
@@ -4453,8 +4457,8 @@ class LittleBallHeroGame {
 
     this.ctx.fillStyle = remainingSec <= 3 ? "#ff6b6b" : "#ccc";
     this.ctx.font = "14px system-ui, sans-serif";
-    this.ctx.fillText(
-      `剩余 ${remainingSec} 秒 · 在下方输入栏输入角色名或编号，超时随机`,
+    this.    ctx.fillText(
+      `剩余 ${remainingSec} 秒 · 请手动选球并点击确认（不会自动开局）`,
       this.width / 2,
       this.arena.top + 56
     );
@@ -4837,7 +4841,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "黑帮事件/每5秒4打手入侵/击杀本体结束";
   }
   if (skillType === HeroSkillType.TEAM_COLLECT) {
-    return "收集保存/按1-4开轮盘/输入编号快选";
+    return "收集保存/长按1-4开轮盘/Enter填入编号";
   }
   return "技能";
 };
