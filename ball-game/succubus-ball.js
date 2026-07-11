@@ -21,6 +21,10 @@ const SuccubusBallConstants = {
   CHARM_ATTACK_INTERVAL_RATIO: 0.65,
   SEDUCE_FLASH_MS: 360,
   CHARM_FLASH_MS: 520,
+  /** 入魅后保留原轨迹的时间（毫秒） */
+  CHARM_MOMENTUM_MS: 700,
+  /** 守护魅魔时的环绕半径（不贴脸本体） */
+  GUARD_ORBIT_RADIUS: 64,
   HEART_PULSE_MS: 700,
 };
 
@@ -209,6 +213,9 @@ class SuccubusBallSkillSystem {
     target.succubusCharmOwnerPlayerId = succubus.playerId;
     target.succubusSeductionStacks = SuccubusBallConstants.CHARM_STACKS_REQUIRED;
     target.succubusCharmFlashUntil = now + SuccubusBallConstants.CHARM_FLASH_MS;
+    // 保留入魅瞬间的惯性，避免立刻掉头撞向魅魔本体
+    target.succubusCharmKeepMomentumUntil =
+      now + SuccubusBallConstants.CHARM_MOMENTUM_MS;
 
     if (typeof ElementStatusEffectSystem !== "undefined") {
       ElementStatusEffectSystem.setStatusText(target, "舔狗");
@@ -279,7 +286,44 @@ class SuccubusBallSkillSystem {
     }
   }
 
-  static updateCharmedMovement(fighter, allFighters, game, arena) {
+  static isKeepingCharmMomentum(fighter, now) {
+    return (
+      fighter &&
+      now < (fighter.succubusCharmKeepMomentumUntil || 0) &&
+      Math.hypot(fighter.vx, fighter.vy) > 0.5
+    );
+  }
+
+  static steerToward(fighter, targetX, targetY, speed) {
+    const dx = targetX - fighter.x;
+    const dy = targetY - fighter.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return false;
+    }
+    fighter.vx = (dx / dist) * speed;
+    fighter.vy = (dy / dist) * speed;
+    return true;
+  }
+
+  static getGuardOrbitPoint(master, fighter) {
+    const dx = fighter.x - master.x;
+    const dy = fighter.y - master.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.001) {
+      return {
+        x: master.x + SuccubusBallConstants.GUARD_ORBIT_RADIUS,
+        y: master.y,
+      };
+    }
+    const orbitRadius = SuccubusBallConstants.GUARD_ORBIT_RADIUS;
+    return {
+      x: master.x + (dx / dist) * orbitRadius,
+      y: master.y + (dy / dist) * orbitRadius,
+    };
+  }
+
+  static updateCharmedMovement(fighter, allFighters, game, arena, now) {
     if (!SuccubusBallSkillSystem.isCharmed(fighter) || !fighter.isAlive()) {
       return;
     }
@@ -290,35 +334,42 @@ class SuccubusBallSkillSystem {
       return;
     }
 
-    const teammateTarget =
-      SuccubusBallSkillSystem.getCharmedAttackTarget(
-        fighter,
-        allFighters,
-        game
-      );
-    const distToMaster = SuccubusBallSkillSystem.getDistance(fighter, master);
-    let target = master;
+    const speed =
+      fighter.template.moveSpeed * SuccubusBallConstants.CHARM_MOVE_SPEED_RATIO;
 
-    if (
-      teammateTarget &&
-      (distToMaster <= SuccubusBallConstants.GUARD_RADIUS ||
-        SuccubusBallSkillSystem.getDistance(fighter, teammateTarget) <
-          distToMaster)
-    ) {
-      target = teammateTarget;
-    }
-
-    const dx = target.x - fighter.x;
-    const dy = target.y - fighter.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 0.001) {
+    if (SuccubusBallSkillSystem.isKeepingCharmMomentum(fighter, now)) {
+      fighter.x += fighter.vx;
+      fighter.y += fighter.vy;
+      SuccubusBallSkillSystem.clampToArena(fighter, arena);
       return;
     }
 
-    const speed =
-      fighter.template.moveSpeed * SuccubusBallConstants.CHARM_MOVE_SPEED_RATIO;
-    fighter.vx = (dx / dist) * speed;
-    fighter.vy = (dy / dist) * speed;
+    const attackTarget = HeroBattleArenaHelper.getNearestOpponent(
+      fighter,
+      allFighters,
+      game
+    );
+
+    if (attackTarget) {
+      SuccubusBallSkillSystem.steerToward(
+        fighter,
+        attackTarget.x,
+        attackTarget.y,
+        speed
+      );
+    } else {
+      const orbitPoint = SuccubusBallSkillSystem.getGuardOrbitPoint(
+        master,
+        fighter
+      );
+      SuccubusBallSkillSystem.steerToward(
+        fighter,
+        orbitPoint.x,
+        orbitPoint.y,
+        speed * 0.55
+      );
+    }
+
     fighter.x += fighter.vx;
     fighter.y += fighter.vy;
     SuccubusBallSkillSystem.clampToArena(fighter, arena);
@@ -341,43 +392,6 @@ class SuccubusBallSkillSystem {
         fighter.isAlive() &&
         fighter.succubusCharmOwnerPlayerId === succubus.playerId
     ).length;
-  }
-
-  static getCharmedTeammateTargets(fighter, allFighters) {
-    const originalTeamId = HeroTeamRegistry.getTeamId(fighter.playerId);
-    return allFighters.filter((other) => {
-      if (!other || other === fighter || !other.isAlive()) {
-        return false;
-      }
-      if (
-        other.succubusCharmOwnerPlayerId === fighter.succubusCharmOwnerPlayerId
-      ) {
-        return false;
-      }
-      if (!originalTeamId) {
-        return other.playerId !== fighter.playerId;
-      }
-      return HeroTeamRegistry.getTeamId(other.playerId) === originalTeamId;
-    });
-  }
-
-  static getCharmedAttackTarget(fighter, allFighters, game) {
-    const targets = SuccubusBallSkillSystem.getCharmedTeammateTargets(
-      fighter,
-      allFighters
-    );
-    let nearest = null;
-    let nearestDistance = Infinity;
-
-    for (const target of targets) {
-      const distance = SuccubusBallSkillSystem.getDistance(fighter, target);
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearest = target;
-      }
-    }
-
-    return nearest;
   }
 
   static onFighterDeath(deadFighter, allFighters) {

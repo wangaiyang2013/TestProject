@@ -3039,17 +3039,6 @@ class HeroBattleArenaHelper {
   }
 
   static getNearestOpponent(fighter, allFighters, game) {
-    if (
-      typeof SuccubusBallSkillSystem !== "undefined" &&
-      SuccubusBallSkillSystem.isCharmed(fighter)
-    ) {
-      return SuccubusBallSkillSystem.getCharmedAttackTarget(
-        fighter,
-        allFighters,
-        game
-      );
-    }
-
     let opponents = HeroBattleArenaHelper.getAliveOpponents(
       fighter,
       allFighters,
@@ -3759,7 +3748,8 @@ class LittleBallHeroGame {
             fighter,
             fighters,
             this,
-            this.arena
+            this.arena,
+            now
           );
         } else if (
           typeof GangsterBallSkillSystem !== "undefined" &&
