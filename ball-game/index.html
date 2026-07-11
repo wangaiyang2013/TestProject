@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>双球对战</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+
+    <div id="coin-hud" class="coin-hud">金币：0</div>
+
+    <div id="game-session-controls" class="game-session-controls hidden">
+      <button id="game-pause-btn" type="button" class="btn-session">暂停</button>
+      <button id="game-exit-btn" type="button" class="btn-session btn-session-exit">退出</button>
+    </div>
+
+    <div id="game-pause-overlay" class="game-pause-overlay hidden">
+      <div class="game-pause-panel">
+        <h2>游戏已暂停</h2>
+        <p class="setup-hint">按 <kbd>Esc</kbd> 可继续游戏</p>
+        <div class="menu-buttons">
+          <button id="game-resume-btn" type="button" class="btn-primary">继续游戏</button>
+          <button id="game-exit-menu-btn" type="button" class="btn-secondary">退出到主菜单</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay" class="overlay visible">
+      <h1>双球对战</h1>
+      <p id="match-coin-reward" class="match-coin-reward hidden"></p>
+      <div class="rules" id="rules-versus">
+        <p><span class="p1-tag">玩家1（红）</span> 方向键移动，<kbd>Ctrl</kbd> 攻击</p>
+        <p><span class="p2-tag">玩家2（蓝）</span> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>Z</kbd> 移动，<kbd>Y</kbd> 攻击</p>
+      </div>
+      <div class="rules hidden" id="rules-four-player">
+        <p><span class="p1-tag">玩家1（红）</span> 方向键 + <kbd>Ctrl</kbd></p>
+        <p><span class="p2-tag">玩家2（蓝）</span> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>Z</kbd> + <kbd>Y</kbd></p>
+        <p><span class="p3-tag">玩家3（绿）</span> <kbd>I</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd> + <kbd>U</kbd></p>
+        <p><span class="p4-tag">玩家4（紫）</span> <kbd>T</kbd><kbd>F</kbd><kbd>G</kbd><kbd>H</kbd> + <kbd>R</kbd></p>
+        <p>四人自由对战，<strong>最后存活者</strong>获胜</p>
+      </div>
+      <div class="rules hidden" id="rules-training">
+        <p><span class="p1-tag">你（红球）</span> 方向键移动，<kbd>Ctrl</kbd> 攻击</p>
+        <p><span class="p2-tag">AI 机器人（蓝球）</span> 自动移动与攻击</p>
+      </div>
+      <div class="rules hidden" id="rules-group">
+        <p>击杀怪物获得经验，每关击败 Boss 后可<strong>抽卡</strong>强化</p>
+        <p>击败 <strong>30</strong> 个 Boss 即可通关获胜</p>
+        <p>可选 <strong>1 人</strong> 或 <strong>2 人</strong> 组队</p>
+      </div>
+      <div class="menu-buttons" id="main-menu-buttons">
+        <button id="versus-btn" type="button" class="btn-primary">双人对战</button>
+        <button id="four-player-btn" type="button" class="btn-four">四人模式</button>
+        <button id="training-btn" type="button" class="btn-secondary">训练模式</button>
+        <button id="group-battle-btn" type="button" class="btn-accent">组团战斗</button>
+        <button id="hero-mode-btn" type="button" class="btn-hero">小球英雄</button>
+        <button id="west-bulldog-btn" type="button" class="btn-west">西部斗牛球</button>
+        <button id="number-teacher-btn" type="button" class="btn-number">数字老师</button>
+        <button id="self-def-btn" type="button" class="btn-self-def">自定义模式</button>
+        <button id="shop-btn" type="button" class="btn-shop">商店</button>
+      </div>
+    </div>
+
+    <div id="shop-overlay" class="overlay shop-overlay hidden">
+      <h1>游戏商店</h1>
+      <p id="shop-coins" class="setup-hint">当前金币：0</p>
+      <p class="setup-hint">完成一局后可购买；收益为本局价值的 50% 金币</p>
+      <div class="shop-tabs">
+        <button type="button" class="shop-tab-btn active" data-shop-tab="skin">皮肤</button>
+        <button type="button" class="shop-tab-btn" data-shop-tab="accessory">配饰</button>
+        <button type="button" class="shop-tab-btn" data-shop-tab="custom_ball">自创球</button>
+      </div>
+      <div id="shop-item-list" class="shop-item-list"></div>
+      <p id="shop-message" class="shop-message"></p>
+      <button id="shop-close-btn" type="button" class="btn-text">关闭商店</button>
+      <button id="shop-back-btn" type="button" class="btn-text">返回主菜单</button>
+    </div>
+
+    <div id="self-def-setup" class="overlay hidden">
+      <h1>自定义模式</h1>
+      <div class="rules">
+        <p>玩法同<strong>小球英雄</strong>：限时选球，双球自动反弹，技能自动释放</p>
+        <p>在<strong>自创球房间</strong>中自由创建全部 8 颗球：名称、技能名想输什么就输什么，还可加装饰</p>
+      </div>
+      <div class="menu-buttons">
+        <button id="self-def-training-btn" type="button" class="btn-primary">训练场</button>
+        <button id="self-def-versus-btn" type="button" class="btn-secondary">双人模式</button>
+      </div>
+      <button id="self-def-setup-back" type="button" class="btn-text">返回主菜单</button>
+    </div>
+
+    <div id="self-def-room" class="overlay self-def-room hidden">
+      <h1>自创球房间</h1>
+      <p class="setup-hint">点击球位编辑属性，完成后进入选球对战</p>
+      <div id="self-def-slots" class="self-def-slots"></div>
+      <form id="self-def-form" class="self-def-form" onsubmit="return false;">
+        <div class="self-def-form-grid">
+          <label>名称（最多 12 字，想输什么就输什么）
+            <input id="sdf-name" type="text" maxlength="12" placeholder="如：烈焰丸" />
+          </label>
+          <label>球体颜色
+            <input id="sdf-color" type="color" />
+          </label>
+          <label>光晕颜色
+            <input id="sdf-glow" type="color" />
+          </label>
+          <label>装饰（最多 12 字，显示在球上）
+            <input id="sdf-decoration" type="text" maxlength="12" placeholder="如：★皇冠、翅膀" />
+          </label>
+          <label>生命值（550–700）
+            <input id="sdf-health" type="number" min="550" max="700" />
+          </label>
+          <label>移动速度（5–14）
+            <input id="sdf-speed" type="number" min="5" max="14" step="0.1" />
+          </label>
+          <label>质量（0.5–2.0）
+            <input id="sdf-mass" type="number" min="0.5" max="2" step="0.05" />
+          </label>
+          <label>技能类型（想输什么就输什么，字数不限）
+            <input id="sdf-skill" type="text" placeholder="如：烈焰冲击、回旋拳" />
+          </label>
+          <label>技能伤害（不超过 100）
+            <input id="sdf-damage" type="text" maxlength="6" placeholder="1–100 或 80%" />
+          </label>
+          <label>技能间隔（0.5–5 秒）
+            <input id="sdf-interval" type="number" min="0.5" max="5" step="0.1" />
+          </label>
+        </div>
+      </form>
+      <div class="menu-buttons">
+        <button id="self-def-confirm-btn" type="button" class="btn-primary">完成创球，开始选球</button>
+      </div>
+      <button id="self-def-room-back" type="button" class="btn-text">返回</button>
+    </div>
+
+    <div id="number-teacher-setup" class="overlay hidden">
+      <h1>数字老师</h1>
+      <div class="rules">
+        <p>头顶显示数字，数字<strong>自动飞出追踪</strong>最近敌人</p>
+        <p>命中伤害 = 数字大小，命中后数字 <strong>+1</strong>（无上限）</p>
+      </div>
+      <div class="menu-buttons">
+        <button id="nt-training-btn" type="button" class="btn-primary">训练场</button>
+        <button id="nt-versus-btn" type="button" class="btn-secondary">双人模式</button>
+      </div>
+      <button id="nt-setup-back" type="button" class="btn-text">返回主菜单</button>
+    </div>
+
+    <div id="hero-setup-overlay" class="overlay hidden">
+      <h1>小球英雄</h1>
+      <div class="rules" id="rules-hero">
+        <p>你<strong>只需选球</strong>（限时 8 秒，超时随机）</p>
+        <p>在下方<strong>输入栏</strong>输入角色名或编号选球，会显示<strong>对弈编号</strong></p>
+        <p>两球<strong>自动持续反弹</strong>对打，技能<strong>自动释放</strong></p>
+        <p><strong>双队团战</strong>：红蓝队 vs 绿紫队，30 回合得分制</p>
+        <p><strong>疯狂对战</strong>：玩法同双人，全场球体技能超强（寒冰狂暴仍射冰弹）</p>
+      </div>
+      <div class="rules setup-hint" id="rules-hero-simulation">
+        <p><strong>模拟试球</strong>：不是对战，而是在场地中央测试你选的球</p>
+        <p>周围固定 <strong>9 颗红色靶球</strong>，中央为试球区，可反复观察技能效果</p>
+        <p>红靶被击破后会重生；试球阵亡也会回到场中，<strong>无胜负</strong></p>
+      </div>
+      <div class="menu-buttons">
+        <button id="hero-simulation-btn" type="button" class="btn-primary">模拟试球（9红靶）</button>
+        <button id="hero-training-btn" type="button" class="btn-secondary">训练场（蓝队 AI）</button>
+        <button id="hero-versus-btn" type="button" class="btn-secondary">双人模式（红蓝轮流输入）</button>
+        <button id="hero-four-player-btn" type="button" class="btn-four">四人模式（轮流选球）</button>
+        <button id="hero-team-battle-btn" type="button" class="btn-accent">双队团战（30回合）</button>
+        <button id="hero-crazy-fight-btn" type="button" class="btn-crazy">疯狂对战（超强）</button>
+      </div>
+      <div class="rules setup-hint" id="rules-hero-team">
+        <p><strong>红蓝队</strong>（玩家1+2）对战 <strong>绿紫队</strong>（玩家3+4）</p>
+        <p>共 <strong>30</strong> 回合；每回合团灭对方队伍得 1 分</p>
+        <p>每回合结束后四人<strong>重新选球</strong>，再进入下一局战斗</p>
+        <p>30 回合后得分高者胜；领先到对手无法追平时提前结束</p>
+      </div>
+      <div class="rules setup-hint" id="rules-hero-crazy">
+        <p>玩法与<strong>双人模式</strong>相同（红蓝轮流选球）</p>
+        <p>全场球体获得<strong>超强</strong>：伤害提升、冷却缩短</p>
+        <p>例：<strong>寒冰腐烂球</strong>进入狂暴后仍会发射冰弹</p>
+      </div>
+      <button id="hero-setup-back" type="button" class="btn-text">返回主菜单</button>
+    </div>
+
+    <div id="hero-hud" class="hero-hud hidden">
+      <div id="hero-phase-text" class="hero-phase-text">选球阶段</div>
+      <div id="hero-p1-info" class="hero-info p1">红队 · —</div>
+      <div id="hero-p2-info" class="hero-info p2">蓝队 · —</div>
+      <div id="hero-p3-info" class="hero-info p3 hidden-info">绿队 · —</div>
+      <div id="hero-p4-info" class="hero-info p4 hidden-info">紫队 · —</div>
+    </div>
+
+    <div id="hero-pick-panel" class="hero-pick-panel hidden">
+      <label class="hero-pick-label" for="hero-pick-input">选择角色</label>
+      <div class="hero-pick-row">
+        <input
+          id="hero-pick-input"
+          class="hero-pick-input"
+          type="text"
+          autocomplete="off"
+          placeholder="输入角色名或编号，如：喷火球 或 1"
+        />
+        <button id="hero-pick-confirm" type="button" class="btn-primary hero-pick-confirm">
+          确认选球
+        </button>
+      </div>
+      <p id="hero-pick-match" class="hero-pick-match">输入角色名或编号，下方显示对弈编号</p>
+    </div>
+
+    <div id="group-setup-overlay" class="overlay hidden">
+      <h1>组团战斗</h1>
+      <p class="setup-hint">选择组队人数</p>
+      <div class="menu-buttons">
+        <button id="group-1p-btn" type="button" class="btn-primary">1 人闯关</button>
+        <button id="group-2p-btn" type="button" class="btn-secondary">2 人组队</button>
+      </div>
+      <button id="group-setup-back" type="button" class="btn-text">返回主菜单</button>
+    </div>
+
+    <div id="card-overlay" class="overlay hidden">
+      <h1>关卡胜利！抽一张卡</h1>
+      <p id="card-level-hint" class="setup-hint">Boss 已击败，选择增益卡牌</p>
+      <div id="card-choices" class="card-choices"></div>
+    </div>
+
+    <div id="mode-badge" class="mode-badge hidden">训练模式</div>
+
+    <div id="hud" class="hud hidden">
+      <div class="health-bar p1">
+        <span>玩家1</span>
+        <div class="bar"><div id="hp-p1" class="fill"></div></div>
+      </div>
+      <div class="health-bar p2">
+        <span id="p2-label">玩家2</span>
+        <div class="bar"><div id="hp-p2" class="fill"></div></div>
+      </div>
+      <div class="health-bar p3 hidden-bar">
+        <span id="p3-label">玩家3</span>
+        <div class="bar"><div id="hp-p3" class="fill"></div></div>
+      </div>
+      <div class="health-bar p4 hidden-bar">
+        <span id="p4-label">玩家4</span>
+        <div class="bar"><div id="hp-p4" class="fill"></div></div>
+      </div>
+    </div>
+
+    <div id="number-teacher-hud" class="number-teacher-hud hidden">
+      <span id="nt-p1-num" class="nt-num p1">红队 数字 1</span>
+      <span id="nt-p2-num" class="nt-num p2">蓝队 数字 1</span>
+      <span id="nt-hit-msg" class="nt-hit-msg"></span>
+    </div>
+
+    <div id="west-hud" class="west-hud hidden">
+      <span id="west-hud-title">西部斗牛球</span>
+      <span id="west-hit-msg" class="west-hit-msg"></span>
+    </div>
+
+    <div id="group-hud" class="group-hud hidden">
+      <div class="group-stat">
+        <span id="gb-level">第 1 关</span>
+        <span id="gb-boss">Boss 0/30</span>
+      </div>
+      <div class="group-xp-row">
+        <div class="xp-block p1">
+          <span id="gb-p1-label">玩家1</span>
+          <span id="gb-p1-xp">Lv.1 · XP 0</span>
+        </div>
+        <div class="xp-block p2 hidden" id="gb-p2-block">
+          <span id="gb-p2-label">玩家2</span>
+          <span id="gb-p2-xp">Lv.1 · XP 0</span>
+        </div>
+      </div>
+      <div id="gb-phase" class="gb-phase">清剿怪物中...</div>
+    </div>
+  </div>
+  <script src="game-pause-controls.js"></script>
+  <script src="game.js"></script>
+  <script src="group-battle.js"></script>
+  <script src="hero-team-battle.js"></script>
+  <script src="tracking-ball.js"></script>
+  <script src="cyclone-mecha-ball.js"></script>
+  <script src="medical-ball.js"></script>
+  <script src="faction-ball.js"></script>
+  <script src="weapon-ball.js"></script>
+  <script src="white-jade-ball.js"></script>
+  <script src="giant-teeth-ball.js"></script>
+  <script src="show-off-ball.js"></script>
+  <script src="succubus-ball.js"></script>
+  <script src="gangster-ball.js"></script>
+  <script src="team-collect-ball.js"></script>
+  <script src="hero-simulation-mode.js"></script>
+  <script src="ball-touch-bonus.js"></script>
+  <script src="crazy-fight.js"></script>
+  <script src="little-ball-hero.js"></script>
+  <script src="element-burst.js"></script>
+  <script src="magnet-ball.js"></script>
+  <script src="defense-ball.js"></script>
+  <script src="sword-blade-ball.js"></script>
+  <script src="ice-rot-ball.js"></script>
+  <script src="weapon-box.js"></script>
+  <script src="shop-system.js"></script>
+  <script src="west-bulldog.js"></script>
+  <script src="number-teacher.js"></script>
+  <script src="self-definition-mode.js"></script>
+</body>
+</html>
