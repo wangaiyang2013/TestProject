@@ -1162,15 +1162,15 @@ class HeroPickPreviewRenderer {
     }
 
     if (hero.skillType === HeroSkillType.TEAM_COLLECT) {
+      const savedNumber =
+        typeof TeamCollectPickRegistry !== "undefined"
+          ? TeamCollectPickRegistry.getNumber(hero.collectorTeamId)
+          : hero.collectSavedNumber || 0;
       ctx.fillStyle = "#fff";
       ctx.font = `bold ${Math.max(10, radius * 0.45)}px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(
-        CollectorTeamId.getShortLabel(hero.collectorTeamId),
-        cx,
-        cy
-      );
+      ctx.fillText(String(savedNumber), cx, cy);
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       return;
@@ -3252,7 +3252,11 @@ class LittleBallHeroGame {
 
   getHeroes() {
     const heroes = this.customRoster || HeroRoster.getAll();
-    return HeroRoster.filterHeroesForSubMode(heroes, this.subMode);
+    const filtered = HeroRoster.filterHeroesForSubMode(heroes, this.subMode);
+    if (typeof TeamCollectPickRegistry !== "undefined") {
+      TeamCollectPickRegistry.syncCollectTemplateLabels(filtered);
+    }
+    return filtered;
   }
 
   getHeroById(id) {
@@ -3645,6 +3649,16 @@ class LittleBallHeroGame {
   }
 
   updatePickPhase() {
+    if (
+      typeof TeamCollectPickUiSystem !== "undefined" &&
+      this.input
+    ) {
+      TeamCollectPickUiSystem.tickPickKeyboard(
+        this.input,
+        this,
+        Date.now()
+      );
+    }
     if (this.canAutoPickByTimer()) {
       this.autoPickForCurrentStep();
     }
@@ -3678,6 +3692,11 @@ class LittleBallHeroGame {
       context.blockedByTeam = this.getTeamLabelForStep(1);
     }
 
+    if (typeof TeamCollectPickUiSystem !== "undefined") {
+      context.collectHint = TeamCollectPickUiSystem.getPickHint();
+      context.emptyHint = `${context.emptyHint}；${context.collectHint}`;
+    }
+
     return context;
   }
 
@@ -3706,6 +3725,17 @@ class LittleBallHeroGame {
       };
     }
 
+    const collectInput =
+      typeof TeamCollectPickInputParser !== "undefined"
+        ? TeamCollectPickInputParser.tryParse(rawInput, this.pickStep)
+        : null;
+    if (collectInput && collectInput.handled) {
+      return {
+        ok: collectInput.ok,
+        message: collectInput.message,
+      };
+    }
+
     const resolved = HeroPickInputResolver.resolve(
       this.getHeroes(),
       this.getAvailableHeroes(),
@@ -3730,6 +3760,13 @@ class LittleBallHeroGame {
   }
 
   getPickPreviewText(rawInput) {
+    const collectInput =
+      typeof TeamCollectPickInputParser !== "undefined"
+        ? TeamCollectPickInputParser.tryParse(rawInput, this.pickStep)
+        : null;
+    if (collectInput && collectInput.handled) {
+      return collectInput.message;
+    }
     return HeroPickInputResolver.preview(
       this.getHeroes(),
       this.getAvailableHeroes(),
@@ -4455,6 +4492,12 @@ class LittleBallHeroGame {
         this.ctx.fillText("已选", slot.cx, slot.cy + slot.ballRadius + 48);
       }
     });
+
+    if (typeof TeamCollectPickUiSystem !== "undefined") {
+      TeamCollectPickUiSystem.drawPickOverlay(this.ctx, this, this.arena);
+      TeamCollectPickUiSystem.drawActiveNumberPopup(this.ctx, this, this.arena);
+    }
+
     this.ctx.textAlign = "left";
   }
 
@@ -4779,7 +4822,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "黑帮事件/每5秒4打手入侵/击杀本体结束";
   }
   if (skillType === HeroSkillType.TEAM_COLLECT) {
-    return "收集保存/每秒+1/伤害+1/外围数字键查看";
+    return "收集保存/设收藏数/选球按1-4快选/战斗按1-4查看";
   }
   return "技能";
 };

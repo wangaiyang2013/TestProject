@@ -1483,6 +1483,16 @@ class GameUI {
     }
 
     this.showHeroPickPanel(snap, game);
+    if (
+      typeof TeamCollectPickUiSystem !== "undefined" &&
+      this.heroPickMatch
+    ) {
+      const keyboardMessage = TeamCollectPickUiSystem.consumeLastPickMessage();
+      if (keyboardMessage) {
+        this.heroPickMatch.textContent = keyboardMessage;
+        this.heroPickInput.value = "";
+      }
+    }
   }
 
   bindSelfDefinitionGame() {
