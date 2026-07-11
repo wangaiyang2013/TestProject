@@ -1397,25 +1397,15 @@ class GameUI {
           return;
         }
 
-        if (TeamCollectPickUiSystem.isWheelHotkeyCode(code)) {
-          event.preventDefault();
-          if (event.repeat) {
-            return;
-          }
-          return;
-        }
-
-        if (
-          TeamCollectPickUiSystem.isQuickFillKeyCode(code) &&
-          !event.repeat
-        ) {
+        if (TeamCollectPickUiSystem.isTeamPickKeyCode(code)) {
           const pickInput = document.getElementById("hero-pick-input");
           const inputFocused =
             pickInput && document.activeElement === pickInput;
-          if (inputFocused) {
+          if (event.repeat) {
+            event.preventDefault();
             return;
           }
-          if (TeamCollectPickUiSystem.tryQuickFillFromCode(code, game)) {
+          if (!inputFocused) {
             event.preventDefault();
           }
         }

@@ -4852,7 +4852,7 @@ HeroAutoSkillSystem.getSkillLabel = function getSkillLabel(skillType) {
     return "黑帮事件/每5秒4打手入侵/击杀本体结束";
   }
   if (skillType === HeroSkillType.TEAM_COLLECT) {
-    return "收集保存/长按F1-F4设编号/短按1-4填入";
+    return "收集保存/长按1-4共3秒/设编号或填入";
   }
   return "技能";
 };
