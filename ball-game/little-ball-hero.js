@@ -3735,6 +3735,8 @@ class LittleBallHeroGame {
       return;
     }
 
+    const now = Date.now();
+
     for (const fighter of fighters) {
       if (!fighter.isAlive()) {
         continue;
@@ -3787,7 +3789,6 @@ class LittleBallHeroGame {
       SuccubusBallSkillSystem.tickCharmMaintenance(fighters);
     }
 
-    const now = Date.now();
     for (const fighter of fighters) {
       if (typeof BallTouchBonusSystem !== "undefined") {
         BallTouchBonusSystem.updateTouchState(fighter, fighters, this);
