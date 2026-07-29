@@ -296,6 +296,10 @@ class RightSculptureShooterPlant extends Plant {
     this.shootTimerMs = 0;
   }
 
+  blocksEnemy() {
+    return false;
+  }
+
   update(context) {
     if (!this.isAlive()) {
       return;
@@ -337,6 +341,10 @@ class SmallKitchenPlant extends Plant {
   constructor(road, column) {
     super("smallKitchen", road, column);
     this.timerMs = 0;
+  }
+
+  blocksEnemy() {
+    return false;
   }
 
   update(context) {
@@ -396,6 +404,10 @@ class BigNuclearBombPlant extends Plant {
     super("bigNuclearBomb", road, column);
     this.armTimerMs = 0;
     this.armed = false;
+  }
+
+  blocksEnemy() {
+    return false;
   }
 
   update(context) {
@@ -1317,7 +1329,10 @@ class TowerDefenseGame {
 
   hasEnemyOnRight(road, column) {
     return this.enemies.some(
-      (enemy) => enemy.isAlive() && enemy.road === road && enemy.columnPosition > column + 0.2
+      (enemy) =>
+        enemy.isAlive() &&
+        enemy.road === road &&
+        enemy.columnPosition > column - 0.35
     );
   }
 
@@ -1339,7 +1354,7 @@ class TowerDefenseGame {
   }
 
   getBlockingPlant(road, columnPosition) {
-    const column = Math.floor(columnPosition + 0.2);
+    const column = Math.floor(columnPosition + 0.35);
     const plant = this.grid.getPlant(road, column);
     if (plant !== null && plant.blocksEnemy()) {
       return plant;
@@ -1486,7 +1501,7 @@ class TowerDefenseGame {
         if (enemy.road !== projectile.road) {
           return;
         }
-        if (Math.abs(enemy.columnPosition - projectile.columnPosition) < 0.35) {
+        if (Math.abs(enemy.columnPosition - projectile.columnPosition) < 0.45) {
           enemy.takeDamage(projectile.damage);
           if (projectile.slowDurationMs > 0) {
             enemy.applySlow(projectile.slowDurationMs);
