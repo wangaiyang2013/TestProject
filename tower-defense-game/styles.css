@@ -98,27 +98,27 @@ body {
   border: 2px solid rgba(255, 255, 255, 0.5);
 }
 
-.snake-sculpture-icon {
+.snake-head-icon {
   background: radial-gradient(circle at 35% 35%, #2a9d8f, #1b4332);
 }
 
-.snake-sunflower-icon {
+.small-kitchen-icon {
   background: radial-gradient(circle at 35% 35%, #ffe066, #e9c46a);
 }
 
-.snake-barrier-icon {
-  background: radial-gradient(circle at 35% 35%, #d4a373, #bc6c25);
+.big-iron-plate-icon {
+  background: radial-gradient(circle at 35% 35%, #adb5bd, #6c757d);
 }
 
-.snake-stake-icon {
-  background: radial-gradient(circle at 35% 35%, #a68a64, #8b5e34);
+.big-nuclear-bomb-icon {
+  background: radial-gradient(circle at 35% 35%, #ff006e, #212529);
 }
 
-.snake-slow-sculpture-icon {
+.big-ice-horn-icon {
   background: radial-gradient(circle at 35% 35%, #74c0fc, #457b9d);
 }
 
-.snake-recharge-sculpture-icon {
+.battle-engine-icon {
   background: radial-gradient(circle at 35% 35%, #a7c957, #606c38);
 }
 

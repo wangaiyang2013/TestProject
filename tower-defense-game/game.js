@@ -28,55 +28,56 @@ const GameConstants = {
   CART_WHEEL: "#1d3557",
   ENEMY_COLOR: "#6a4c93",
   ENEMY_EYE: "#fffcf2",
-  SNAKE_SUN_INTERVAL_MS: 15000,
-  SNAKE_SUN_VALUE: 50,
-  SNAKE_SCULPTURE_INTERVAL_MS: 1500,
-  SNAKE_SCULPTURE_DAMAGE: 20,
-  SNAKE_SLOW_DURATION_MS: 4000,
-  SNAKE_SLOW_SPEED_FACTOR: 0.45,
-  SNAKE_RECHARGE_MS: 20000,
-  SNAKE_BARRIER_HP: 350,
-  SNAKE_STAKE_HP: 500,
+  SUN_PRODUCE_INTERVAL_MS: 15000,
+  SUN_PRODUCE_VALUE: 50,
+  SCULPTURE_SHOOT_INTERVAL_MS: 1500,
+  SCULPTURE_DAMAGE: 20,
+  SLOW_DURATION_MS: 4000,
+  SLOW_SPEED_FACTOR: 0.45,
+  BATTLE_ENGINE_RECOVER_MS: 20000,
+  IRON_PLATE_HP: 4000,
+  EXPLOSION_RADIUS: 1,
+  EXPLOSION_FLASH_MS: 500,
 };
 
 const PlantCatalog = {
-  snakeSculpture: {
-    name: "蛇形雕塑",
+  snakeHeadSculptor: {
+    name: "蛇形雕首",
     cost: 100,
     maxHp: 100,
     color: "#2a9d8f",
     leafColor: "#1b4332",
   },
-  snakeSunflower: {
-    name: "蛇阳花",
+  smallKitchen: {
+    name: "小厨局",
     cost: 50,
     maxHp: 80,
     color: "#e9c46a",
     leafColor: "#2d6a4f",
   },
-  snakeBarrier: {
-    name: "蛇障",
+  bigIronPlate: {
+    name: "大铁板",
     cost: 50,
-    maxHp: GameConstants.SNAKE_BARRIER_HP,
-    color: "#bc6c25",
-    leafColor: "#6c3d0f",
+    maxHp: GameConstants.IRON_PLATE_HP,
+    color: "#6c757d",
+    leafColor: "#495057",
   },
-  snakeStake: {
-    name: "蛇坚桩",
-    cost: 50,
-    maxHp: GameConstants.SNAKE_STAKE_HP,
-    color: "#8b5e34",
-    leafColor: "#3d2b1f",
+  bigNuclearBomb: {
+    name: "大核弹",
+    cost: 150,
+    maxHp: 100,
+    color: "#212529",
+    leafColor: "#343a40",
   },
-  snakeSlowSculpture: {
-    name: "缓蛇雕塑",
-    cost: 100,
+  bigIceHorn: {
+    name: "大汉角",
+    cost: 175,
     maxHp: 100,
     color: "#457b9d",
     leafColor: "#1d3557",
   },
-  snakeRechargeSculpture: {
-    name: "蓄蛇雕塑",
+  battleEngine: {
+    name: "战斗引擎",
     cost: 150,
     maxHp: 100,
     color: "#606c38",
@@ -191,6 +192,10 @@ class Plant {
     // 子类实现
   }
 
+  blocksEnemy() {
+    return this.isAlive();
+  }
+
   draw(ctx, cellX, cellY, cellSize) {
     const centerX = cellX + cellSize * 0.5;
     const centerY = cellY + cellSize * 0.5;
@@ -206,7 +211,7 @@ class Plant {
     ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
     ctx.fill();
 
-    if (this.maxHp >= GameConstants.SNAKE_BARRIER_HP) {
+    if (this.maxHp >= GameConstants.IRON_PLATE_HP) {
       const hpRatio = this.hp / this.maxHp;
       ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
       ctx.fillRect(cellX + 4, cellY + 4, cellSize - 8, 5);
@@ -217,13 +222,11 @@ class Plant {
 }
 
 /**
- * 左向蛇形雕塑射手基类：种植后自动向左侧敌人发射蛇形雕塑
+ * 蛇形雕首射手基类：右侧有敌人时，向右侧发射蛇形雕首
  */
-class LeftSnakeSculptureShooter extends Plant {
-  constructor(typeKey, road, column, damage, intervalMs, slowDurationMs) {
+class RightSculptureShooterPlant extends Plant {
+  constructor(typeKey, road, column, slowDurationMs) {
     super(typeKey, road, column);
-    this.damage = damage;
-    this.intervalMs = intervalMs;
     this.slowDurationMs = slowDurationMs;
     this.shootTimerMs = 0;
   }
@@ -236,10 +239,10 @@ class LeftSnakeSculptureShooter extends Plant {
       return;
     }
     this.shootTimerMs += context.deltaMs;
-    if (this.shootTimerMs >= this.intervalMs) {
+    if (this.shootTimerMs >= GameConstants.SCULPTURE_SHOOT_INTERVAL_MS) {
       this.shootTimerMs = 0;
-      context.spawnSnakeSculpture(this.road, this.column, {
-        damage: this.damage,
+      context.spawnSnakeHeadSculpture(this.road, this.column, {
+        damage: GameConstants.SCULPTURE_DAMAGE,
         slowDurationMs: this.slowDurationMs,
       });
     }
@@ -251,34 +254,23 @@ class LeftSnakeSculptureShooter extends Plant {
     const centerY = cellY + cellSize * 0.5;
     ctx.fillStyle = "#ffd166";
     ctx.beginPath();
-    ctx.arc(centerX - cellSize * 0.18, centerY, cellSize * 0.08, 0, Math.PI * 2);
+    ctx.arc(centerX + cellSize * 0.18, centerY, cellSize * 0.08, 0, Math.PI * 2);
     ctx.fill();
-    SnakeSculptureProjectile.drawMini(ctx, centerX - cellSize * 0.28, centerY, cellSize * 0.14);
+    SnakeHeadProjectile.drawMini(ctx, centerX + cellSize * 0.28, centerY, cellSize * 0.14, ShootDirection.RIGHT);
   }
 }
 
-/**
- * 蛇形雕塑：100 阳光，自动向左侧敌人发射蛇形雕塑，20 点伤害，无特殊效果
- */
-class SnakeSculpturePlant extends LeftSnakeSculptureShooter {
+/** 1. 蛇形雕首：100 阳光，向右侧敌人发射，20 伤害，无特殊效果 */
+class SnakeHeadSculptorPlant extends RightSculptureShooterPlant {
   constructor(road, column) {
-    super(
-      "snakeSculpture",
-      road,
-      column,
-      GameConstants.SNAKE_SCULPTURE_DAMAGE,
-      GameConstants.SNAKE_SCULPTURE_INTERVAL_MS,
-      0
-    );
+    super("snakeHeadSculptor", road, column, 0);
   }
 }
 
-/**
- * 蛇阳花：50 阳光，每 15 秒产生 50 阳光
- */
-class SnakeSunflowerPlant extends Plant {
+/** 2. 小厨局：50 阳光，每 15 秒产生 50 阳光 */
+class SmallKitchenPlant extends Plant {
   constructor(road, column) {
-    super("snakeSunflower", road, column);
+    super("smallKitchen", road, column);
     this.timerMs = 0;
   }
 
@@ -287,11 +279,10 @@ class SnakeSunflowerPlant extends Plant {
       return;
     }
     this.timerMs += context.deltaMs;
-    if (this.timerMs >= GameConstants.SNAKE_SUN_INTERVAL_MS) {
+    if (this.timerMs >= GameConstants.SUN_PRODUCE_INTERVAL_MS) {
       this.timerMs = 0;
-      context.addSun(GameConstants.SNAKE_SUN_VALUE);
+      context.addSun(GameConstants.SUN_PRODUCE_VALUE);
       context.spawnSunVisual(this.road, this.column);
-      console.info("[SnakeSunflower] 产生 " + GameConstants.SNAKE_SUN_VALUE + " 阳光");
     }
   }
 
@@ -315,62 +306,74 @@ class SnakeSunflowerPlant extends Plant {
   }
 }
 
-/**
- * 蛇障：50 阳光，原地驻守，阻挡敌人
- */
-class SnakeBarrierPlant extends Plant {
+/** 3. 大铁板：50 阳光，原地驻守阻挡，4000 生命 */
+class BigIronPlatePlant extends Plant {
   constructor(road, column) {
-    super("snakeBarrier", road, column);
+    super("bigIronPlate", road, column);
   }
 
   update() {
-    // 原地驻守，无主动行为
+    // 原地驻守
   }
 
   draw(ctx, cellX, cellY, cellSize) {
     super.draw(ctx, cellX, cellY, cellSize);
     const centerX = cellX + cellSize * 0.5;
     const centerY = cellY + cellSize * 0.5;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(centerX - cellSize * 0.22, centerY - cellSize * 0.22, cellSize * 0.44, cellSize * 0.44);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.fillRect(centerX - cellSize * 0.28, centerY - cellSize * 0.28, cellSize * 0.56, cellSize * 0.56);
   }
 }
 
-/**
- * 蛇坚桩：50 阳光，原地驻守，更高血量阻挡
- */
-class SnakeStakePlant extends Plant {
+/** 4. 大核弹：150 阳光，3x3 范围爆炸，秒杀范围内敌人 */
+class BigNuclearBombPlant extends Plant {
   constructor(road, column) {
-    super("snakeStake", road, column);
+    super("bigNuclearBomb", road, column);
+    this.armTimerMs = 0;
+    this.armed = false;
   }
 
-  update() {
-    // 原地驻守，无主动行为
-  }
-
-  draw(ctx, cellX, cellY, cellSize) {
-    super.draw(ctx, cellX, cellY, cellSize);
-    const centerX = cellX + cellSize * 0.5;
-    const centerY = cellY + cellSize * 0.5;
-    ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
-    ctx.fillRect(centerX - cellSize * 0.26, centerY - cellSize * 0.26, cellSize * 0.52, cellSize * 0.52);
-  }
-}
-
-/**
- * 缓蛇雕塑：100 阳光，机制同蛇形雕塑，额外附带减速
- */
-class SnakeSlowSculpturePlant extends LeftSnakeSculptureShooter {
-  constructor(road, column) {
-    super(
-      "snakeSlowSculpture",
-      road,
-      column,
-      GameConstants.SNAKE_SCULPTURE_DAMAGE,
-      GameConstants.SNAKE_SCULPTURE_INTERVAL_MS,
-      GameConstants.SNAKE_SLOW_DURATION_MS
+  update(context) {
+    if (!this.isAlive()) {
+      return;
+    }
+    if (!this.armed) {
+      this.armTimerMs += context.deltaMs;
+      if (this.armTimerMs >= 1000) {
+        this.armed = true;
+      }
+      return;
+    }
+    const enemiesInRange = context.getEnemiesInArea(
+      this.road,
+      this.column,
+      GameConstants.EXPLOSION_RADIUS
     );
+    if (enemiesInRange.length === 0) {
+      return;
+    }
+    context.killEnemiesInstant(enemiesInRange);
+    context.spawnExplosionEffect(this.road, this.column);
+    this.alive = false;
+    context.removePlantAt(this.road, this.column);
+    console.info("[BigNuclearBomb] 3x3 爆炸，秒杀范围内敌人");
+  }
+
+  draw(ctx, cellX, cellY, cellSize) {
+    super.draw(ctx, cellX, cellY, cellSize);
+    const centerX = cellX + cellSize * 0.5;
+    const centerY = cellY + cellSize * 0.5;
+    ctx.fillStyle = this.armed ? "#ff006e" : "#495057";
+    ctx.beginPath();
+    ctx.arc(centerX, centerY - cellSize * 0.05, cellSize * 0.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/** 5. 大汉角：175 阳光，机制同蛇形雕首，命中额外减速 */
+class BigIceHornPlant extends RightSculptureShooterPlant {
+  constructor(road, column) {
+    super("bigIceHorn", road, column, GameConstants.SLOW_DURATION_MS);
   }
 
   draw(ctx, cellX, cellY, cellSize) {
@@ -379,86 +382,102 @@ class SnakeSlowSculpturePlant extends LeftSnakeSculptureShooter {
     const centerY = cellY + cellSize * 0.5;
     ctx.fillStyle = "#a8dadc";
     ctx.beginPath();
-    ctx.arc(centerX, centerY - cellSize * 0.2, cellSize * 0.06, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY - cellSize * 0.22, cellSize * 0.07, 0, Math.PI * 2);
     ctx.fill();
   }
 }
 
-/**
- * 蓄蛇雕塑：150 阳光，每次只能发射一枚蛇形雕塑，耗尽后 20 秒恢复
- */
-class SnakeRechargeSculpturePlant extends Plant {
+/** 6. 战斗引擎：150 阳光，秒杀前方一格敌人，自身爆碎，20 秒后恢复 */
+class BattleEnginePlant extends Plant {
   constructor(road, column) {
-    super("snakeRechargeSculpture", road, column);
-    this.exhausted = false;
-    this.rechargeTimerMs = 0;
+    super("battleEngine", road, column);
+    this.shattered = false;
+    this.recoverTimerMs = 0;
+  }
+
+  blocksEnemy() {
+    return this.isAlive() && !this.shattered;
   }
 
   update(context) {
-    if (!this.isAlive()) {
+    if (!this.alive) {
       return;
     }
-    if (this.exhausted) {
-      this.rechargeTimerMs += context.deltaMs;
-      if (this.rechargeTimerMs >= GameConstants.SNAKE_RECHARGE_MS) {
-        this.exhausted = false;
-        this.rechargeTimerMs = 0;
-        console.info("[SnakeRechargeSculpture] 蓄力完成，可再次发射");
+    if (this.shattered) {
+      this.recoverTimerMs += context.deltaMs;
+      if (this.recoverTimerMs >= GameConstants.BATTLE_ENGINE_RECOVER_MS) {
+        this.shattered = false;
+        this.recoverTimerMs = 0;
+        console.info("[BattleEngine] 恢复完成，可再次使用");
       }
       return;
     }
-    if (!context.hasEnemyOnRight(this.road, this.column)) {
+    const frontColumn = this.column + 1;
+    if (frontColumn >= GameConstants.COLUMN_COUNT) {
       return;
     }
-    context.spawnSnakeSculpture(this.road, this.column, {
-      damage: GameConstants.SNAKE_SCULPTURE_DAMAGE,
-      slowDurationMs: 0,
-    });
-    this.exhausted = true;
-    this.rechargeTimerMs = 0;
-    console.info("[SnakeRechargeSculpture] 发射蛇形雕塑，进入 20 秒恢复");
+    const enemy = context.getEnemyAtCell(this.road, frontColumn);
+    if (enemy === null) {
+      return;
+    }
+    context.killEnemiesInstant([enemy]);
+    this.shattered = true;
+    this.recoverTimerMs = 0;
+    console.info("[BattleEngine] 秒杀前方一格敌人，自身爆碎");
   }
 
   draw(ctx, cellX, cellY, cellSize) {
-    super.draw(ctx, cellX, cellY, cellSize);
-    if (this.exhausted) {
-      const ratio = this.rechargeTimerMs / GameConstants.SNAKE_RECHARGE_MS;
+    if (this.shattered) {
+      const ratio = this.recoverTimerMs / GameConstants.BATTLE_ENGINE_RECOVER_MS;
       ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
-      ctx.fillRect(cellX + 4, cellY + cellSize - 10, cellSize - 8, 4);
+      ctx.fillRect(cellX + 6, cellY + cellSize * 0.5 - 8, cellSize - 12, 16);
       ctx.fillStyle = "#ffd166";
-      ctx.fillRect(cellX + 4, cellY + cellSize - 10, (cellSize - 8) * ratio, 4);
+      ctx.fillRect(cellX + 6, cellY + cellSize * 0.5 - 8, (cellSize - 12) * ratio, 16);
+      ctx.fillStyle = "rgba(96, 108, 56, 0.45)";
+      ctx.fillRect(cellX + 4, cellY + 4, cellSize - 8, cellSize - 8);
+      ctx.fillStyle = "#adb5bd";
+      ctx.font = "11px sans-serif";
+      ctx.fillText("恢复中", cellX + cellSize * 0.22, cellY + cellSize * 0.58);
+      return;
     }
+    super.draw(ctx, cellX, cellY, cellSize);
+    const centerX = cellX + cellSize * 0.5;
+    const centerY = cellY + cellSize * 0.5;
+    ctx.fillStyle = "#ffd166";
+    ctx.fillRect(centerX + cellSize * 0.05, centerY - cellSize * 0.05, cellSize * 0.2, cellSize * 0.1);
   }
 }
 
 /**
- * 蛇形雕塑弹：向左飞行，命中造成伤害，可选减速
+ * 蛇形雕首弹：向右侧飞行
  */
-class SnakeSculptureProjectile {
-  constructor(road, columnPosition, damage, slowDurationMs) {
+class SnakeHeadProjectile {
+  constructor(road, columnPosition, damage, slowDurationMs, direction) {
     this.road = road;
     this.columnPosition = columnPosition;
     this.damage = damage;
     this.slowDurationMs = slowDurationMs;
+    this.direction = direction;
     this.alive = true;
   }
 
   update(deltaMs, cellWidth) {
     const moveStep = (GameConstants.PROJECTILE_SPEED * deltaMs) / cellWidth;
-    this.columnPosition += moveStep * ShootDirection.LEFT;
-    if (this.columnPosition <= 0) {
+    this.columnPosition += moveStep * this.direction;
+    if (this.direction === ShootDirection.RIGHT && this.columnPosition >= GameConstants.COLUMN_COUNT) {
       this.alive = false;
     }
   }
 
-  static drawMini(ctx, x, y, size) {
+  static drawMini(ctx, x, y, size, direction) {
+    const headOffset = direction === ShootDirection.RIGHT ? size * 0.7 : -size * 0.7;
     ctx.fillStyle = "#2a9d8f";
     ctx.beginPath();
     ctx.ellipse(x, y, size * 0.9, size * 0.45, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = "#ffd166";
     ctx.beginPath();
-    ctx.arc(x - size * 0.7, y - size * 0.15, size * 0.25, 0, Math.PI * 2);
+    ctx.arc(x + headOffset, y - size * 0.15, size * 0.25, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -466,13 +485,44 @@ class SnakeSculptureProjectile {
     const x = layout.columnToPixel(this.columnPosition);
     const y = layout.roadCenterY(this.road);
     const size = layout.cellSize * 0.16;
-    SnakeSculptureProjectile.drawMini(ctx, x, y, size);
+    SnakeHeadProjectile.drawMini(ctx, x, y, size, this.direction);
     if (this.slowDurationMs > 0) {
       ctx.fillStyle = "rgba(168, 218, 220, 0.5)";
       ctx.beginPath();
-      ctx.arc(x, y, size * 0.8, 0, Math.PI * 2);
+      ctx.arc(x, y, size * 0.9, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+}
+
+/**
+ * 爆炸特效
+ */
+class ExplosionEffect {
+  constructor(road, column, layout) {
+    this.road = road;
+    this.column = column;
+    this.layout = layout;
+    this.timerMs = 0;
+    this.alive = true;
+  }
+
+  update(deltaMs) {
+    this.timerMs += deltaMs;
+    if (this.timerMs >= GameConstants.EXPLOSION_FLASH_MS) {
+      this.alive = false;
+    }
+  }
+
+  draw(ctx, layout) {
+    const radius = layout.cellSize * (GameConstants.EXPLOSION_RADIUS + 0.5);
+    const x = layout.columnToPixel(this.column + 0.5);
+    const y = layout.roadCenterY(this.road);
+    const alpha = 1 - this.timerMs / GameConstants.EXPLOSION_FLASH_MS;
+    ctx.fillStyle = "rgba(255, 100, 0, " + (alpha * 0.55) + ")";
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
@@ -502,7 +552,7 @@ class LittleMonster {
 
   getMoveSpeed(context) {
     if (this.slowTimerMs > 0) {
-      return GameConstants.ENEMY_SPEED * GameConstants.SNAKE_SLOW_SPEED_FACTOR;
+      return GameConstants.ENEMY_SPEED * GameConstants.SLOW_SPEED_FACTOR;
     }
     return GameConstants.ENEMY_SPEED;
   }
@@ -535,7 +585,7 @@ class LittleMonster {
     }
 
     const plant = context.getBlockingPlant(this.road, this.columnPosition);
-    if (plant !== null && plant.isAlive()) {
+    if (plant !== null) {
       this.eatingPlant = plant;
       this.eatTimerMs += context.deltaMs;
       if (this.eatTimerMs >= this.eatIntervalMs) {
@@ -644,7 +694,7 @@ class SunVisual {
     this.y = layout.roadCenterY(road);
     this.targetY = this.y - layout.cellSize * 0.8;
     this.alive = true;
-    this.value = GameConstants.SNAKE_SUN_VALUE;
+    this.value = GameConstants.SUN_PRODUCE_VALUE;
     this.radius = layout.cellSize * 0.18;
   }
 
@@ -778,23 +828,23 @@ class FieldLayout {
  */
 class PlantFactory {
   static create(typeKey, road, column) {
-    if (typeKey === "snakeSculpture") {
-      return new SnakeSculpturePlant(road, column);
+    if (typeKey === "snakeHeadSculptor") {
+      return new SnakeHeadSculptorPlant(road, column);
     }
-    if (typeKey === "snakeSunflower") {
-      return new SnakeSunflowerPlant(road, column);
+    if (typeKey === "smallKitchen") {
+      return new SmallKitchenPlant(road, column);
     }
-    if (typeKey === "snakeBarrier") {
-      return new SnakeBarrierPlant(road, column);
+    if (typeKey === "bigIronPlate") {
+      return new BigIronPlatePlant(road, column);
     }
-    if (typeKey === "snakeStake") {
-      return new SnakeStakePlant(road, column);
+    if (typeKey === "bigNuclearBomb") {
+      return new BigNuclearBombPlant(road, column);
     }
-    if (typeKey === "snakeSlowSculpture") {
-      return new SnakeSlowSculpturePlant(road, column);
+    if (typeKey === "bigIceHorn") {
+      return new BigIceHornPlant(road, column);
     }
-    if (typeKey === "snakeRechargeSculpture") {
-      return new SnakeRechargeSculpturePlant(road, column);
+    if (typeKey === "battleEngine") {
+      return new BattleEnginePlant(road, column);
     }
     return null;
   }
@@ -811,6 +861,7 @@ class TowerDefenseGame {
     this.grid = new FieldGrid(GameConstants.ROAD_COUNT, GameConstants.COLUMN_COUNT);
     this.enemies = [];
     this.projectiles = [];
+    this.explosionEffects = [];
     this.sunVisuals = [];
     this.carts = [];
     this.spawner = new WaveSpawner();
@@ -912,6 +963,7 @@ class TowerDefenseGame {
     this.selectedPlantType = null;
     this.enemies = [];
     this.projectiles = [];
+    this.explosionEffects = [];
     this.sunVisuals = [];
     this.grid.reset();
     this.spawner.reset();
@@ -989,10 +1041,44 @@ class TowerDefenseGame {
     this.sunVisuals.push(new SunVisual(road, column, this.layout));
   }
 
-  spawnSnakeSculpture(road, column, options) {
-    const damage = options.damage;
-    const slowDurationMs = options.slowDurationMs;
-    this.projectiles.push(new SnakeSculptureProjectile(road, column - 0.8, damage, slowDurationMs));
+  spawnSnakeHeadSculpture(road, column, options) {
+    this.projectiles.push(
+      new SnakeHeadProjectile(
+        road,
+        column + 0.8,
+        options.damage,
+        options.slowDurationMs,
+        ShootDirection.RIGHT
+      )
+    );
+  }
+
+  getEnemiesInArea(centerRoad, centerColumn, radius) {
+    return this.enemies.filter((enemy) => {
+      if (!enemy.isAlive()) {
+        return false;
+      }
+      const enemyColumn = Math.floor(enemy.columnPosition + 0.5);
+      const roadDelta = Math.abs(enemy.road - centerRoad);
+      const columnDelta = Math.abs(enemyColumn - centerColumn);
+      return roadDelta <= radius && columnDelta <= radius;
+    });
+  }
+
+  killEnemiesInstant(enemyList) {
+    let killed = 0;
+    enemyList.forEach((enemy) => {
+      if (enemy.isAlive()) {
+        enemy.alive = false;
+        killed += 1;
+      }
+    });
+    this.killCount += killed;
+    this.updateHud();
+  }
+
+  spawnExplosionEffect(road, column) {
+    this.explosionEffects.push(new ExplosionEffect(road, column, this.layout));
   }
 
   spawnEnemy(road) {
@@ -1025,7 +1111,7 @@ class TowerDefenseGame {
   getBlockingPlant(road, columnPosition) {
     const column = Math.floor(columnPosition + 0.2);
     const plant = this.grid.getPlant(road, column);
-    if (plant !== null && plant.isAlive()) {
+    if (plant !== null && plant.blocksEnemy()) {
       return plant;
     }
     return null;
@@ -1089,8 +1175,17 @@ class TowerDefenseGame {
       spawnSunVisual(road, column) {
         self.spawnSunVisual(road, column);
       },
-      spawnSnakeSculpture(road, column, options) {
-        self.spawnSnakeSculpture(road, column, options);
+      spawnSnakeHeadSculpture(road, column, options) {
+        self.spawnSnakeHeadSculpture(road, column, options);
+      },
+      getEnemiesInArea(centerRoad, centerColumn, radius) {
+        return self.getEnemiesInArea(centerRoad, centerColumn, radius);
+      },
+      killEnemiesInstant(enemyList) {
+        self.killEnemiesInstant(enemyList);
+      },
+      spawnExplosionEffect(road, column) {
+        self.spawnExplosionEffect(road, column);
       },
       hasEnemyOnRight(road, column) {
         return self.hasEnemyOnRight(road, column);
@@ -1172,8 +1267,13 @@ class TowerDefenseGame {
       visual.update(deltaMs);
     });
 
+    this.explosionEffects.forEach((effect) => {
+      effect.update(deltaMs);
+    });
+
     this.enemies = this.enemies.filter((enemy) => enemy.isAlive());
     this.projectiles = this.projectiles.filter((projectile) => projectile.alive);
+    this.explosionEffects = this.explosionEffects.filter((effect) => effect.alive);
     this.sunVisuals = this.sunVisuals.filter((visual) => visual.alive);
   }
 
@@ -1222,7 +1322,7 @@ class TowerDefenseGame {
     for (let road = 0; road < GameConstants.ROAD_COUNT; road += 1) {
       for (let column = 1; column < GameConstants.COLUMN_COUNT; column += 1) {
         const plant = this.grid.getPlant(road, column);
-        if (plant !== null && plant.isAlive()) {
+        if (plant !== null && (plant.isAlive() || (plant.typeKey === "battleEngine" && plant.shattered))) {
           const x = this.layout.offsetX + column * this.layout.cellSize;
           const y = this.layout.offsetY + road * this.layout.cellSize;
           plant.draw(this.ctx, x, y, this.layout.cellSize);
@@ -1240,6 +1340,10 @@ class TowerDefenseGame {
 
     this.projectiles.forEach((projectile) => {
       projectile.draw(this.ctx, this.layout);
+    });
+
+    this.explosionEffects.forEach((effect) => {
+      effect.draw(this.ctx, this.layout);
     });
 
     this.sunVisuals.forEach((visual) => {
