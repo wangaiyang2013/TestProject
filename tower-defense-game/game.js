@@ -108,7 +108,7 @@ class FieldGrid {
     if (road < 0 || road >= this.roadCount) {
       return false;
     }
-    if (column <= 0 || column >= this.columnCount) {
+    if (column < 1 || column >= this.columnCount) {
       return false;
     }
     return this.plants[road][column] === null;
@@ -777,20 +777,24 @@ class FieldLayout {
     this.cellWidth = 0;
     this.cellHeight = 0;
     this.cellSize = 0;
-    this.recalculate();
+    this.logicalWidth = canvas.width;
+    this.logicalHeight = canvas.height;
+    this.recalculate(this.logicalWidth, this.logicalHeight);
   }
 
-  recalculate() {
+  recalculate(logicalWidth, logicalHeight) {
     const padding = 8;
-    const availableWidth = this.canvas.width - padding * 2;
-    const availableHeight = this.canvas.height - padding * 2;
+    const availableWidth = logicalWidth - padding * 2;
+    const availableHeight = logicalHeight - padding * 2;
     this.cellWidth = availableWidth / this.columnCount;
     this.cellHeight = availableHeight / this.roadCount;
     this.cellSize = Math.min(this.cellWidth, this.cellHeight);
     const fieldWidth = this.cellSize * this.columnCount;
     const fieldHeight = this.cellSize * this.roadCount;
-    this.offsetX = (this.canvas.width - fieldWidth) * 0.5;
-    this.offsetY = (this.canvas.height - fieldHeight) * 0.5;
+    this.offsetX = (logicalWidth - fieldWidth) * 0.5;
+    this.offsetY = (logicalHeight - fieldHeight) * 0.5;
+    this.logicalWidth = logicalWidth;
+    this.logicalHeight = logicalHeight;
   }
 
   roadCenterY(road) {
@@ -868,6 +872,9 @@ class TowerDefenseGame {
     this.sun = GameConstants.INITIAL_SUN;
     this.killCount = 0;
     this.selectedPlantType = null;
+    this.hoverRoad = -1;
+    this.hoverColumn = -1;
+    this.tipTimerId = null;
     this.running = false;
     this.gameOver = false;
     this.lastFrameMs = 0;
@@ -882,6 +889,7 @@ class TowerDefenseGame {
       gameOverTitle: document.getElementById("game-over-title"),
       gameOverMessage: document.getElementById("game-over-message"),
       plantCards: document.querySelectorAll(".plant-card"),
+      statusTip: document.getElementById("status-tip"),
     };
 
     this.bindEvents();
@@ -906,16 +914,31 @@ class TowerDefenseGame {
 
     this.ui.plantCards.forEach((card) => {
       card.addEventListener("click", () => {
-        if (!this.running || this.gameOver) {
+        const plantType = card.getAttribute("data-plant");
+        if (this.gameOver) {
           return;
         }
-        const plantType = card.getAttribute("data-plant");
+        if (!this.running) {
+          this.selectedPlantType = plantType;
+          this.refreshPlantCards();
+          this.showTip("已选择「" + PlantCatalog[plantType].name + "」，请点击「开始游戏」后再在绿地上种植");
+          return;
+        }
         this.selectPlantType(plantType);
       });
     });
 
     this.canvas.addEventListener("click", (event) => {
       this.handleCanvasClick(event.clientX, event.clientY);
+    });
+
+    this.canvas.addEventListener("mousemove", (event) => {
+      this.handleCanvasHover(event.clientX, event.clientY);
+    });
+
+    this.canvas.addEventListener("mouseleave", () => {
+      this.hoverRoad = -1;
+      this.hoverColumn = -1;
     });
 
     this.canvas.addEventListener("touchstart", (event) => {
@@ -926,20 +949,57 @@ class TowerDefenseGame {
   }
 
   resizeCanvas() {
-    const container = this.canvas.parentElement;
-    const rect = container.getBoundingClientRect();
-    const width = Math.min(rect.width, 1200);
-    const height = Math.max(320, rect.height - 160);
-    this.canvas.width = width;
-    this.canvas.height = height;
-    this.layout.recalculate();
+    const topBar = document.getElementById("top-bar");
+    const plantBar = document.getElementById("plant-bar");
+    const statusTip = document.getElementById("status-tip");
+    const topBarHeight = topBar ? topBar.offsetHeight : 48;
+    const plantBarHeight = plantBar ? plantBar.offsetHeight : 88;
+    const statusTipHeight = statusTip ? statusTip.offsetHeight : 28;
+    const horizontalPadding = 16;
+    const verticalPadding = 24;
+    const displayWidth = Math.min(window.innerWidth - horizontalPadding, 1200);
+    const displayHeight = Math.max(
+      300,
+      window.innerHeight - topBarHeight - plantBarHeight - statusTipHeight - verticalPadding
+    );
+
+    this.canvas.style.width = displayWidth + "px";
+    this.canvas.style.height = displayHeight + "px";
+    this.canvas.width = Math.floor(displayWidth);
+    this.canvas.height = Math.floor(displayHeight);
+    this.layout.recalculate(displayWidth, displayHeight);
+
+    if (this.running && !this.gameOver) {
+      this.draw();
+    } else {
+      this.renderStaticPreview();
+    }
+  }
+
+  showTip(message) {
+    if (this.ui.statusTip === null) {
+      return;
+    }
+    this.ui.statusTip.textContent = message;
+    this.ui.statusTip.classList.remove("hidden");
+    if (this.tipTimerId !== null) {
+      clearTimeout(this.tipTimerId);
+    }
+    this.tipTimerId = setTimeout(() => {
+      if (this.ui.statusTip !== null) {
+        this.ui.statusTip.classList.add("hidden");
+      }
+      this.tipTimerId = null;
+    }, 3000);
   }
 
   selectPlantType(plantType) {
     if (this.selectedPlantType === plantType) {
       this.selectedPlantType = null;
+      this.showTip("已取消选择");
     } else {
       this.selectedPlantType = plantType;
+      this.showTip("已选择「" + PlantCatalog[plantType].name + "」，点击绿色草地放置（第1列起可种）");
     }
     this.refreshPlantCards();
   }
@@ -947,9 +1007,12 @@ class TowerDefenseGame {
   refreshPlantCards() {
     this.ui.plantCards.forEach((card) => {
       const plantType = card.getAttribute("data-plant");
-      const cost = PlantCatalog[plantType].cost;
+      const definition = PlantCatalog[plantType];
+      if (definition === undefined) {
+        return;
+      }
       const selected = this.selectedPlantType === plantType;
-      const disabled = this.sun < cost;
+      const disabled = this.running && this.sun < definition.cost;
       card.classList.toggle("selected", selected);
       card.classList.toggle("disabled", disabled);
     });
@@ -976,6 +1039,11 @@ class TowerDefenseGame {
     this.ui.startOverlay.classList.remove("visible");
     this.updateHud();
     this.refreshPlantCards();
+    if (this.selectedPlantType !== null) {
+      this.showTip("游戏开始！点击绿色草地放置「" + PlantCatalog[this.selectedPlantType].name + "」");
+    } else {
+      this.showTip("游戏开始！请先选择一种植物，再点击绿色草地放置");
+    }
 
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
@@ -988,39 +1056,84 @@ class TowerDefenseGame {
     console.info("[TowerDefenseGame] 游戏开始");
   }
 
-  handleCanvasClick(clientX, clientY) {
+  getCanvasPosition(clientX, clientY) {
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      return null;
+    }
+    return {
+      pixelX: ((clientX - rect.left) / rect.width) * this.canvas.width,
+      pixelY: ((clientY - rect.top) / rect.height) * this.canvas.height,
+    };
+  }
+
+  handleCanvasHover(clientX, clientY) {
     if (!this.running || this.gameOver) {
       return;
     }
-    const rect = this.canvas.getBoundingClientRect();
-    const pixelX = ((clientX - rect.left) / rect.width) * this.canvas.width;
-    const pixelY = ((clientY - rect.top) / rect.height) * this.canvas.height;
+    const position = this.getCanvasPosition(clientX, clientY);
+    if (position === null) {
+      return;
+    }
+    if (!this.layout.isInsideField(position.pixelX, position.pixelY)) {
+      this.hoverRoad = -1;
+      this.hoverColumn = -1;
+      return;
+    }
+    const gridPos = this.layout.pixelToGrid(position.pixelX, position.pixelY);
+    this.hoverRoad = gridPos.road;
+    this.hoverColumn = gridPos.column;
+  }
 
-    if (!this.layout.isInsideField(pixelX, pixelY)) {
+  handleCanvasClick(clientX, clientY) {
+    if (!this.running || this.gameOver) {
+      this.showTip("请先点击「开始游戏」");
+      return;
+    }
+    const position = this.getCanvasPosition(clientX, clientY);
+    if (position === null) {
+      this.showTip("战场尚未加载完成，请稍后再试");
+      return;
+    }
+    if (!this.layout.isInsideField(position.pixelX, position.pixelY)) {
+      this.showTip("请点击绿色草地区域");
       return;
     }
     if (this.selectedPlantType === null) {
+      this.showTip("请先在上方选择一种植物");
       return;
     }
 
-    const gridPos = this.layout.pixelToGrid(pixelX, pixelY);
+    const gridPos = this.layout.pixelToGrid(position.pixelX, position.pixelY);
     this.tryPlacePlant(this.selectedPlantType, gridPos.road, gridPos.column);
   }
 
   tryPlacePlant(typeKey, road, column) {
     const definition = PlantCatalog[typeKey];
     if (definition === undefined) {
+      this.showTip("未知植物类型");
       return;
     }
     if (this.sun < definition.cost) {
+      this.showTip("阳光不足，需要 " + definition.cost + " 阳光");
+      return;
+    }
+    if (column < 1) {
+      this.showTip("最左列是小推车区域，不能种植");
+      return;
+    }
+    if (road < 0 || road >= GameConstants.ROAD_COUNT) {
+      this.showTip("请点击五条路中的任意一条");
       return;
     }
     if (!this.grid.canPlantAt(road, column)) {
+      this.showTip("该格子已有植物或不可种植");
       return;
     }
 
     const plant = PlantFactory.create(typeKey, road, column);
     if (plant === null) {
+      this.showTip("放置失败");
       return;
     }
 
@@ -1028,6 +1141,7 @@ class TowerDefenseGame {
     this.sun -= definition.cost;
     this.updateHud();
     this.refreshPlantCards();
+    this.showTip("成功放置「" + definition.name + "」在第 " + (road + 1) + " 路第 " + column + " 列");
     console.info("[TowerDefenseGame] 放置 " + definition.name + " 于第 " + (road + 1) + " 路第 " + column + " 列");
   }
 
@@ -1314,10 +1428,33 @@ class TowerDefenseGame {
 
     ctx.fillStyle = "rgba(230, 57, 70, 0.15)";
     ctx.fillRect(layout.offsetX, layout.offsetY, layout.cellSize, layout.cellSize * GameConstants.ROAD_COUNT);
+
+    ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.font = "12px sans-serif";
+    for (let road = 0; road < GameConstants.ROAD_COUNT; road += 1) {
+      const labelY = layout.offsetY + road * layout.cellSize + layout.cellSize * 0.35;
+      ctx.fillText("第" + (road + 1) + "路", layout.offsetX + 4, labelY);
+    }
+  }
+
+  drawPlantPreview() {
+    if (this.selectedPlantType === null || this.hoverRoad < 0 || this.hoverColumn < 1) {
+      return;
+    }
+    const canPlace = this.grid.canPlantAt(this.hoverRoad, this.hoverColumn)
+      && this.sun >= PlantCatalog[this.selectedPlantType].cost;
+    const x = this.layout.offsetX + this.hoverColumn * this.layout.cellSize;
+    const y = this.layout.offsetY + this.hoverRoad * this.layout.cellSize;
+    this.ctx.fillStyle = canPlace ? "rgba(255, 209, 102, 0.35)" : "rgba(230, 57, 70, 0.35)";
+    this.ctx.fillRect(x, y, this.layout.cellSize, this.layout.cellSize);
+    this.ctx.strokeStyle = canPlace ? "#ffd166" : "#e63946";
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(x + 1, y + 1, this.layout.cellSize - 2, this.layout.cellSize - 2);
   }
 
   draw() {
     this.drawField();
+    this.drawPlantPreview();
 
     for (let road = 0; road < GameConstants.ROAD_COUNT; road += 1) {
       for (let column = 1; column < GameConstants.COLUMN_COUNT; column += 1) {
@@ -1359,6 +1496,7 @@ class TowerDefenseGame {
 
   renderStaticPreview() {
     this.drawField();
+    this.drawPlantPreview();
     for (let road = 0; road < GameConstants.ROAD_COUNT; road += 1) {
       const cart = new PushCart(road);
       cart.draw(this.ctx, this.layout);

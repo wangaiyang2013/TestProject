@@ -136,11 +136,34 @@ body {
   flex: 1;
   width: 100%;
   max-width: 1200px;
-  max-height: calc(100vh - 180px);
+  min-height: 300px;
+  height: auto;
+  max-height: calc(100vh - 200px);
   border-radius: 12px;
   border: 2px solid rgba(255, 255, 255, 0.15);
   cursor: crosshair;
   touch-action: none;
+  display: block;
+}
+
+.status-tip {
+  width: 100%;
+  max-width: 1200px;
+  min-height: 28px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #ffd166;
+  font-size: 14px;
+  text-align: center;
+  border: 1px solid rgba(255, 209, 102, 0.25);
+}
+
+.status-tip.hidden {
+  visibility: hidden;
+  min-height: 0;
+  padding: 0;
+  border: none;
 }
 
 .overlay {
