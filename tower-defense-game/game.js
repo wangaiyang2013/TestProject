@@ -17,13 +17,14 @@ const GameConstants = {
   ENEMY_HP: 270,
   ENEMY_SPAWN_INTERVAL_MS: 1800,
   ENEMY_INITIAL_SPAWN_COUNT: 3,
-  ENEMY_INITIAL_SPAWN_DELAY_MS: 600,
+  ENEMY_INITIAL_SPAWN_DELAY_MS: 400,
   PLANT_SPAWN_ANIM_MS: 650,
   WAVE_ENEMY_COUNT: 8,
   WAVE_BREAK_MS: 5000,
   CART_WIDTH_RATIO: 0.6,
   BASE_FAIL_COLUMN: 0,
   CART_TRIGGER_COLUMN: 0.55,
+  ENEMY_SPAWN_COLUMN: 25.2,
   GRASS_LIGHT: "#40916c",
   GRASS_DARK: "#2d6a4f",
   GRID_LINE: "rgba(255, 255, 255, 0.08)",
@@ -596,7 +597,7 @@ class ExplosionEffect {
 class LittleMonster {
   constructor(road) {
     this.road = road;
-    this.columnPosition = GameConstants.COLUMN_COUNT + 0.8;
+    this.columnPosition = GameConstants.ENEMY_SPAWN_COLUMN;
     this.hp = GameConstants.ENEMY_HP;
     this.maxHp = GameConstants.ENEMY_HP;
     this.alive = true;
@@ -1139,6 +1140,11 @@ class TowerDefenseGame {
       this.carts.push(new PushCart(road));
     }
 
+    this.spawnEnemy(0);
+    this.spawnEnemy(2);
+    this.spawnEnemy(4);
+    this.spawner.initialSpawnRemaining = 0;
+
     this.ui.startOverlay.classList.add("hidden");
     this.ui.startOverlay.classList.remove("visible");
     this.updateHud();
@@ -1305,6 +1311,8 @@ class TowerDefenseGame {
 
   spawnEnemy(road) {
     this.enemies.push(new LittleMonster(road));
+    this.updateHud();
+    console.info("[TowerDefenseGame] 敌人在第 " + (road + 1) + " 路右侧出现，向左进攻");
   }
 
   hasEnemyOnRight(road, column) {
@@ -1440,6 +1448,9 @@ class TowerDefenseGame {
       showTip(message) {
         self.showTip(message);
       },
+      onWaveChanged(wave) {
+        self.onWaveChanged(wave);
+      },
     };
   }
 
@@ -1558,7 +1569,7 @@ class TowerDefenseGame {
     ctx.fillText(
       "敌人入口 →",
       layout.offsetX + spawnColumnStart * layout.cellSize + 6,
-      layout.offsetY - 2
+      layout.offsetY + 14
     );
 
     ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
@@ -1652,6 +1663,12 @@ class TowerDefenseGame {
 
 document.addEventListener("DOMContentLoaded", () => {
   const canvas = document.getElementById("game-canvas");
+  const ctx = canvas.getContext("2d");
+  if (typeof ctx.roundRect !== "function") {
+    CanvasRenderingContext2D.prototype.roundRect = function roundRectPolyfill(x, y, width, height) {
+      this.rect(x, y, width, height);
+    };
+  }
   const game = new TowerDefenseGame(canvas);
   window.towerDefenseGame = game;
 });
