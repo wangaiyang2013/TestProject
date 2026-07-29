@@ -98,7 +98,7 @@ body {
   border: 2px solid rgba(255, 255, 255, 0.5);
 }
 
-.snake-sculptor-icon {
+.snake-sculpture-icon {
   background: radial-gradient(circle at 35% 35%, #2a9d8f, #1b4332);
 }
 
@@ -106,19 +106,19 @@ body {
   background: radial-gradient(circle at 35% 35%, #ffe066, #e9c46a);
 }
 
-.snake-shooter-right-icon {
-  background: radial-gradient(circle at 35% 35%, #74c69d, #40916c);
+.snake-barrier-icon {
+  background: radial-gradient(circle at 35% 35%, #d4a373, #bc6c25);
 }
 
-.snake-shooter-left-icon {
-  background: radial-gradient(circle at 35% 35%, #95d5b2, #52b788);
+.snake-stake-icon {
+  background: radial-gradient(circle at 35% 35%, #a68a64, #8b5e34);
 }
 
-.snake-cannon-right-icon {
-  background: radial-gradient(circle at 35% 35%, #457b9d, #1d3557);
+.snake-slow-sculpture-icon {
+  background: radial-gradient(circle at 35% 35%, #74c0fc, #457b9d);
 }
 
-.snake-regenerator-left-icon {
+.snake-recharge-sculpture-icon {
   background: radial-gradient(circle at 35% 35%, #a7c957, #606c38);
 }
 
