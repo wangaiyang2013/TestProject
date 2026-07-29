@@ -1,24 +1,23 @@
 /**
  * 塔防大战 - 5 条路 × 26 列长距离战场
- * 5 种植物 vs 小怪物，最左侧小推车可清整路敌人
+ * 6 种蛇系植物 vs 小怪物，最左侧小推车可清整路敌人
  */
+
+const ShootDirection = {
+  LEFT: -1,
+  RIGHT: 1,
+};
 
 const GameConstants = {
   ROAD_COUNT: 5,
   COLUMN_COUNT: 26,
   INITIAL_SUN: 150,
-  SUN_DROP_VALUE: 25,
-  SUNFLOWER_INTERVAL_MS: 8000,
-  PEASHOOTER_INTERVAL_MS: 1400,
-  REPEATER_INTERVAL_MS: 1400,
   PROJECTILE_SPEED: 0.18,
-  PROJECTILE_DAMAGE: 20,
   ENEMY_SPEED: 0.035,
-  ENEMY_HP: 100,
+  ENEMY_HP: 270,
   ENEMY_SPAWN_INTERVAL_MS: 2200,
   WAVE_ENEMY_COUNT: 8,
   WAVE_BREAK_MS: 5000,
-  POTATO_ARM_MS: 12000,
   CART_WIDTH_RATIO: 0.6,
   BASE_FAIL_COLUMN: 0,
   CART_TRIGGER_COLUMN: 0.55,
@@ -29,43 +28,73 @@ const GameConstants = {
   CART_WHEEL: "#1d3557",
   ENEMY_COLOR: "#6a4c93",
   ENEMY_EYE: "#fffcf2",
+  SNAKE_SUN_INTERVAL_MS: 15000,
+  SNAKE_SUN_VALUE: 50,
+  SNAKE_SCULPTOR_INTERVAL_MS: 1500,
+  SNAKE_SCULPTOR_DAMAGE: 20,
+  SNAKE_HEAVY_INTERVAL_MS: 2000,
+  SNAKE_HEAVY_DAMAGE: 50,
+  SNAKE_REPAIR_MS: 20000,
 };
 
 const PlantCatalog = {
-  sunflower: {
-    name: "向日葵",
-    cost: 50,
-    maxHp: 80,
-    color: "#f4a261",
-    leafColor: "#2d6a4f",
-  },
-  peashooter: {
-    name: "豌豆射手",
+  snakeSculptor: {
+    name: "蛇雕师",
     cost: 100,
     maxHp: 100,
-    color: "#52b788",
+    color: "#2a9d8f",
     leafColor: "#1b4332",
+    shootDirection: ShootDirection.LEFT,
+    shootDamage: GameConstants.SNAKE_SCULPTOR_DAMAGE,
+    shootIntervalMs: GameConstants.SNAKE_SCULPTOR_INTERVAL_MS,
   },
-  wallnut: {
-    name: "坚果墙",
+  snakeSunflower: {
+    name: "蛇阳花",
+    cost: 50,
+    maxHp: 80,
+    color: "#e9c46a",
+    leafColor: "#2d6a4f",
+  },
+  snakeShooterRight: {
+    name: "右蛇射手",
     cost: 150,
-    maxHp: 400,
-    color: "#bc6c25",
-    leafColor: "#6c3d0f",
-  },
-  repeater: {
-    name: "双发射手",
-    cost: 200,
     maxHp: 100,
     color: "#40916c",
     leafColor: "#1b4332",
+    shootDirection: ShootDirection.RIGHT,
+    shootDamage: GameConstants.SNAKE_HEAVY_DAMAGE,
+    shootIntervalMs: GameConstants.SNAKE_HEAVY_INTERVAL_MS,
   },
-  potato: {
-    name: "土豆雷",
-    cost: 25,
-    maxHp: 30,
-    color: "#8b5e34",
-    leafColor: "#3d2b1f",
+  snakeShooterLeft: {
+    name: "左蛇射手",
+    cost: 150,
+    maxHp: 100,
+    color: "#52b788",
+    leafColor: "#1b4332",
+    shootDirection: ShootDirection.LEFT,
+    shootDamage: GameConstants.SNAKE_HEAVY_DAMAGE,
+    shootIntervalMs: GameConstants.SNAKE_HEAVY_INTERVAL_MS,
+  },
+  snakeCannonRight: {
+    name: "右蛇炮",
+    cost: 175,
+    maxHp: 100,
+    color: "#1d3557",
+    leafColor: "#14213d",
+    shootDirection: ShootDirection.RIGHT,
+    shootDamage: GameConstants.SNAKE_HEAVY_DAMAGE,
+    shootIntervalMs: GameConstants.SNAKE_HEAVY_INTERVAL_MS,
+  },
+  snakeRegeneratorLeft: {
+    name: "再生左蛇",
+    cost: 200,
+    maxHp: 150,
+    color: "#606c38",
+    leafColor: "#283618",
+    shootDirection: ShootDirection.LEFT,
+    shootDamage: GameConstants.SNAKE_HEAVY_DAMAGE,
+    shootIntervalMs: GameConstants.SNAKE_HEAVY_INTERVAL_MS,
+    autoRepairMs: GameConstants.SNAKE_REPAIR_MS,
   },
 };
 
@@ -202,11 +231,69 @@ class Plant {
 }
 
 /**
- * 向日葵：周期性产生阳光
+ * 定向射手基类：支持向左或向右攻击
  */
-class SunflowerPlant extends Plant {
+class DirectionalShooterPlant extends Plant {
+  constructor(typeKey, road, column) {
+    super(typeKey, road, column);
+    const definition = PlantCatalog[typeKey];
+    this.shootDirection = definition.shootDirection;
+    this.shootDamage = definition.shootDamage;
+    this.shootIntervalMs = definition.shootIntervalMs;
+    this.shootTimerMs = 0;
+  }
+
+  hasTargetInDirection(context) {
+    if (this.shootDirection === ShootDirection.RIGHT) {
+      return context.hasEnemyOnRight(this.road, this.column);
+    }
+    return context.hasEnemyOnLeft(this.road, this.column);
+  }
+
+  update(context) {
+    if (!this.isAlive()) {
+      return;
+    }
+    if (!this.hasTargetInDirection(context)) {
+      return;
+    }
+    this.shootTimerMs += context.deltaMs;
+    if (this.shootTimerMs >= this.shootIntervalMs) {
+      this.shootTimerMs = 0;
+      context.spawnProjectile(this.road, this.column, {
+        direction: this.shootDirection,
+        damage: this.shootDamage,
+      });
+    }
+  }
+
+  draw(ctx, cellX, cellY, cellSize) {
+    super.draw(ctx, cellX, cellY, cellSize);
+    const centerX = cellX + cellSize * 0.5;
+    const centerY = cellY + cellSize * 0.5;
+    const muzzleOffset = this.shootDirection === ShootDirection.RIGHT ? cellSize * 0.18 : -cellSize * 0.18;
+    ctx.fillStyle = "#ffd166";
+    ctx.beginPath();
+    ctx.arc(centerX + muzzleOffset, centerY, cellSize * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/**
+ * 蛇雕师：消耗 100 阳光，对左侧敌人造成 20 点伤害
+ */
+class SnakeSculptorPlant extends DirectionalShooterPlant {
   constructor(road, column) {
-    super("sunflower", road, column);
+    super("snakeSculptor", road, column);
+  }
+}
+
+/**
+ * 蛇阳花：每 15 秒产生 50 阳光
+ */
+class SnakeSunflowerPlant extends Plant {
+  constructor(road, column) {
+    super("snakeSunflower", road, column);
     this.timerMs = 0;
   }
 
@@ -215,10 +302,11 @@ class SunflowerPlant extends Plant {
       return;
     }
     this.timerMs += context.deltaMs;
-    if (this.timerMs >= GameConstants.SUNFLOWER_INTERVAL_MS) {
+    if (this.timerMs >= GameConstants.SNAKE_SUN_INTERVAL_MS) {
       this.timerMs = 0;
-      context.addSun(GameConstants.SUN_DROP_VALUE);
+      context.addSun(GameConstants.SNAKE_SUN_VALUE);
       context.spawnSunVisual(this.road, this.column);
+      console.info("[SnakeSunflower] 产生 " + GameConstants.SNAKE_SUN_VALUE + " 阳光");
     }
   }
 
@@ -243,130 +331,105 @@ class SunflowerPlant extends Plant {
 }
 
 /**
- * 豌豆射手：同路射击
+ * 右蛇射手：对右侧敌人造成 50 点伤害
  */
-class PeashooterPlant extends Plant {
+class SnakeShooterRightPlant extends DirectionalShooterPlant {
   constructor(road, column) {
-    super("peashooter", road, column);
-    this.timerMs = 0;
-  }
-
-  update(context) {
-    if (!this.isAlive()) {
-      return;
-    }
-    const hasTarget = context.hasEnemyInRoad(this.road, this.column);
-    if (!hasTarget) {
-      return;
-    }
-    this.timerMs += context.deltaMs;
-    if (this.timerMs >= GameConstants.PEASHOOTER_INTERVAL_MS) {
-      this.timerMs = 0;
-      context.spawnProjectile(this.road, this.column, 1);
-    }
+    super("snakeShooterRight", road, column);
   }
 }
 
 /**
- * 双发射手：一次两发
+ * 左蛇射手：对左侧敌人造成 50 点伤害
  */
-class RepeaterPlant extends Plant {
+class SnakeShooterLeftPlant extends DirectionalShooterPlant {
   constructor(road, column) {
-    super("repeater", road, column);
-    this.timerMs = 0;
-  }
-
-  update(context) {
-    if (!this.isAlive()) {
-      return;
-    }
-    const hasTarget = context.hasEnemyInRoad(this.road, this.column);
-    if (!hasTarget) {
-      return;
-    }
-    this.timerMs += context.deltaMs;
-    if (this.timerMs >= GameConstants.REPEATER_INTERVAL_MS) {
-      this.timerMs = 0;
-      context.spawnProjectile(this.road, this.column, 2);
-    }
+    super("snakeShooterLeft", road, column);
   }
 }
 
 /**
- * 坚果墙：高血量阻挡
+ * 右蛇炮：对右侧敌人造成 50 点伤害
  */
-class WallNutPlant extends Plant {
+class SnakeCannonRightPlant extends DirectionalShooterPlant {
   constructor(road, column) {
-    super("wallnut", road, column);
+    super("snakeCannonRight", road, column);
   }
 
-  update() {
-    // 坚果墙无主动行为
+  draw(ctx, cellX, cellY, cellSize) {
+    super.draw(ctx, cellX, cellY, cellSize);
+    const centerX = cellX + cellSize * 0.5;
+    const centerY = cellY + cellSize * 0.5;
+    ctx.fillStyle = "#457b9d";
+    ctx.fillRect(centerX + cellSize * 0.08, centerY - cellSize * 0.06, cellSize * 0.22, cellSize * 0.12);
   }
 }
 
 /**
- * 土豆雷：埋设后接触即爆
+ * 再生左蛇：对左侧敌人造成 50 点伤害，受伤后 20 秒自动回满生命
  */
-class PotatoMinePlant extends Plant {
+class SnakeRegeneratorLeftPlant extends DirectionalShooterPlant {
   constructor(road, column) {
-    super("potato", road, column);
-    this.armTimerMs = 0;
-    this.armed = false;
+    super("snakeRegeneratorLeft", road, column);
+    this.repairTimerMs = 0;
+  }
+
+  takeDamage(amount) {
+    super.takeDamage(amount);
+    this.repairTimerMs = 0;
   }
 
   update(context) {
+    super.update(context);
     if (!this.isAlive()) {
       return;
     }
-    if (this.armed) {
-      const enemy = context.getEnemyAtCell(this.road, this.column);
-      if (enemy !== null) {
-        context.killEnemiesInRoad(this.road);
-        this.alive = false;
-        context.removePlantAt(this.road, this.column);
-      }
+    if (this.hp >= this.maxHp) {
+      this.repairTimerMs = 0;
       return;
     }
-    this.armTimerMs += context.deltaMs;
-    if (this.armTimerMs >= GameConstants.POTATO_ARM_MS) {
-      this.armed = true;
+    this.repairTimerMs += context.deltaMs;
+    if (this.repairTimerMs >= GameConstants.SNAKE_REPAIR_MS) {
+      this.hp = this.maxHp;
+      this.repairTimerMs = 0;
+      console.info("[SnakeRegeneratorLeft] 自动修复完成，生命回满");
     }
   }
 
   draw(ctx, cellX, cellY, cellSize) {
-    const centerX = cellX + cellSize * 0.5;
-    const centerY = cellY + cellSize * 0.5;
-    if (!this.armed) {
-      ctx.fillStyle = "#3d2b1f";
-      ctx.beginPath();
-      ctx.ellipse(centerX, centerY + cellSize * 0.1, cellSize * 0.28, cellSize * 0.12, 0, 0, Math.PI * 2);
-      ctx.fill();
-      return;
-    }
     super.draw(ctx, cellX, cellY, cellSize);
-    ctx.fillStyle = "#ff006e";
-    ctx.beginPath();
-    ctx.arc(centerX, centerY - cellSize * 0.05, cellSize * 0.06, 0, Math.PI * 2);
-    ctx.fill();
+    if (this.hp < this.maxHp) {
+      const hpRatio = this.hp / this.maxHp;
+      const repairRatio = this.repairTimerMs / GameConstants.SNAKE_REPAIR_MS;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+      ctx.fillRect(cellX + 4, cellY + cellSize - 10, cellSize - 8, 4);
+      ctx.fillStyle = "#95d5b2";
+      ctx.fillRect(cellX + 4, cellY + cellSize - 10, (cellSize - 8) * repairRatio, 4);
+      ctx.fillStyle = "#ffd166";
+      ctx.fillRect(cellX + 4, cellY + 4, (cellSize - 8) * hpRatio, 5);
+    }
   }
 }
 
 /**
- * 子弹
+ * 子弹：支持向左或向右飞行
  */
 class Projectile {
-  constructor(road, columnPosition) {
+  constructor(road, columnPosition, direction, damage) {
     this.road = road;
     this.columnPosition = columnPosition;
+    this.direction = direction;
     this.alive = true;
-    this.damage = GameConstants.PROJECTILE_DAMAGE;
+    this.damage = damage;
   }
 
   update(deltaMs, cellWidth) {
     const moveStep = (GameConstants.PROJECTILE_SPEED * deltaMs) / cellWidth;
-    this.columnPosition += moveStep;
-    if (this.columnPosition >= GameConstants.COLUMN_COUNT) {
+    this.columnPosition += moveStep * this.direction;
+    if (this.direction === ShootDirection.RIGHT && this.columnPosition >= GameConstants.COLUMN_COUNT) {
+      this.alive = false;
+    }
+    if (this.direction === ShootDirection.LEFT && this.columnPosition <= 0) {
       this.alive = false;
     }
   }
@@ -374,7 +437,7 @@ class Projectile {
   draw(ctx, layout) {
     const x = layout.columnToPixel(this.columnPosition);
     const y = layout.roadCenterY(this.road);
-    ctx.fillStyle = "#52b788";
+    ctx.fillStyle = this.direction === ShootDirection.RIGHT ? "#52b788" : "#90be6d";
     ctx.beginPath();
     ctx.arc(x, y, layout.cellSize * 0.12, 0, Math.PI * 2);
     ctx.fill();
@@ -529,7 +592,7 @@ class SunVisual {
     this.y = layout.roadCenterY(road);
     this.targetY = this.y - layout.cellSize * 0.8;
     this.alive = true;
-    this.value = GameConstants.SUN_DROP_VALUE;
+    this.value = GameConstants.SNAKE_SUN_VALUE;
     this.radius = layout.cellSize * 0.18;
   }
 
@@ -663,20 +726,23 @@ class FieldLayout {
  */
 class PlantFactory {
   static create(typeKey, road, column) {
-    if (typeKey === "sunflower") {
-      return new SunflowerPlant(road, column);
+    if (typeKey === "snakeSculptor") {
+      return new SnakeSculptorPlant(road, column);
     }
-    if (typeKey === "peashooter") {
-      return new PeashooterPlant(road, column);
+    if (typeKey === "snakeSunflower") {
+      return new SnakeSunflowerPlant(road, column);
     }
-    if (typeKey === "wallnut") {
-      return new WallNutPlant(road, column);
+    if (typeKey === "snakeShooterRight") {
+      return new SnakeShooterRightPlant(road, column);
     }
-    if (typeKey === "repeater") {
-      return new RepeaterPlant(road, column);
+    if (typeKey === "snakeShooterLeft") {
+      return new SnakeShooterLeftPlant(road, column);
     }
-    if (typeKey === "potato") {
-      return new PotatoMinePlant(road, column);
+    if (typeKey === "snakeCannonRight") {
+      return new SnakeCannonRightPlant(road, column);
+    }
+    if (typeKey === "snakeRegeneratorLeft") {
+      return new SnakeRegeneratorLeftPlant(road, column);
     }
     return null;
   }
@@ -871,20 +937,26 @@ class TowerDefenseGame {
     this.sunVisuals.push(new SunVisual(road, column, this.layout));
   }
 
-  spawnProjectile(road, column, count) {
-    for (let i = 0; i < count; i += 1) {
-      const offset = i * 0.15;
-      this.projectiles.push(new Projectile(road, column + 0.8 + offset));
-    }
+  spawnProjectile(road, column, options) {
+    const direction = options.direction;
+    const damage = options.damage;
+    const startOffset = direction === ShootDirection.RIGHT ? 0.8 : -0.8;
+    this.projectiles.push(new Projectile(road, column + startOffset, direction, damage));
   }
 
   spawnEnemy(road) {
     this.enemies.push(new LittleMonster(road));
   }
 
-  hasEnemyInRoad(road, afterColumn) {
+  hasEnemyOnRight(road, column) {
     return this.enemies.some(
-      (enemy) => enemy.isAlive() && enemy.road === road && enemy.columnPosition > afterColumn
+      (enemy) => enemy.isAlive() && enemy.road === road && enemy.columnPosition > column + 0.2
+    );
+  }
+
+  hasEnemyOnLeft(road, column) {
+    return this.enemies.some(
+      (enemy) => enemy.isAlive() && enemy.road === road && enemy.columnPosition < column + 0.8
     );
   }
 
@@ -966,11 +1038,14 @@ class TowerDefenseGame {
       spawnSunVisual(road, column) {
         self.spawnSunVisual(road, column);
       },
-      spawnProjectile(road, column, count) {
-        self.spawnProjectile(road, column, count);
+      spawnProjectile(road, column, options) {
+        self.spawnProjectile(road, column, options);
       },
-      hasEnemyInRoad(road, afterColumn) {
-        return self.hasEnemyInRoad(road, afterColumn);
+      hasEnemyOnRight(road, column) {
+        return self.hasEnemyOnRight(road, column);
+      },
+      hasEnemyOnLeft(road, column) {
+        return self.hasEnemyOnLeft(road, column);
       },
       getEnemyAtCell(road, column) {
         return self.getEnemyAtCell(road, column);

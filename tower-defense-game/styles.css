@@ -64,8 +64,8 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  min-width: 88px;
-  padding: 8px 10px;
+  min-width: 76px;
+  padding: 8px 8px;
   border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.35);
@@ -98,24 +98,28 @@ body {
   border: 2px solid rgba(255, 255, 255, 0.5);
 }
 
-.sunflower-icon {
-  background: radial-gradient(circle at 35% 35%, #ffe066, #f4a261);
+.snake-sculptor-icon {
+  background: radial-gradient(circle at 35% 35%, #2a9d8f, #1b4332);
 }
 
-.peashooter-icon {
-  background: radial-gradient(circle at 35% 35%, #95d5b2, #2d6a4f);
+.snake-sunflower-icon {
+  background: radial-gradient(circle at 35% 35%, #ffe066, #e9c46a);
 }
 
-.wallnut-icon {
-  background: radial-gradient(circle at 35% 35%, #d4a373, #8b5e34);
+.snake-shooter-right-icon {
+  background: radial-gradient(circle at 35% 35%, #74c69d, #40916c);
 }
 
-.repeater-icon {
-  background: radial-gradient(circle at 35% 35%, #74c69d, #1b4332);
+.snake-shooter-left-icon {
+  background: radial-gradient(circle at 35% 35%, #95d5b2, #52b788);
 }
 
-.potato-icon {
-  background: radial-gradient(circle at 35% 35%, #bc6c25, #6c3d0f);
+.snake-cannon-right-icon {
+  background: radial-gradient(circle at 35% 35%, #457b9d, #1d3557);
+}
+
+.snake-regenerator-left-icon {
+  background: radial-gradient(circle at 35% 35%, #a7c957, #606c38);
 }
 
 .plant-name {
