@@ -13,9 +13,12 @@ const GameConstants = {
   COLUMN_COUNT: 26,
   INITIAL_SUN: 150,
   PROJECTILE_SPEED: 0.18,
-  ENEMY_SPEED: 0.035,
+  ENEMY_SPEED: 0.045,
   ENEMY_HP: 270,
-  ENEMY_SPAWN_INTERVAL_MS: 2200,
+  ENEMY_SPAWN_INTERVAL_MS: 1800,
+  ENEMY_INITIAL_SPAWN_COUNT: 3,
+  ENEMY_INITIAL_SPAWN_DELAY_MS: 600,
+  PLANT_SPAWN_ANIM_MS: 650,
   WAVE_ENEMY_COUNT: 8,
   WAVE_BREAK_MS: 5000,
   CART_WIDTH_RATIO: 0.6,
@@ -174,6 +177,25 @@ class Plant {
     this.road = road;
     this.column = column;
     this.alive = true;
+    this.spawnAnimMs = 0;
+    this.spawnAnimDuration = GameConstants.PLANT_SPAWN_ANIM_MS;
+  }
+
+  getSpawnScale() {
+    if (this.spawnAnimMs >= this.spawnAnimDuration) {
+      return 1;
+    }
+    const progress = this.spawnAnimMs / this.spawnAnimDuration;
+    if (progress < 0.55) {
+      return 0.2 + progress * 1.45;
+    }
+    return 1 + Math.sin((progress - 0.55) * Math.PI * 2.2) * 0.08 * (1 - progress);
+  }
+
+  updateSpawnAnimation(deltaMs) {
+    if (this.spawnAnimMs < this.spawnAnimDuration) {
+      this.spawnAnimMs += deltaMs;
+    }
   }
 
   isAlive() {
@@ -197,19 +219,39 @@ class Plant {
   }
 
   draw(ctx, cellX, cellY, cellSize) {
+    const scale = this.getSpawnScale();
     const centerX = cellX + cellSize * 0.5;
     const centerY = cellY + cellSize * 0.5;
-    const radius = cellSize * 0.32;
+    const radius = cellSize * 0.38 * scale;
+
+    if (this.spawnAnimMs < this.spawnAnimDuration) {
+      ctx.fillStyle = "rgba(255, 209, 102, " + (0.35 * (1 - this.spawnAnimMs / this.spawnAnimDuration)) + ")";
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, cellSize * 0.5 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     ctx.fillStyle = this.leafColor;
     ctx.beginPath();
-    ctx.ellipse(centerX, centerY + cellSize * 0.18, radius * 0.9, radius * 0.35, 0, 0, Math.PI * 2);
+    ctx.ellipse(centerX, centerY + cellSize * 0.2 * scale, radius * 0.95, radius * 0.38, 0, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = this.color;
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
     ctx.fill();
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold " + Math.max(10, Math.floor(cellSize * 0.22)) + "px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(this.getIconLabel(), centerX, centerY);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
 
     if (this.maxHp >= GameConstants.IRON_PLATE_HP) {
       const hpRatio = this.hp / this.maxHp;
@@ -218,6 +260,28 @@ class Plant {
       ctx.fillStyle = hpRatio > 0.5 ? "#95d5b2" : "#e63946";
       ctx.fillRect(cellX + 4, cellY + 4, (cellSize - 8) * hpRatio, 5);
     }
+  }
+
+  getIconLabel() {
+    if (this.typeKey === "snakeHeadSculptor") {
+      return "蛇";
+    }
+    if (this.typeKey === "smallKitchen") {
+      return "阳";
+    }
+    if (this.typeKey === "bigIronPlate") {
+      return "铁";
+    }
+    if (this.typeKey === "bigNuclearBomb") {
+      return "核";
+    }
+    if (this.typeKey === "bigIceHorn") {
+      return "角";
+    }
+    if (this.typeKey === "battleEngine") {
+      return "战";
+    }
+    return "植";
   }
 }
 
@@ -532,7 +596,7 @@ class ExplosionEffect {
 class LittleMonster {
   constructor(road) {
     this.road = road;
-    this.columnPosition = GameConstants.COLUMN_COUNT + 0.5;
+    this.columnPosition = GameConstants.COLUMN_COUNT + 0.8;
     this.hp = GameConstants.ENEMY_HP;
     this.maxHp = GameConstants.ENEMY_HP;
     this.alive = true;
@@ -540,6 +604,8 @@ class LittleMonster {
     this.eatTimerMs = 0;
     this.eatIntervalMs = 900;
     this.slowTimerMs = 0;
+    this.enterAnimMs = 0;
+    this.enterAnimDuration = 500;
   }
 
   isSlowed() {
@@ -578,6 +644,9 @@ class LittleMonster {
     if (this.slowTimerMs > 0) {
       this.slowTimerMs = Math.max(0, this.slowTimerMs - context.deltaMs);
     }
+    if (this.enterAnimMs < this.enterAnimDuration) {
+      this.enterAnimMs += context.deltaMs;
+    }
 
     if (this.columnPosition <= GameConstants.BASE_FAIL_COLUMN) {
       context.triggerGameOver("小怪物突破了最左端防线！");
@@ -611,21 +680,37 @@ class LittleMonster {
   draw(ctx, layout) {
     const x = layout.columnToPixel(this.columnPosition);
     const y = layout.roadCenterY(this.road);
-    const size = layout.cellSize * 0.38;
+    const enterScale = this.enterAnimMs < this.enterAnimDuration
+      ? 0.4 + (this.enterAnimMs / this.enterAnimDuration) * 0.6
+      : 1;
+    const size = layout.cellSize * 0.44 * enterScale;
 
     ctx.fillStyle = this.isSlowed() ? "#4cc9f0" : GameConstants.ENEMY_COLOR;
     ctx.beginPath();
     ctx.roundRect(x - size * 0.5, y - size * 0.55, size, size * 1.1, size * 0.2);
     ctx.fill();
 
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
     ctx.fillStyle = GameConstants.ENEMY_EYE;
     ctx.beginPath();
-    ctx.arc(x - size * 0.18, y - size * 0.12, size * 0.1, 0, Math.PI * 2);
-    ctx.arc(x + size * 0.18, y - size * 0.12, size * 0.1, 0, Math.PI * 2);
+    ctx.arc(x - size * 0.18, y - size * 0.12, size * 0.11, 0, Math.PI * 2);
+    ctx.arc(x + size * 0.18, y - size * 0.12, size * 0.11, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = "#1d3557";
-    ctx.fillRect(x - size * 0.08, y + size * 0.08, size * 0.16, size * 0.08);
+    ctx.fillStyle = "#ffd166";
+    ctx.font = "bold " + Math.max(10, Math.floor(size * 0.35)) + "px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("怪", x, y + size * 0.08);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+
+    ctx.fillStyle = "#ff6b6b";
+    ctx.font = Math.max(10, Math.floor(size * 0.28)) + "px sans-serif";
+    ctx.fillText("←", x + size * 0.35, y - size * 0.35);
 
     const hpRatio = this.hp / this.maxHp;
     ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
@@ -726,6 +811,8 @@ class WaveSpawner {
     this.spawnTimerMs = 0;
     this.breakTimerMs = 0;
     this.inBreak = false;
+    this.initialSpawnRemaining = 0;
+    this.initialSpawnTimerMs = 0;
   }
 
   reset() {
@@ -734,9 +821,24 @@ class WaveSpawner {
     this.spawnTimerMs = 0;
     this.breakTimerMs = 0;
     this.inBreak = false;
+    this.initialSpawnRemaining = GameConstants.ENEMY_INITIAL_SPAWN_COUNT;
+    this.initialSpawnTimerMs = 0;
   }
 
   update(context) {
+    if (this.initialSpawnRemaining > 0) {
+      this.initialSpawnTimerMs += context.deltaMs;
+      if (this.initialSpawnTimerMs >= GameConstants.ENEMY_INITIAL_SPAWN_DELAY_MS) {
+        this.initialSpawnTimerMs = 0;
+        const road = this.initialSpawnRemaining % GameConstants.ROAD_COUNT;
+        context.spawnEnemy(road);
+        this.spawnedInWave += 1;
+        this.initialSpawnRemaining -= 1;
+        context.showTip("小怪物从右侧第 " + (road + 1) + " 路出现了！");
+      }
+      return;
+    }
+
     if (this.inBreak) {
       this.breakTimerMs += context.deltaMs;
       if (this.breakTimerMs >= GameConstants.WAVE_BREAK_MS) {
@@ -884,6 +986,7 @@ class TowerDefenseGame {
       sunCount: document.getElementById("sun-count"),
       waveCount: document.getElementById("wave-count"),
       killCount: document.getElementById("kill-count"),
+      enemyCount: document.getElementById("enemy-count"),
       startOverlay: document.getElementById("overlay"),
       gameOverOverlay: document.getElementById("game-over-overlay"),
       gameOverTitle: document.getElementById("game-over-title"),
@@ -1023,7 +1126,8 @@ class TowerDefenseGame {
     this.gameOver = false;
     this.sun = GameConstants.INITIAL_SUN;
     this.killCount = 0;
-    this.selectedPlantType = null;
+    const pendingPlantType = this.selectedPlantType;
+    this.selectedPlantType = pendingPlantType;
     this.enemies = [];
     this.projectiles = [];
     this.explosionEffects = [];
@@ -1040,9 +1144,9 @@ class TowerDefenseGame {
     this.updateHud();
     this.refreshPlantCards();
     if (this.selectedPlantType !== null) {
-      this.showTip("游戏开始！点击绿色草地放置「" + PlantCatalog[this.selectedPlantType].name + "」");
+      this.showTip("游戏开始！敌人将从右侧进攻。点击绿地把「" + PlantCatalog[this.selectedPlantType].name + "」种下去");
     } else {
-      this.showTip("游戏开始！请先选择一种植物，再点击绿色草地放置");
+      this.showTip("游戏开始！敌人将从右侧出现并向左进攻，请先选择植物");
     }
 
     if (this.animationFrameId !== null) {
@@ -1138,11 +1242,15 @@ class TowerDefenseGame {
     }
 
     this.grid.placePlant(road, column, plant);
+    plant.spawnAnimMs = 0;
     this.sun -= definition.cost;
     this.updateHud();
     this.refreshPlantCards();
     this.showTip("成功放置「" + definition.name + "」在第 " + (road + 1) + " 路第 " + column + " 列");
     console.info("[TowerDefenseGame] 放置 " + definition.name + " 于第 " + (road + 1) + " 路第 " + column + " 列");
+    if (this.running && !this.gameOver) {
+      this.draw();
+    }
   }
 
   addSun(amount) {
@@ -1276,6 +1384,10 @@ class TowerDefenseGame {
     this.ui.sunCount.textContent = String(this.sun);
     this.ui.waveCount.textContent = String(this.spawner.wave);
     this.ui.killCount.textContent = String(this.killCount);
+    if (this.ui.enemyCount !== null) {
+      const aliveCount = this.enemies.filter((enemy) => enemy.isAlive()).length;
+      this.ui.enemyCount.textContent = String(aliveCount);
+    }
   }
 
   buildUpdateContext(deltaMs) {
@@ -1325,6 +1437,9 @@ class TowerDefenseGame {
       triggerGameOver(message) {
         self.triggerGameOver(message);
       },
+      showTip(message) {
+        self.showTip(message);
+      },
     };
   }
 
@@ -1339,6 +1454,7 @@ class TowerDefenseGame {
     for (let road = 0; road < GameConstants.ROAD_COUNT; road += 1) {
       const plants = this.grid.getPlantsInRoad(road);
       plants.forEach((plant) => {
+        plant.updateSpawnAnimation(deltaMs);
         plant.update(context);
       });
     }
@@ -1428,6 +1544,22 @@ class TowerDefenseGame {
 
     ctx.fillStyle = "rgba(230, 57, 70, 0.15)";
     ctx.fillRect(layout.offsetX, layout.offsetY, layout.cellSize, layout.cellSize * GameConstants.ROAD_COUNT);
+
+    const spawnColumnStart = GameConstants.COLUMN_COUNT - 2;
+    ctx.fillStyle = "rgba(255, 100, 100, 0.12)";
+    ctx.fillRect(
+      layout.offsetX + spawnColumnStart * layout.cellSize,
+      layout.offsetY,
+      layout.cellSize * 2,
+      layout.cellSize * GameConstants.ROAD_COUNT
+    );
+    ctx.fillStyle = "#ff6b6b";
+    ctx.font = "bold 13px sans-serif";
+    ctx.fillText(
+      "敌人入口 →",
+      layout.offsetX + spawnColumnStart * layout.cellSize + 6,
+      layout.offsetY - 2
+    );
 
     ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
     ctx.font = "12px sans-serif";
