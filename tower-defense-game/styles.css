@@ -1,0 +1,221 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #1b4332;
+  color: #f8f9fa;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#game-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100vw;
+  height: 100vh;
+  padding: 8px;
+  gap: 8px;
+}
+
+#top-bar {
+  display: flex;
+  gap: 24px;
+  width: 100%;
+  max-width: 1200px;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.stat-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-label {
+  color: #b7e4c7;
+  font-size: 14px;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffd166;
+}
+
+#plant-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+  max-width: 1200px;
+}
+
+.plant-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 88px;
+  padding: 8px 10px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.plant-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.plant-card.selected {
+  border-color: #ffd166;
+  background: rgba(255, 209, 102, 0.18);
+  box-shadow: 0 0 12px rgba(255, 209, 102, 0.35);
+}
+
+.plant-card.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.plant-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+.sunflower-icon {
+  background: radial-gradient(circle at 35% 35%, #ffe066, #f4a261);
+}
+
+.peashooter-icon {
+  background: radial-gradient(circle at 35% 35%, #95d5b2, #2d6a4f);
+}
+
+.wallnut-icon {
+  background: radial-gradient(circle at 35% 35%, #d4a373, #8b5e34);
+}
+
+.repeater-icon {
+  background: radial-gradient(circle at 35% 35%, #74c69d, #1b4332);
+}
+
+.potato-icon {
+  background: radial-gradient(circle at 35% 35%, #bc6c25, #6c3d0f);
+}
+
+.plant-name {
+  font-size: 12px;
+}
+
+.plant-cost {
+  font-size: 13px;
+  color: #ffd166;
+  font-weight: 600;
+}
+
+#game-canvas {
+  flex: 1;
+  width: 100%;
+  max-width: 1200px;
+  max-height: calc(100vh - 180px);
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 100;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay.visible {
+  display: flex;
+}
+
+.overlay-panel {
+  max-width: 480px;
+  padding: 32px 28px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #2d6a4f, #1b4332);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  text-align: center;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+}
+
+.overlay-panel h1 {
+  margin-bottom: 16px;
+  font-size: 28px;
+  color: #ffd166;
+}
+
+.overlay-desc {
+  margin-bottom: 24px;
+  line-height: 1.7;
+  color: #d8f3dc;
+  font-size: 15px;
+}
+
+#game-over-message {
+  margin-bottom: 24px;
+  line-height: 1.6;
+  color: #d8f3dc;
+}
+
+.btn-primary {
+  padding: 12px 32px;
+  border: none;
+  border-radius: 999px;
+  background: #ffd166;
+  color: #1b4332;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn-primary:hover {
+  transform: scale(1.04);
+  box-shadow: 0 6px 20px rgba(255, 209, 102, 0.35);
+}
+
+@media (max-width: 640px) {
+  #top-bar {
+    gap: 12px;
+    padding: 6px 10px;
+  }
+
+  .plant-card {
+    min-width: 72px;
+    padding: 6px 8px;
+  }
+
+  .plant-icon {
+    width: 28px;
+    height: 28px;
+  }
+}

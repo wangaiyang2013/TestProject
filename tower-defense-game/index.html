@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>塔防大战</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="game-container">
+    <header id="top-bar">
+      <div class="stat-group">
+        <span class="stat-label">阳光</span>
+        <span id="sun-count" class="stat-value">150</span>
+      </div>
+      <div class="stat-group">
+        <span class="stat-label">波次</span>
+        <span id="wave-count" class="stat-value">1</span>
+      </div>
+      <div class="stat-group">
+        <span class="stat-label">击杀</span>
+        <span id="kill-count" class="stat-value">0</span>
+      </div>
+    </header>
+
+    <div id="plant-bar">
+      <button type="button" class="plant-card" data-plant="sunflower">
+        <span class="plant-icon sunflower-icon"></span>
+        <span class="plant-name">向日葵</span>
+        <span class="plant-cost">50</span>
+      </button>
+      <button type="button" class="plant-card" data-plant="peashooter">
+        <span class="plant-icon peashooter-icon"></span>
+        <span class="plant-name">豌豆射手</span>
+        <span class="plant-cost">100</span>
+      </button>
+      <button type="button" class="plant-card" data-plant="wallnut">
+        <span class="plant-icon wallnut-icon"></span>
+        <span class="plant-name">坚果墙</span>
+        <span class="plant-cost">150</span>
+      </button>
+      <button type="button" class="plant-card" data-plant="repeater">
+        <span class="plant-icon repeater-icon"></span>
+        <span class="plant-name">双发射手</span>
+        <span class="plant-cost">200</span>
+      </button>
+      <button type="button" class="plant-card" data-plant="potato">
+        <span class="plant-icon potato-icon"></span>
+        <span class="plant-name">土豆雷</span>
+        <span class="plant-cost">25</span>
+      </button>
+    </div>
+
+    <canvas id="game-canvas"></canvas>
+
+    <div id="overlay" class="overlay visible">
+      <div class="overlay-panel">
+        <h1>塔防大战</h1>
+        <p class="overlay-desc">
+          战场共 <strong>5 条路</strong>、<strong>26 列</strong> 长距离场地。<br>
+          放置 5 种植物，阻止小怪物从右侧向左进攻。<br>
+          最左侧有小推车：敌人接触后会清掉该路全部敌人。<br>
+          若敌人抵达最左端，游戏失败。
+        </p>
+        <button id="start-btn" type="button" class="btn-primary">开始游戏</button>
+      </div>
+    </div>
+
+    <div id="game-over-overlay" class="overlay hidden">
+      <div class="overlay-panel">
+        <h1 id="game-over-title">游戏结束</h1>
+        <p id="game-over-message"></p>
+        <button id="restart-btn" type="button" class="btn-primary">再来一局</button>
+      </div>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
